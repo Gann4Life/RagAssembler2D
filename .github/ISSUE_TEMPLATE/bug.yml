@@ -1,0 +1,34 @@
+name: Bug
+description: Behavior that contradicts DESIGN.md or breaks the editor, runtime or demo.
+labels: ["type:bug", "status:ready"]
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options: [editor, runtime, format, demo, tests, docs, deps]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected (with DESIGN.md reference if applicable)
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser and version, commit or release.
