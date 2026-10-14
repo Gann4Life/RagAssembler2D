@@ -2,7 +2,7 @@
 
 A browser-based editor for building and animating **active ragdolls** for **LiquidFun** (Box2D) games rendered with **PIXI.js**. It ships with **RagImporter**, a runtime library that loads exported ragdolls into any game.
 
-> Status: **pre-alpha, design phase.** The spec is complete; implementation has not started. See [TODO.md](TODO.md).
+> Status: **pre-alpha.** The spec is complete. Implementation has started: the editor opens with its header toolbar (all actions disabled) and an empty viewport. See [TODO.md](TODO.md).
 
 ## What it does
 
@@ -28,11 +28,12 @@ app.ticker.add(() => { rag.update(dt); world.Step(dt, 8, 3); rag.sync(); });
 ## Repository layout
 
 ```
-index.html, js/      editor
-lib/                 RagImporter runtime (planned)
+index.html, js/      editor (shell: header and viewport)
+css/                 editor styles
+lib/                 RagImporter runtime (stub; runtime planned)
 vendor/              pinned liquidfun.js v1.1.0 and PIXI.js 8.21.0 builds
 demo/                production preview using only RagImporter (planned)
-tests/               round-trip and runtime tests (planned)
+tests/               node --test suite (smoke and header tests; round-trip and runtime tests planned)
 docs/                architecture and development documentation
 ```
 

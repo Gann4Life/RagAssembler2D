@@ -306,7 +306,20 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 ```
 
 ### 5.3 Header
-Location: top center.
+Location: top, full width. One toolbar row with four button groups divided by separators:
+
+| Group | Buttons, in order | Alignment |
+|---|---|---|
+| File | New, Load, Save | Left |
+| History | Undo, Redo | Left, after File |
+| Playback | Play, Pause, Next frame, Stop | Left, after History |
+| Workspace | Window, Settings | Right end |
+
+- **Buttons** are text-labelled. Each tooltip shows the label, plus the hotkey from [§5.9](#59-hotkeys-defaults) if one exists. Buttons without a §5.9 hotkey show none.
+- **Keyboard:** the header is a single Tab stop (`role="toolbar"`, roving tabindex). Left/Right move between buttons and wrap around, and Home/End jump to the first/last button. While focus is in the header, these keys do not trigger global hotkeys.
+- **Unavailable actions** use `aria-disabled` and stay focusable, so keyboard users can still reach them. The tooltip adds "(not available yet)".
+- If the window is narrower than the row, the header scrolls horizontally. Buttons never wrap.
+
 - **New**: new empty ragdoll. Asks for confirmation if there are unsaved changes.
 - **Load**: imports a `.rag.json` from disk (file picker, or drag & drop onto the viewport).
   - Older format versions are migrated.
@@ -336,6 +349,7 @@ Location: top center.
   - optional ground line, by default at the lowest point of the rest pose;
   - *pin rootBody* option to hang the ragdoll;
   - gravity.
+- **Accessibility:** the viewport host is focusable (`tabindex="0"`) and labelled "Viewport". It uses `role="group"` until the viewport handles keys itself. From then on it uses `role="application"`, with `aria-roledescription="viewport"` and `aria-describedby` pointing to a summary of its keys. That way screen readers pass single-key hotkeys ([§5.9](#59-hotkeys-defaults)) to the editor instead of using them for browse-mode navigation. The role applies only to the viewport host, never to the page or a panel.
 
 ### 5.5 Tools panel
 Location: left middle.

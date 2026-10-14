@@ -12,7 +12,7 @@
 
 ## Phase 1 – Editor: rigging
 - [ ] #6 Spike: verify sprite folder access across browsers
-- [ ] #7 Editor shell with index.html, PIXI app and header
+- [x] #7 Editor shell with index.html, PIXI app and header
 - [ ] #8 Dockable panel system with tabs, resize handles and saved layout
 - [ ] #9 Editor data model for ragdolls, clips and sprite assets
 - [ ] #10 Command stack with undo/redo and editor modes
@@ -36,6 +36,9 @@
 - [ ] #28 Header Save/Load with sprite folder resolution
 - [ ] #29 Autosave draft and recovery on startup
 - [ ] #63 Duplicate selection with Ctrl+D
+- [ ] #71 Keep header controls reachable on narrow windows
+- [ ] #72 Show a visible error when vendored libraries are missing
+- [x] #73 Clarify header alignment and viewport ARIA role in the spec
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
@@ -76,3 +79,6 @@
 - [ ] #59 Demo controls: walk, hit, kill, revive, strength, debug and respawn
 - [ ] #60 Demo controls: look at cursor, aim arm, impulse and drag
 - [ ] #61 Demo event log
+
+## No milestone
+- [ ] #70 Publish editor into host provider
