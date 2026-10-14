@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **(planned)**. No implementation exists yet. This document describes the intended structure and is updated as code lands.
+> Status: **(planned)**. Only a stub of `lib/ragimporter.js` and the test harness exist (see [Module map](#module-map)). The rest of this document describes the intended structure and is updated as code lands.
 
 ## Components
 
@@ -48,4 +48,10 @@ rag.sync()        body transforms → PIXI sprites
 
 ## Module map
 
-Filled in by `doc-writer` as modules are created: one line per module with its responsibility and public exports.
+One line per module: responsibility and public exports. Modules not listed here do not exist yet.
+
+| Module | Responsibility | Public exports |
+|---|---|---|
+| `lib/ragimporter.js` | RagImporter entry point. Currently a stub that only declares the supported format versions. | `RagImporter` (frozen object with `supportedVersions: [1]`) |
+| `tests/index.js` | Test aggregator for `node --test tests/`: recursively imports every `*.test.js` under `tests/`. | none |
+| `tests/smoke.test.js` | Smoke test: `lib/ragimporter.js` loads as an ES module and supports format version 1. | none |

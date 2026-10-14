@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows [Kee
   - issue templates (task, bug) and a pull request template;
   - a `planner` agent that manages issues, labels and milestones;
   - a `/next` skill that picks the most relevant open issue.
+- Test harness: `node --test tests/` runs every `*.test.js` under `tests/` with no dependencies, starting with a RagImporter smoke test.
 
 ### Changed
 - `TODO.md` is now a generated index of GitHub issues instead of a hand-edited list.
