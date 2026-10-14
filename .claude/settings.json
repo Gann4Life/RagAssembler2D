@@ -11,7 +11,8 @@
       "PowerShell(node --test tests/)",
       "PowerShell(gh issue list *)",
       "PowerShell(Get-ChildItem *)",
-      "PowerShell(gh pr view *)"
+      "PowerShell(gh pr view *)",
+      "PowerShell(Out-Null)"
     ]
   }
 }
