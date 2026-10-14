@@ -710,15 +710,19 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 RagImporter (`lib/ragimporter.js`) is an ES module built **specifically for LiquidFun and PIXI.js**:
 
 - It parses files, builds the ragdoll in a LiquidFun world, creates and syncs PIXI sprites, and drives the ragdoll with the animation model and procedural overrides above.
-- It bundles neither library. It uses the host's liquidfun.js (global `b2*` classes) and PIXI.js (`globalThis.PIXI`, or the module passed to `RagImporter.configure({ PIXI })`).
+- It bundles neither library. It uses the host's liquidfun.js and PIXI.js, each taken from `RagImporter.configure` when passed there, otherwise from its global:
+  - liquidfun.js: the `Box2D` namespace (`globalThis.Box2D`, or `configure({ Box2D })`). Classes and constants live on it (`Box2D.b2World`, `Box2D.b2RevoluteJointDef`, `Box2D.b2_dynamicBody`); there are no global `b2*` names.
+  - PIXI.js: `globalThis.PIXI`, or `configure({ PIXI })`.
+- The supported liquidfun.js build is the Emscripten (asm.js) port pinned in `vendor/` (`docs/development.md`). Its objects use WebIDL accessors for fields (`bd.set_type(Box2D.b2_dynamicBody)`, `body.GetPosition().get_y()`); methods keep their Box2D names (`world.Step`, `body.ApplyLinearImpulse`). In this document, `b2Xxx` names a class of that namespace (`Box2D.b2Xxx`).
+- `parse` and `validate` need neither library. `spawn` resolves both and throws an `Error` naming the missing one.
 - The editor uses this same module for validation, evaluation, Simulate mode and rendering.
 
 ```js
 import { RagImporter } from './lib/ragimporter.js';
-// liquidfun.js loaded with a <script> tag (globals b2World, b2Vec2, …), PIXI.js v8 loaded by the host.
+// liquidfun.js (global Box2D) and PIXI.js v8 (global PIXI) loaded by the host with <script> tags.
 
 const app   = new PIXI.Application(); await app.init({ resizeTo: window });
-const world = new b2World(new b2Vec2(0, -10));
+const world = new Box2D.b2World(new Box2D.b2Vec2(0, -10));
 
 const json = await (await fetch('assets/humanoid.rag.json')).json();
 const def  = RagImporter.parse(json);                         // validates; throws on errors or unsupported version
@@ -752,7 +756,7 @@ app.ticker.add(() => {
 
 | Member | Description |
 |---|---|
-| `RagImporter.configure({ PIXI })` | Optional; PIXI module when it is not on `globalThis`. |
+| `RagImporter.configure({ Box2D, PIXI })` | Optional; both keys optional. Sets the liquidfun.js `Box2D` namespace and/or the PIXI module to use instead of the globals. A key that is omitted keeps its previous setting. |
 | `RagImporter.parse(json) → RagDef` | Validates and builds an immutable definition. Throws `RagFormatError` with the error list. |
 | `RagImporter.validate(json) → { errors, warnings }` | Validation without throwing. |
 | `RagImporter.supportedVersions` | e.g. `[1]`. |
@@ -792,13 +796,13 @@ app.ticker.add(() => {
 | `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors and sprite images. Call it once per physics step, **before** `world.Step`. |
 | `sync()` | Copies body transforms to the sprites. Call it **after** `world.Step`. |
 | `view` | The instance's `PIXI.Container`, with `sortableChildren` on and sprite `zIndex = z`. |
-| `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun / PIXI objects, looked up by name. |
+| `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun (`Box2D.b2Body`, `Box2D.b2RevoluteJoint`, `Box2D.b2Fixture`) / PIXI objects, looked up by name. |
 | `bodies` / `joints` | Maps id → native object. |
 | `position`, `angle` | Follow `rootBody`. |
 | `destroy()` | Removes bodies and joints from the world, destroys the view and clears listeners and overrides. |
 
 ### 7.2 Spawn and flipX
-- Every body's world transform is `spawnTransform × rootLocal`. Joints are created with `b2RevoluteJointDef.Initialize(bodyA, bodyB, anchorWorld)` while the bodies are at rest, so LiquidFun computes the reference angle that matches the rest pose.
+- Every body's world transform is `spawnTransform × rootLocal`. Joints are created with `Box2D.b2RevoluteJointDef` and its `Initialize(bodyA, bodyB, anchorWorld)` while the bodies are at rest, so LiquidFun computes the reference angle that matches the rest pose.
 - `flipX` mirrors the ragdoll horizontally:
   - x coordinates and body angles are negated;
   - polygon vertex order is reversed (to stay CCW);
@@ -893,9 +897,10 @@ demo/                      production preview (§10)
 
 ## 12. Open items / to verify
 
-- **liquidfun.js contact filter:** confirm whether the emscripten binding allows a custom `ShouldCollide`. If not, the fallback in §2.5 applies, and per-shape `selfCollide` cannot be honored.
-- **liquidfun.js API surface:** confirm that the build in use exposes `b2RevoluteJointDef.Initialize`, motor setters, `GetJointAngle`/`GetJointSpeed` and filter data at runtime.
-- **PIXI.js version:** pin a v8 release and verify `Assets`, `sortableChildren`/`zIndex` and the pointer-event API used above.
+- **liquidfun.js contact filter:** confirm whether the pinned build lets JavaScript implement a contact filter on the `Box2D` namespace (a JS-implementable `ShouldCollide` class plus `b2World.SetContactFilter`). If not, the fallback in §2.5 applies, and per-shape `selfCollide` cannot be honored.
+- **liquidfun.js API surface:** confirm that the pinned build exposes, through `Box2D.*` and WebIDL accessors, `b2RevoluteJointDef.Initialize`, the motor setters (`SetMotorSpeed`, `SetMaxMotorTorque`, `EnableMotor`), `GetJointAngle`/`GetJointSpeed`, limits and fixture filter data (`categoryBits`, `maskBits`, `groupIndex`). Also confirm how objects created with `new` (defs, `b2Vec2`) are released (`Box2D.destroy`), so `spawn`, `update` and `destroy` do not leak Emscripten heap memory.
+- **Resolved – liquidfun.js build:** pinned to the doebi/liquidfun.js v1.1.0 Emscripten (asm.js) build. It exposes a single global `Box2D` namespace with WebIDL accessors (§7). Checksum and provenance in `docs/development.md`.
+- **Resolved – PIXI.js version:** pinned to 8.21.0. `Assets`, `sortableChildren`/`zIndex` and `eventMode` + `pointermove` were verified in the browser (`docs/development.md`).
 - **Motor stability:** verify the PD-over-motor behavior with high `gain` and light bodies, and with procedural overrides that jump far from the clip angle. Tune the default `motor` values for the demo humanoid. Consider velocity/position iterations ≥ 8/3.
 - **Sprite file access in the browser:** directory pickers are not available in every browser. The multi-file fallback must be usable with 20+ images.
 - **Performance:** measure the cost of `update()` + `sync()` with many instances (target: 20 humanoids at 60 Hz without noticeable cost).

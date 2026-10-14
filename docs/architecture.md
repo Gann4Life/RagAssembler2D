@@ -16,9 +16,11 @@
 │  validate · parse → RagDef · evaluator (pure) · spawn → RagInstance      │
 │  motor controller · procedural overrides · events · PIXI sprite sync     │
 └──────────────┬──────────────────────────────────────┬────────────────────┘
-               │ globals                              │ globals / configure()
+               │ Box2D global / configure()           │ PIXI global / configure()
         vendor/liquidfun.js                    vendor/pixi.min.js
 ```
+
+RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `b2*` names) and PIXI.js through `PIXI`; either can be injected with `RagImporter.configure({ Box2D, PIXI })` (`DESIGN.md` §7).
 
 `demo/` is a separate host page. It imports only `lib/ragimporter.js` and the vendored libraries.
 
