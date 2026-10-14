@@ -7,8 +7,9 @@
 - [x] #3 Add node --test harness with a first smoke test
 - [ ] #4 Spike: check custom contact filter support in liquidfun.js
 - [ ] #5 Spike: verify the liquidfun.js API surface used by RagImporter
-- [ ] #65 Spike: define editor core architecture and module map
+- [x] #65 Spike: define editor core architecture and module map
 - [ ] #66 Architecture conformance tests for imports, pure modules and comments
+- [x] #75 Add read-only permission allowlist for routine commands
 
 ## Phase 1 – Editor: rigging
 - [ ] #6 Spike: verify sprite folder access across browsers
@@ -39,6 +40,8 @@
 - [ ] #71 Keep header controls reachable on narrow windows
 - [ ] #72 Show a visible error when vendored libraries are missing
 - [x] #73 Clarify header alignment and viewport ARIA role in the spec
+- [ ] #77 Decide how Save writes meta.name and meta.editorVersion
+- [ ] #78 Warn about duplicate body, joint and shape names
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
