@@ -390,3 +390,130 @@ test('children lists and nodes are frozen', () => {
   assert.ok(Object.isFrozen(model.get(bodies[0])));
   assert.throws(() => bodies.push(1), TypeError);
 });
+
+test('batch emits one change with every effective change and returns frozen ops and changes', () => {
+  const model = new Model();
+  const events = record(model);
+  const result = model.batch(() => {
+    const uid = addBody(model, 2);
+    model.applyOps([{ op: 'set', uid, path: 'name', value: 'renamed' }]);
+  });
+  assert.equal(events.length, 1);
+  assert.equal(events[0][1].cause, 'do');
+  assert.deepEqual(events[0][1].changes, result.changes);
+  assert.deepEqual(result.changes.map((change) => change.kind), ['add', 'add', 'add', 'set']);
+  assert.equal(result.ops.length, 2);
+  assert.ok(Object.isFrozen(result));
+  assert.ok(Object.isFrozen(result.ops));
+  assert.ok(Object.isFrozen(result.changes));
+});
+
+test('batch lets later calls read the earlier writes', () => {
+  const model = new Model();
+  model.batch(() => {
+    const uid = addBody(model);
+    assert.equal(model.get(uid).type, 'body');
+    model.applyOps([{ op: 'set', uid, path: 'name', value: 'seen' }]);
+    assert.equal(model.prop(uid, 'name'), 'seen');
+  });
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
+});
+
+test('batch reverts every applied op and emits nothing when the callback throws', () => {
+  const model = new Model();
+  const keep = addBody(model);
+  const events = record(model);
+  const before = model.get(keep).props;
+  assert.throws(() => model.batch(() => {
+    addBody(model);
+    model.applyOps([{ op: 'set', uid: keep, path: 'name', value: 'changed' }]);
+    model.applyOps([{ op: 'remove', uid: keep }]);
+    throw new Error('boom');
+  }), /boom/);
+  assert.equal(events.length, 0);
+  assert.deepEqual(model.children(ROOT_UID, 'bodies'), [keep]);
+  assert.deepEqual(model.get(keep).props, before);
+  model.applyOps([{ op: 'set', uid: keep, path: 'name', value: 'after' }]);
+  assert.equal(events.length, 1);
+});
+
+test('batch keeps earlier ops when a later applyOps call fails atomically and the callback handles it', () => {
+  const model = new Model();
+  const events = record(model);
+  model.batch(() => {
+    const uid = addBody(model);
+    assert.throws(() => model.applyOps([
+      { op: 'set', uid, path: 'name', value: 'x' },
+      { op: 'remove', uid: 9999 },
+    ]));
+    assert.notEqual(model.prop(uid, 'name'), 'x');
+  });
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
+  assert.equal(events.length, 1);
+});
+
+test('batch cannot nest and a failed nested call leaves the outer batch usable', () => {
+  const model = new Model();
+  model.batch(() => {
+    assert.throws(() => model.batch(() => {}), /nested/);
+    addBody(model);
+  });
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
+  assert.doesNotThrow(() => model.batch(() => {}));
+});
+
+test('batch accepts only the do cause for applyOps', () => {
+  const model = new Model();
+  const uid = addBody(model);
+  for (const cause of ['undo', 'redo', 'cancel']) {
+    assert.throws(() => model.batch(() => {
+      model.applyOps([{ op: 'set', uid, path: 'name', value: 'x' }], cause);
+    }));
+  }
+  assert.notEqual(model.prop(uid, 'name'), 'x');
+});
+
+test('reset throws inside a batch and works after it', () => {
+  const model = new Model();
+  assert.throws(() => model.batch(() => model.reset({ type: 'root', props: {} })));
+  assert.doesNotThrow(() => model.reset({ type: 'root', props: {} }));
+});
+
+test('an empty batch or one with only no-op changes emits nothing', () => {
+  const model = new Model();
+  const uid = addBody(model);
+  const events = record(model);
+  const empty = model.batch(() => {});
+  assert.deepEqual(empty.ops, []);
+  assert.deepEqual(empty.changes, []);
+  const noop = model.batch(() => {
+    model.applyOps([{ op: 'set', uid, path: 'name', value: model.prop(uid, 'name') }]);
+  });
+  assert.equal(noop.ops.length, 1);
+  assert.deepEqual(noop.changes, []);
+  assert.equal(events.length, 0);
+});
+
+test('a listener error is rethrown after the batch is committed', () => {
+  const model = new Model();
+  model.on('change', () => {
+    throw new Error('listener');
+  });
+  assert.throws(() => model.batch(() => addBody(model)), /listener/);
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
+  assert.doesNotThrow(() => model.applyOps([]));
+});
+
+test('props naming a child collection are rejected on add, reset and set', () => {
+  const model = new Model();
+  const bodyUid = addBody(model);
+  const events = record(model);
+  const bad = { ...bodySnapshot(model), props: { ...bodySnapshot(model).props, fixtures: [] } };
+  assert.throws(() => model.applyOps([{ op: 'add', snapshot: bad, parent: ROOT_UID, collection: 'bodies' }]), /fixtures/);
+  assert.throws(() => model.reset({ type: 'root', props: { bodies: [] } }), /bodies/);
+  assert.throws(() => model.applyOps([{ op: 'set', uid: bodyUid, path: 'fixtures', value: [] }]), /fixtures/);
+  assert.throws(() => model.applyOps([{ op: 'set', uid: bodyUid, path: 'fixtures.0.name', value: 'x' }]), /fixtures/);
+  assert.throws(() => model.applyOps([{ op: 'set', uid: ROOT_UID, path: 'clips', value: [] }]), /clips/);
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
+  assert.equal(events.length, 0);
+});

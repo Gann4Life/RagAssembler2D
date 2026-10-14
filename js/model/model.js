@@ -138,6 +138,7 @@ export class Model {
   #idCounters = new Map();
   #nextUid = ROOT_UID + 1;
   #emitter = new Emitter();
+  #openBatch = null;
 
   /**
    * Creates a model holding a new, empty document with schema defaults.
@@ -246,16 +247,54 @@ export class Model {
   applyOps(ops, cause = 'do') {
     if (!CHANGE_CAUSES.has(cause)) throw new Error(`Unknown change cause "${cause}"`);
     if (!Array.isArray(ops)) throw new TypeError('applyOps expects an array of operations');
+    if (this.#openBatch && cause !== 'do') throw new Error('Only the "do" cause is allowed inside a batch');
     const applied = [];
     const changes = [];
     try {
       for (const op of ops) applied.push(this.#apply(op, changes));
     } catch (error) {
-      for (const op of applied.reverse()) this.#apply(this.#inverse(op), []);
+      this.#revert(applied);
       throw error;
     }
-    if (changes.length > 0) this.#emitter.emit('change', Object.freeze({ changes: Object.freeze(changes), cause }));
+    if (this.#openBatch) {
+      this.#openBatch.ops.push(...applied);
+      this.#openBatch.changes.push(...changes);
+    } else if (changes.length > 0) {
+      this.#emitter.emit('change', Object.freeze({ changes: Object.freeze(changes), cause }));
+    }
     return Object.freeze(applied);
+  }
+
+  /**
+   * Runs `fn` with change emission deferred, then emits one `change` (cause `do`) with every effective change.
+   * If `fn` throws, every operation applied inside is reverted in reverse order, nothing is emitted and
+   * the error is rethrown. Reserved for `js/commands/history.js`.
+   * @param {() => void} fn Callback that calls `applyOps` with cause `do`.
+   * @returns {Readonly<{ ops: ReadonlyArray<Op>, changes: ReadonlyArray<Change> }>} Applied operations and effective changes.
+   * @throws {Error} When a batch is already open or `fn` throws; listener errors are rethrown after the batch is applied.
+   */
+  batch(fn) {
+    if (this.#openBatch) throw new Error('Batches cannot be nested');
+    const open = { ops: [], changes: [] };
+    this.#openBatch = open;
+    try {
+      fn();
+    } catch (error) {
+      try {
+        this.#revert(open.ops);
+      } finally {
+        this.#openBatch = null;
+      }
+      throw error;
+    }
+    this.#openBatch = null;
+    const result = Object.freeze({ ops: Object.freeze(open.ops), changes: Object.freeze(open.changes) });
+    if (result.changes.length > 0) this.#emitter.emit('change', Object.freeze({ changes: result.changes, cause: 'do' }));
+    return result;
+  }
+
+  #revert(applied) {
+    for (const op of [...applied].reverse()) this.#apply(this.#inverse(op), []);
   }
 
   /**
@@ -267,6 +306,7 @@ export class Model {
    * @throws {Error} When the snapshot is not a valid root tree; the model is left unchanged.
    */
   reset(snapshot, cause = 'new') {
+    if (this.#openBatch) throw new Error('Cannot reset inside a batch');
     if (!RESET_CAUSES.has(cause)) throw new Error(`Unknown reset cause "${cause}"`);
     if (snapshot?.type !== 'root') throw new Error('reset expects a root snapshot');
     const records = this.#buildTree(snapshot, null, null, 'root');
@@ -292,6 +332,9 @@ export class Model {
     }
     const props = frozenCopy(snapshot.props ?? {});
     if (!isPlainObject(props)) throw new Error('Node props must be an object');
+    for (const name of Object.keys(COLLECTIONS[snapshot.type])) {
+      if (Object.hasOwn(props, name)) throw new Error(`A ${snapshot.type} cannot hold "${name}" in props`);
+    }
     const uid = mode === 'root' ? ROOT_UID : this.#snapshotUid(snapshot, mode, claimed);
     const record = { uid, type: snapshot.type, parent, collection, props, children: {} };
     out.push(record);
@@ -435,6 +478,9 @@ export class Model {
   #applySet({ uid, path, value }, changes) {
     const record = this.#require(uid);
     const segments = splitPath(path);
+    if (Object.hasOwn(COLLECTIONS[record.type], segments[0])) {
+      throw new Error(`Cannot set "${path}": "${segments[0]}" is a child collection of a ${record.type}`);
+    }
     const isId = segments[0] === 'id';
     if (isId && record.type === 'root') throw new Error('The root id cannot change');
     const next = frozenCopy(value);
