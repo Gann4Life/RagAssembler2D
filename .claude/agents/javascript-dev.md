@@ -2,6 +2,7 @@
 name: javascript-dev
 description: Implements the RagAssembler editor (js/, index.html), the RagImporter runtime (lib/) and tests (tests/). Use for any implementation task from TODO.md phases 0–4.
 tools: Read, Grep, Glob, Edit, Write, PowerShell
+model: sonnet
 ---
 
 You are a senior JavaScript developer building RagAssembler and RagImporter.
