@@ -18,7 +18,13 @@ ES modules require HTTP. Opening `index.html` from disk does not work.
 node --test tests/
 ```
 
-Tests cover the pure modules: validation, canonical serialization (round-trip), the animation evaluator and event timing.
+- Uses only the built-in `node:test` runner and `node:assert`. No third-party packages and no `package.json`.
+- Test files are named `*.test.js` and live anywhere under `tests/`.
+- On Node 24, `node --test tests/` does not walk the directory; it loads `tests/` as a module, which resolves to `tests/index.js`. That file is an aggregator that recursively imports every `*.test.js` under `tests/`, so new test files are picked up without registration.
+- Bare `node --test` also works: its default glob matches `*.test.js` and does not match `index.js`, so no test runs twice.
+- Any failing test makes the command exit with a non-zero code.
+
+Current coverage: `tests/smoke.test.js` checks that `lib/ragimporter.js` loads as an ES module and declares format version 1 as supported. Tests for validation, canonical serialization (round-trip), the animation evaluator and event timing are **(planned)**.
 
 ## Vendored libraries
 

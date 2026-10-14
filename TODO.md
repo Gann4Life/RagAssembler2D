@@ -4,7 +4,7 @@
 
 ## Phase 0 – Foundations
 - [ ] #2 Pin PIXI.js v8 and liquidfun.js builds in vendor/
-- [ ] #3 Add node --test harness with a first smoke test
+- [x] #3 Add node --test harness with a first smoke test
 - [ ] #4 Spike: check custom contact filter support in liquidfun.js
 - [ ] #5 Spike: verify the liquidfun.js API surface used by RagImporter
 - [ ] #65 Spike: define editor core architecture and module map
