@@ -25,10 +25,10 @@ RagAssembler is a ragdoll editor for visually designing characters and creatures
 | Units (editor UI) | Pixels and degrees. Multiplier channels are shown as 0–100 %. |
 | Pixels per meter | `units.pixelsPerMeter` converts meters to pixels **in the editor and at runtime**. A sprite at scale 1 is drawn at its texture's native pixel size under this ratio, so at 32 px/m a 32 px image covers 1 m. |
 | Axes | Physics: Y up, CCW-positive angles (Box2D). PIXI: Y down, CW-positive rotation. RagImporter converts: `sprite.x = x·ppm`, `sprite.y = −y·ppm`, `sprite.rotation = −angle`. |
-| Identity | Every body, shape, joint and sprite asset has a stable `id` (unique across the file, never reused, used for references) and a human `name` (used for lookup by code). `root` is a reserved id. |
+| Identity | Every body, shape, joint and sprite asset has a stable `id` (unique across the file, never reused, used for references) and a human `name` (used for lookup by code). `root` is a reserved id. The editor generates ids as a kind prefix plus a counter (`b_3`, `f_3`, `j_3`, `s_3`), above any id of that prefix seen in the session, and never changes an existing id. |
 | Clip identity | Clips are referenced by `key`: lower-case, `[a-z0-9_]+`, unique. **The key is the contract with game code.** Renaming a clip's `name` never breaks code. Changing its `key` does, and the inspector warns about it. |
 | Rest pose | The pose built in the editor is the **rest pose**. All joint angles are measured relative to it, so every joint's angle is `0` at rest. |
-| Undo / Redo | Every data mutation (including keys, events and sprite edits) goes through a command stack (minimum 200 steps). Selection, camera and panel layout are not undoable. |
+| Undo / Redo | Every data mutation (including keys, events and sprite edits) goes through a command stack (minimum 200 steps). One user operation is one step: a compound operation (delete with its cascade, group, ungroup, duplicate) and a continuous gesture (a drag from press to release, a slider or field scrub) each undo at once. Esc during a gesture reverts it without leaving a step. Selection, camera, panel layout, mode, playhead and editor settings (except `pixelsPerMeter`) are not undoable. |
 | Autosave | The editor stores a draft in browser storage every 30 s and on page unload, and offers to recover it on the next start. |
 
 ---
@@ -55,7 +55,7 @@ The root is a **parent object in the world**, not a physics body.
 - It owns the **global animation channels** `strength`, `gain` and `damping` ([§4.2](#42-channels)). They are **multipliers in 0–1, default 1**, and they never replace joint values. This is how a whole ragdoll can go limp from a single track, without keying every joint.
 - At runtime, the spawn transform (`x`, `y`, `angle`, `flipX`) is applied to the root. After spawning, `rag.position` / `rag.angle` follow `rootBody`.
 
-`rootBody` is the body from which the joint tree is built (usually the torso or pelvis). It is used for the Hierarchy tree, forward-kinematics preview and the runtime position.
+`rootBody` is the body from which the joint tree is built (usually the torso or pelvis). It is used for the Hierarchy tree, forward-kinematics preview and the runtime position. While it is `null` (a new ragdoll), the first body created becomes `rootBody`. Deleting the `rootBody` body sets it to the first remaining body in `bodies` order, or `null` when none is left.
 
 ### 2.2 Bodies and shapes
 - In the UI a **shape** is what the user draws. A **body** owns one or more shapes (Box2D fixtures).
@@ -141,7 +141,7 @@ enableMotor    = S > 0
 | Property | Type | Default | Meaning |
 |---|---|---|---|
 | `name` | string | `"New Clip"` | Display name. |
-| `key` | string | slug of `name` | Code identifier, `[a-z0-9_]+`, unique. It follows `name` automatically until edited by hand. |
+| `key` | string | slug of `name` | Code identifier, `[a-z0-9_]+`, unique. It follows `name` automatically while it still equals the slug generated from `name`; editing it by hand to anything else stops this. The slug rule is in `docs/schema.md`. |
 | `loop` | bool | `true` | Loops at `length`. |
 | `hold` | bool | `true` | Non-loop only. `true`: the clip stays active holding its last frame until it is stopped or replaced. `false`: it stops itself on completion, using `fadeOut`. |
 | `layer` | int ≥ 0 | `0` | **The higher index wins.** Many clips can share a layer (e.g. `idle`, `walk` and `run` on layer 0), but only one is active per layer at a time. |
@@ -174,7 +174,8 @@ Body and shape physics are never animated. The only animatable property of a sha
   - `step`: holds the value until the next key;
   - `ease`: smoothstep.
 - **Discrete channels** (`sprite`) always use `step`, and the editor only offers that option for them.
-- Before the first key the first value is held, after the last key the last value is held. A track with a single key is constant.
+- New keys use `linear` (`step` on discrete channels).
+- Before the first key the first value is held, after the last key the last value is held. A track with a single key is constant. A track with no keys (just added with "+ Track") has no effect on its channel.
 - Angles are interpolated linearly in radians, without wrapping, so a key can go beyond ±180°.
 - Keys are sorted by `t`, there is at most one key per `t` per track, and `0 ≤ t ≤ length`.
 
@@ -288,6 +289,29 @@ Tech: vanilla JavaScript ES modules, no build step. The viewport is rendered wit
 
 Multiplier channels don't move anything. They are shown as the fill of the joint gizmo (grey 0 % → saturated 100 %). Sprite channels swap images live.
 
+**Mode policy.** What each mode allows (✓) or disables (—). Disabled controls stay visible and use `aria-disabled`; disabled inspector fields are read-only.
+
+| Capability | Edit | Animate | Simulate |
+|---|---|---|---|
+| Select, Select Box, Hierarchy selection | ✓ | ✓ | ✓ |
+| Manipulate, Pose | ✓ | ✓ (into keys, below) | — |
+| Creation tools: Circle, Box, Polygon, Hinge | ✓ | — | — |
+| Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add/delete; Group, Ungroup, Duplicate; Manipulate move, joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
+| Animation edits: clip properties, tracks, keys, events, key buttons ◆, autokey, Key selected (K), Manipulate rotate → parent joint `angle`, Pose → keys | — | ✓ | — |
+| Asset import | ✓ | ✓ | — |
+| Asset delete | ✓ | — | — |
+| Clip selector, New clip | ✓ | ✓ | — |
+| Scrub | — | ✓ | — |
+| Preview stack | — | ✓ | ✓ |
+| Procedural preview | — | — | ✓ |
+| New, Load, Save; Undo, Redo | ✓ | ✓ | — |
+| Play | ✓ | ✓ | — |
+| Pause, Next frame, Stop | — | — | ✓ |
+| Editor settings (grid, snapping, display), panels, navigation | ✓ | ✓ | ✓ |
+
+- In Animate mode, inspector fields that are not animatable are shown read-only, and animatable ones show the evaluated value with their key button. Manipulate only rotates (no move handles).
+- Changing mode cancels the tool operation in progress (as Esc). If the active tool is disabled in the new mode, the Select tool becomes active.
+
 ### 5.2 Panels
 - All panels are resizable, modular and can snap to each other.
 - Handles sit at the middle of each edge that overlaps another panel.
@@ -396,7 +420,7 @@ Location: right top, as tabs.
   - Loop joints are marked.
 - **Search field:** fuzzy filter by name or id. Matches keep their ancestors visible.
 - **Selection** is synchronized with the viewport and the inspector.
-- **Delete** (Del): deletes the selected objects. Deleting a body also deletes its joints and any tracks that target them or its shapes, after confirmation listing what will be removed.
+- **Delete** (Del): deletes the selected objects. Deleting a body also deletes its joints and any tracks that target them or its shapes, after confirmation listing what will be removed. If it was `rootBody`, `rootBody` moves as described in [§2.1](#21-root-the-ragdoll-itself). The whole deletion is one undo step.
 - **Add shape:** creates a box body at (0, 0) root-local.
 - **Add joint:** creates an unassigned hinge joint at (0, 0) with no limits. It is invalid (error) until `bodyA` / `bodyB` are set in the inspector.
 
@@ -551,6 +575,9 @@ Location: bottom, full width. Modeled after Godot's animation panel.
 | K | Key selected | F / Home | Frame selection / all |
 | Esc | Abort tool / clear selection | | |
 
+- Hotkeys are ignored while focus is in a text field. Space also goes to a focused button or control instead of Play/Pause.
+- In the viewport, Space + left drag pans. A Space press without a drag toggles Play/Pause when Space is released.
+
 ### 5.10 Inverse kinematics
 Out of scope for v1. It was considered mostly for feet placement, but not all ragdolls have feet and not all are humanoid. Procedural joint control ([§4.8](#48-procedural-joint-control)) covers the single-joint cases (look at, aim). If IK is added later, it should be a runtime helper in RagImporter that produces procedural `angle` targets for a chain, not an editor-only feature.
 
@@ -671,7 +698,8 @@ Out of scope for v1. It was considered mostly for feet placement, but not all ra
   - Valid channels for a joint: `angle | strength | gain | damping`.
   - Valid channel for a shape: `sprite` (key values are a sprite asset id or `null`).
 - **Editor-only data:** `editor` objects (on fixtures), `preview` and `ragdoll.position/angle`. RagImporter ignores them, except `editor.color`, which is used by `debug` drawing.
-- **Explicit values:** every field is written explicitly, even when it equals its default, so files are self-describing.
+- **Explicit values:** every field is written explicitly, even when it equals its default, so files are self-describing. A missing field is an error, except `fixtures[].sprite` (absent means `null`).
+- **Field schema:** the type, default (for new objects), range or enum, unit and editor-only flag of every field, in canonical key order, are listed in `docs/schema.md`. That table and its code version (`lib/schema.js`) must agree with this section and [§6.1](#61-complete-example).
 
 ### 6.3 Versioning
 - `version` is an integer and increases on any breaking change.
@@ -686,7 +714,8 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 
 **Errors** (block save / parse):
 - `format` is not `"ragassembler"`, or `version` is unsupported.
-- Duplicate ids (across bodies, shapes, joints and sprite assets), use of the reserved `root` id, or an unknown `rootBody`.
+- A missing field, a field of the wrong type, or a value outside the range or enum given for it in `docs/schema.md`.
+- Duplicate ids (across bodies, shapes, joints and sprite assets), use of the reserved `root` id, or a missing (`null`) or unknown `rootBody`.
 - A body without fixtures.
 - A joint with a missing `bodyA`/`bodyB`, or `bodyA == bodyB`.
 - `lower > 0` or `upper < 0` when limits are enabled.
@@ -721,7 +750,7 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 
 ## 7. RagImporter
 
-RagImporter (`lib/ragimporter.js`) is an ES module built **specifically for LiquidFun and PIXI.js**:
+RagImporter is the `lib/` folder of ES modules, with `lib/ragimporter.js` as its only public entry point. It is built **specifically for LiquidFun and PIXI.js**:
 
 - It parses files, builds the ragdoll in a LiquidFun world, creates and syncs PIXI sprites, and drives the ragdoll with the animation model and procedural overrides above.
 - It bundles neither library. It uses the host's liquidfun.js and PIXI.js, each taken from `RagImporter.configure` when passed there, otherwise from its global:
@@ -729,7 +758,7 @@ RagImporter (`lib/ragimporter.js`) is an ES module built **specifically for Liqu
   - PIXI.js: `globalThis.PIXI`, or `configure({ PIXI })`.
 - The supported liquidfun.js build is the Emscripten (asm.js) port pinned in `vendor/` (`docs/development.md`). Its objects use WebIDL accessors for fields (`bd.set_type(Box2D.b2_dynamicBody)`, `body.GetPosition().get_y()`); methods keep their Box2D names (`world.Step`, `body.ApplyLinearImpulse`). In this document, `b2Xxx` names a class of that namespace (`Box2D.b2Xxx`).
 - `parse` and `validate` need neither library. `spawn` resolves both and throws an `Error` naming the missing one.
-- The editor uses this same module for validation, evaluation, Simulate mode and rendering.
+- The editor uses these same modules for validation, evaluation, Simulate mode and rendering. It may also import the internal `lib/` modules (schema, serializer, emitter); host projects and `demo/` use only `lib/ragimporter.js`.
 
 ```js
 import { RagImporter } from './lib/ragimporter.js';
@@ -806,7 +835,7 @@ app.ticker.add(() => {
 | `setJointAngle(jointName, angle, { weight, strength, fadeIn })` | Procedural override with a direct angle (radians, relative to rest). |
 | `clearJointOverride(jointName, { fadeOut })` / `clearAllOverrides()` | Removes overrides. |
 | `toWorld(pixiPoint) → { x, y }` / `toPixi(worldPoint)` | Coordinate conversion through `pixelsPerMeter` and the view's parent transform. |
-| `on(type, fn)` / `off(type, fn)` | Types: `event` (custom), `start`, `loop`, `complete`, `stop`. |
+| `on(type, fn)` / `off(type, fn)` | Types: `event` (custom), `start`, `loop`, `complete`, `stop`. `on` returns a function that removes the listener. |
 | `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors and sprite images. Call it once per physics step, **before** `world.Step`. |
 | `sync()` | Copies body transforms to the sprites. Call it **after** `world.Step`. |
 | `view` | The instance's `PIXI.Container`, with `sortableChildren` on and sprite `zIndex = z`. |
@@ -839,7 +868,7 @@ app.ticker.add(() => {
 
 1. **Author** the ragdoll, sprites and clips in RagAssembler, then save `name.rag.json` together with its sprite folder.
 2. **Copy** into the host project:
-   - `lib/ragimporter.js`;
+   - the whole `lib/` folder (import only `lib/ragimporter.js`; the other files are internal);
    - the `.rag.json` and its sprite folder, keeping the relative paths.
 
    The host already loads liquidfun.js and PIXI.js.
@@ -863,9 +892,11 @@ app.ticker.add(() => {
 ```
 index.html                 editor entry point
 js/main.js                 editor bootstrap
-js/editor.js               editor state, command stack, modes
-js/…                       panels, tools, viewport, timeline (split as needed)
-lib/ragimporter.js         runtime: validate, parse, evaluate, spawn, drive, render sync
+js/editor.js               editor composition root (model, commands, modes, tools)
+js/…                       model, commands, tools, viewport, panels
+lib/ragimporter.js         runtime public entry: validate, parse, spawn, drive, render sync
+lib/…                      runtime and shared pure modules (schema, emitter, validation, serializer, evaluator)
+docs/                      how the code is built; the module map is docs/architecture.md
 vendor/liquidfun.js        physics engine build (editor and demo)
 vendor/pixi.min.js         PIXI.js build, pinned version (editor and demo)
 tests/                     round-trip and evaluator tests (Node, ES modules)
@@ -902,7 +933,7 @@ demo/                      production preview (§10)
 | Phase | Scope | Done when |
 |---|---|---|
 | 1. Editor – rigging | Panels, header, PIXI viewport, tools, hierarchy, assets, sprites and sprite edit, inspector, undo/redo, validation + Problems, save/load with sprites | The demo humanoid can be built from scratch with sprites and saved/loaded. |
-| 2. Editor – animation | Timeline, clips, tracks (including `sprite`), keys, events, FK preview, autokey, preview stack. The evaluator is written in `lib/ragimporter.js` (pure, no physics) | The canonical clips can be authored and scrubbed, with face swaps. |
+| 2. Editor – animation | Timeline, clips, tracks (including `sprite`), keys, events, FK preview, autokey, preview stack. The evaluator is written in `lib/` (`lib/evaluate.js`, pure, no physics) | The canonical clips can be authored and scrubbed, with face swaps. |
 | 3. Round-trip verification | Tests over a fixture set (humanoid, groups, polygons, sprites, all channels, additive clips, events) | Load → save is byte-identical for every fixture. Each invalid fixture is rejected with the expected error. The evaluator gives the hand-computed values from §4.6. |
 | 4. RagImporter runtime | Spawn, motor controller, layers/fades/queues, events, procedural overrides, flipX, PIXI sprite sync, self-collision. Editor Simulate mode and procedural preview run on it | Editor Simulate and a host page show the same behavior. The event tests pass (no missed or duplicated events with large `dt` and loop wraps). `lookAt` respects limits and `dead`. |
 | 5. Demo | §10 | Every control works with the exported asset, and no editor code is imported. |
@@ -918,6 +949,7 @@ demo/                      production preview (§10)
 - **Motor stability:** verify the PD-over-motor behavior with high `gain` and light bodies, and with procedural overrides that jump far from the clip angle. Tune the default `motor` values for the demo humanoid. Consider velocity/position iterations ≥ 8/3.
 - **Sprite file access in the browser:** directory pickers are not available in every browser. The multi-file fallback must be usable with 20+ images.
 - **Performance:** measure the cost of `update()` + `sync()` with many instances (target: 20 humanoids at 60 Hz without noticeable cost).
+- **`meta` on Save:** decide whether Save rewrites `meta.name` (from `ragdoll.name`) and `meta.editorVersion` (to the running editor), and how that fits the byte-identical round-trip of [§6.5](#65-round-trip-guarantee) across editor versions. Until then the serializer writes the loaded values unchanged.
 - **Determinism:** the same file plus the same inputs should give the same simulation on the same machine, so the editor preview can be compared against the host page.
 
 ## 13. Out of scope for v1 (backlog)

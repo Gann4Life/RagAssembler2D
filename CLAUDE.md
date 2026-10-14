@@ -75,7 +75,7 @@ If code and `DESIGN.md` disagree, stop and resolve it: either fix the code, or u
 A task is a GitHub issue. It **closes when its pull request is merged into `main`**; the PR body says `Closes #<n>`, so GitHub closes the issue on merge.
 
 1. **Pick:** run `/next`. It ranks the open issues by relevance (bugs, milestone order, unblocking power, risk, priority), recommends one, and creates its branch once confirmed.
-2. **Spec check:** if the task changes behavior, the file format or the public API, run `architect` first. It updates `DESIGN.md` and `docs/decisions.md` on the same branch.
+2. **Spec check:** if the task changes behavior, the file format or the public API, or adds or changes a module, run `architect` first. It updates `DESIGN.md` and `docs/decisions.md` on the same branch.
 3. **Implement** with the matching agent. A checkpoint is simply a conventional commit on the branch.
    - `javascript-dev` for the editor (`js/`), the runtime (`lib/`) and tests;
    - `game-dev` for `demo/` and real-game integration;
@@ -98,6 +98,7 @@ git pull --ff-only
 - Behavior matches `DESIGN.md`, or `DESIGN.md` was updated by the architect on this branch.
 - Tests pass, and the change was exercised in the browser when it touches the UI or runtime.
 - No code comments; exported API has JSDoc.
+- Modules, exports and imports conform to `docs/architecture.md`; PRs that add or change modules were reviewed by `architect`, who updated the module map on the branch.
 - `CHANGELOG.md`, `TODO.md` and `docs/` reflect the change.
 - The branch name, commits and PR title follow the conventions above, and the PR body closes the issue.
 
