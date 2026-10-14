@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **(planned)**. Only a stub of `lib/ragimporter.js` and the test harness exist (see [Module map](#module-map)). The rest of this document describes the intended structure and is updated as code lands.
+> Status: **(planned)**. Only a stub of `lib/ragimporter.js`, the test harness and the pinned `vendor/` libraries exist (see [Module map](#module-map)). The rest of this document describes the intended structure and is updated as code lands.
 
 ## Components
 
@@ -16,9 +16,11 @@
 │  validate · parse → RagDef · evaluator (pure) · spawn → RagInstance      │
 │  motor controller · procedural overrides · events · PIXI sprite sync     │
 └──────────────┬──────────────────────────────────────┬────────────────────┘
-               │ globals                              │ globals / configure()
+               │ Box2D global / configure()           │ PIXI global / configure()
         vendor/liquidfun.js                    vendor/pixi.min.js
 ```
+
+RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `b2*` names) and PIXI.js through `PIXI`; either can be injected with `RagImporter.configure({ Box2D, PIXI })` **(planned)** ([`DESIGN.md` §7](../DESIGN.md)). Both libraries are pinned in `vendor/` ([Vendored libraries](development.md#vendored-libraries)).
 
 `demo/` is a separate host page. It imports only `lib/ragimporter.js` and the vendored libraries.
 

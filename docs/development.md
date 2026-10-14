@@ -28,10 +28,42 @@ Current coverage: `tests/smoke.test.js` checks that `lib/ragimporter.js` loads a
 
 ## Vendored libraries
 
-| Library | File | Version |
-|---|---|---|
-| liquidfun.js | `vendor/liquidfun.js` | TBD (pin in Phase 0) |
-| PIXI.js | `vendor/pixi.min.js` | v8, exact release TBD (pin in Phase 0) |
+Both files are loaded with plain `<script>` tags, as served, with no build step. Neither is fetched from a CDN at runtime.
+
+| Library | File | Version | Source | SHA-256 | Size | License |
+|---|---|---|---|---|---|---|
+| liquidfun.js | `vendor/liquidfun.js` | v1.1.0 (doebi/liquidfun.js release tag `v1.1.0`, commit `25dc77a88e3a99491af3e67f3d50569eb9adfa1b`) | Release asset `liquidfun_v1.1.0.min.js`, renamed: https://github.com/doebi/liquidfun.js/releases/download/v1.1.0/liquidfun_v1.1.0.min.js | `5D6BC9A3BA5D66409CDE01BC3DFEACE01F68EBE0F77746E6C5971322033C9289` | 1,519,142 bytes | Zlib (Box2D / LiquidFun). Notice kept in `vendor/LICENSE-liquidfun.txt`. |
+| PIXI.js | `vendor/pixi.min.js` | 8.21.0 (npm, published 2026-09-17) | `package/dist/pixi.min.js` from https://registry.npmjs.org/pixi.js/-/pixi.js-8.21.0.tgz | `C6D9D4C897B15576CCE0055D0BA4382021181C99CDF08A446BE9D61E16833DB0` | 828,321 bytes | MIT. The license header in the file must stay; full text in `vendor/LICENSE-pixi.txt`. |
+
+### liquidfun.js
+
+- The build is the Emscripten (asm.js) port by doebi. The same file, byte for byte, is used by the reference demo at https://github.com/doebi/liquidfun.js-demo (`js/lib/liquidfun_v1.1.0.min.js`, commit `22d921c6925de8cb2cfea646078a026a0ff4a32f`).
+- It compiles google/liquidfun at submodule commit `0708ce1464b0db3cf34353258ce939a82f28a173`. The notice file is `liquidfun/Box2D/License.txt` from that commit.
+- The doebi/liquidfun.js repository declares no license of its own. It ships only the Box2D notice (`NOTICE`).
+- **API exposure:** loading the script defines a single global, `Box2D`. The classes live on it (`Box2D.b2World`, `Box2D.b2Vec2`, `Box2D.b2RevoluteJointDef`, …). There are **no** global `b2World` / `b2Vec2`. Fields use WebIDL accessors (`bd.set_type(Box2D.b2_dynamicBody)`, `body.GetPosition().get_y()`).
+- The file is self-contained: no `.mem` or `.wasm` side file is requested.
+- On load it writes `pre-main prep time: 0 ms` with `console.log`. This is informational, not an error.
+
+### PIXI.js
+
+- The file is the browser IIFE build: it defines `globalThis.PIXI` (`var PIXI=(function(d){…})({})`) and has no ES module exports.
+- It contains default jsDelivr URLs for the Basis and KTX2 transcoders. They are fetched only when loading `.basis` / `.ktx2` compressed textures. Hosts that use those formats must point the transcoder paths at local copies.
+- API check against `DESIGN.md` §7 (headless Edge, 2026-10-14):
+
+| API | Result |
+|---|---|
+| `PIXI.VERSION` | `8.21.0` |
+| `PIXI.Application` + `await app.init()` | function; init succeeds with the WebGL renderer |
+| `PIXI.Assets` (`load`, `get`) | object with both functions |
+| `Container.sortableChildren` / `zIndex` | children reorder by `zIndex` after `sortChildren()` |
+| `eventMode` + `pointermove` | `eventMode = 'static'` is kept, and a `pointermove` listener fires |
+| `PIXI.Texture.from`, `PIXI.Graphics`, `PIXI.EventSystem` | present |
+
+### Updating a vendored library
+
+1. Download into an empty scratch folder outside the repository and verify the source checksum (npm `dist.integrity` for PIXI.js).
+2. Compute the SHA-256 (`Get-FileHash <file> -Algorithm SHA256`), copy only the distributable file into `vendor/`, and update the table above.
+3. Load both files from a static page served by `npx http-server -c-1 .` and check that the console shows no errors.
 
 ## Documentation style
 - No code comments. Exported API gets valid JSDoc only:
