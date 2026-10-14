@@ -3,7 +3,7 @@
 > Generated from [GitHub issues](https://github.com/Gann4Life/RagAssembler2D/issues) by `doc-writer`. Do not edit by hand; file new work as issues through `planner`.
 
 ## Phase 0 – Foundations
-- [ ] #2 Pin PIXI.js v8 and liquidfun.js builds in vendor/
+- [x] #2 Pin PIXI.js v8 and liquidfun.js builds in vendor/
 - [x] #3 Add node --test harness with a first smoke test
 - [ ] #4 Spike: check custom contact filter support in liquidfun.js
 - [ ] #5 Spike: verify the liquidfun.js API surface used by RagImporter

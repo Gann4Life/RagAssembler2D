@@ -30,7 +30,7 @@ app.ticker.add(() => { rag.update(dt); world.Step(dt, 8, 3); rag.sync(); });
 ```
 index.html, js/      editor
 lib/                 RagImporter runtime (planned)
-vendor/              pinned liquidfun.js and PIXI.js builds (planned)
+vendor/              pinned liquidfun.js v1.1.0 and PIXI.js 8.21.0 builds
 demo/                production preview using only RagImporter (planned)
 tests/               round-trip and runtime tests (planned)
 docs/                architecture and development documentation
