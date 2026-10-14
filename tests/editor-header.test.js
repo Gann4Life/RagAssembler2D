@@ -57,10 +57,10 @@ test('header shortcuts match the DESIGN.md §5.9 hotkeys', () => {
   });
 });
 
-test('actionTitle includes hint and shortcut and marks unavailable actions', () => {
+test('actionTitle shows the label plus the hotkey and marks unavailable actions', () => {
   const nextFrame = HEADER_GROUPS.flat().find((action) => action.id === 'next-frame');
-  assert.equal(actionTitle(nextFrame, true), 'Next frame (1/60 s, .)');
-  assert.equal(actionTitle(nextFrame, false), 'Next frame (1/60 s, .) (not available yet)');
+  assert.equal(actionTitle(nextFrame, true), 'Next frame (.)');
+  assert.equal(actionTitle(nextFrame, false), 'Next frame (.) (not available yet)');
   const stop = HEADER_GROUPS.flat().find((action) => action.id === 'stop');
   assert.equal(actionTitle(stop, true), 'Stop');
   assert.equal(actionTitle(stop, false), 'Stop (not available yet)');

@@ -6,7 +6,6 @@ import { rovingIndex } from './roving-focus.js';
  * @property {string} label Visible button text.
  * @property {string} [shortcut] Human-readable shortcut hint (`DESIGN.md` §5.9).
  * @property {string} [ariaKeyShortcuts] Value for `aria-keyshortcuts`.
- * @property {string} [hint] Extra description shown in the title.
  * @property {boolean} [menu] Whether the button opens a menu.
  */
 
@@ -32,13 +31,7 @@ export const HEADER_GROUPS = Object.freeze([
   Object.freeze([
     Object.freeze({ id: 'play', label: 'Play', shortcut: 'Space', ariaKeyShortcuts: 'Space' }),
     Object.freeze({ id: 'pause', label: 'Pause', shortcut: 'Space', ariaKeyShortcuts: 'Space' }),
-    Object.freeze({
-      id: 'next-frame',
-      label: 'Next frame',
-      hint: '1/60 s',
-      shortcut: '.',
-      ariaKeyShortcuts: '.',
-    }),
+    Object.freeze({ id: 'next-frame', label: 'Next frame', shortcut: '.', ariaKeyShortcuts: '.' }),
     Object.freeze({ id: 'stop', label: 'Stop' }),
   ]),
   Object.freeze([
@@ -56,8 +49,7 @@ const UNAVAILABLE_SUFFIX = ' (not available yet)';
  * @returns {string}
  */
 export function actionTitle(action, enabled) {
-  const details = [action.hint, action.shortcut].filter(Boolean);
-  const base = details.length ? `${action.label} (${details.join(', ')})` : action.label;
+  const base = action.shortcut ? `${action.label} (${action.shortcut})` : action.label;
   return enabled ? base : base + UNAVAILABLE_SUFFIX;
 }
 
