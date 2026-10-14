@@ -41,4 +41,4 @@ export function evaluate(def, active) { … }
 ```
 
 - Explanations longer than a docstring go in `docs/`.
-- Commits use an imperative summary and carry no AI attribution.
+- Branches, commits and changelog follow the conventions in `CLAUDE.md` (Conventional Branch, Conventional Commits, Keep a Changelog). No AI attribution.
