@@ -33,6 +33,9 @@ node --test tests/
 Current coverage:
 - `tests/smoke.test.js` checks that `lib/ragimporter.js` loads as an ES module and declares format version 1 as supported.
 - `tests/editor-header.test.js` checks the header's roving-focus key handling, group order, unique action ids, shortcuts and tooltip text. It imports `js/roving-focus.js` and `js/header.js`, which load in Node without a DOM; DOM behavior (`createHeader`, the viewport) is checked in the browser.
+- `tests/emitter.test.js` checks `lib/emitter.js` (ordering, unsubscribe, error handling, listener validation).
+- `tests/schema.test.js` checks `lib/schema.js` (field table against `docs/schema.md`, defaults, channels, clip keys).
+- `tests/model.test.js` checks `js/model/model.js` (uids, schema defaults, `applyOps` and `batch` change events and rollback, reset, id allocation, collection rejection in props).
 
 Tests for validation, canonical serialization (round-trip), the animation evaluator and event timing are **(planned)**.
 

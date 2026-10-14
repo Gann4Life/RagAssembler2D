@@ -33,7 +33,7 @@ css/                 editor styles
 lib/                 RagImporter runtime (stub; runtime planned)
 vendor/              pinned liquidfun.js v1.1.0 and PIXI.js 8.21.0 builds
 demo/                production preview using only RagImporter (planned)
-tests/               node --test suite (smoke and header tests; round-trip and runtime tests planned)
+tests/               node --test suite (smoke, header, emitter, schema and model tests; round-trip and runtime tests planned)
 docs/                architecture, format schema and development documentation
 ```
 
