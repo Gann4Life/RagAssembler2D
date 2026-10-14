@@ -1,0 +1,118 @@
+:root {
+  color-scheme: dark;
+  --bg: #16171a;
+  --surface: #222428;
+  --surface-hover: #2d3036;
+  --border: #34373d;
+  --text: #d8dade;
+  --text-muted: #8b8f97;
+  --focus: #5b9cf5;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 var(--font);
+}
+
+#header {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-button {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.header-button:hover:not([aria-disabled="true"]) {
+  background: var(--surface-hover);
+}
+
+.header-button[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.header-button:focus-visible,
+#viewport-host:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.header-button[aria-disabled="true"]:focus-visible {
+  opacity: 0.7;
+}
+
+.header-separator {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--border);
+}
+
+.header-separator-end {
+  margin-left: auto;
+}
+
+#workspace {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#panel-viewport {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+#viewport-host {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#viewport-host:focus-visible {
+  outline-offset: -2px;
+}
+
+.viewport-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+}
