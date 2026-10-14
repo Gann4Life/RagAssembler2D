@@ -53,6 +53,7 @@ If code and `DESIGN.md` disagree, stop and resolve it: either fix the code, or u
 
 ### Commits: [Conventional Commits 1.0](https://www.conventionalcommits.org/en/v1.0.0/)
 - Format: `<type>(<scope>): <description>`, imperative and lower-case, without a trailing period, e.g. `feat(editor): add box tool with shift/alt/ctrl modifiers`.
+- **Keep it short.** Subjects stay brief (aim for 50–72 characters). Commit bodies and PR descriptions are concise: what changed and why, no narration or file-by-file lists.
 - **Types:** `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `style`, `revert`.
 - **Scopes:**
   - `editor` (`js/`, `index.html`);
