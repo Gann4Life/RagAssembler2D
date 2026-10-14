@@ -1,5 +1,5 @@
 /**
- * @typedef {'tools' | 'hierarchy' | 'assets' | 'problems' | 'inspector' | 'timeline'} PanelId
+ * @typedef {'hierarchy' | 'assets' | 'problems' | 'inspector' | 'timeline'} PanelId
  */
 
 /**
@@ -33,9 +33,10 @@
 
 /**
  * @typedef {object} Layout
- * @property {1} version
+ * @property {2} version
  * @property {LayoutNode} tree
  * @property {{ [id: string]: { stackId: string, index: number } }} closed Where each closed panel was.
+ * @property {boolean} timelineFolded Whether the Timeline is folded; only takes effect while it is foldable.
  */
 
 /**
@@ -57,6 +58,7 @@
  * @typedef {object} Gutter
  * @property {ReadonlyArray<number>} path Child indexes from the root to the split.
  * @property {number} index The gutter lies between children `index` and `index + 1`.
+ * @property {number} controlled Index of the child the gutter resizes: `index` when the fill child comes after it, else `index + 1`.
  * @property {'row' | 'column'} dir Axis of the split.
  * @property {Rect} rect Gutter area (px).
  * @property {number} value Current size of the child the gutter resizes (px).
@@ -75,10 +77,13 @@
  */
 
 /** Stored layout record version. */
-export const LAYOUT_VERSION = 1;
+export const LAYOUT_VERSION = 2;
+
+/** Height of a stack's tab bar, and of a folded Timeline stack (px). */
+export const TAB_BAR_HEIGHT = 28;
 
 const GUTTER = 4;
-const TAB_BAR = 28;
+const TIMELINE = 'timeline';
 const EDGE_STRIP = 16;
 const ZONE_RATIO = 0.25;
 const ZONE_MIN = 24;
@@ -91,7 +96,6 @@ const SIDES = Object.freeze(['left', 'right', 'top', 'bottom']);
  * @type {Readonly<Record<PanelId, Readonly<PanelSpec>>>}
  */
 export const PANELS = deepFreeze({
-  tools: { title: 'Tools', group: 'tools', edge: 'left', size: 72, min: { width: 56, height: 120 } },
   hierarchy: { title: 'Hierarchy', group: 'hap', edge: 'right', size: 300, min: { width: 200, height: 96 } },
   assets: { title: 'Assets', group: 'hap', edge: 'right', size: 300, min: { width: 200, height: 96 } },
   problems: { title: 'Problems', group: 'hap', edge: 'right', size: 300, min: { width: 200, height: 96 } },
@@ -105,32 +109,32 @@ export const VIEWPORT_MIN = Object.freeze({ width: 240, height: 160 });
 const PANEL_IDS = Object.freeze(Object.keys(PANELS));
 
 /**
- * Builds the default layout of `DESIGN.md` §5.2.
- * @param {{ width: number, height: number }} workspace Workspace size (px); the Hierarchy stack starts at half the right column.
+ * Builds the default layout of `DESIGN.md` §5.2, with the Timeline folded.
+ * @param {{ width: number, height: number }} workspace Workspace size (px); the Hierarchy stack starts at half the
+ *   right column, measured with the Timeline folded.
  * @returns {Readonly<Layout>}
  */
 export function defaultLayout(workspace) {
-  const timeline = PANELS.timeline.size;
-  const rightColumn = workspace.height - timeline - GUTTER;
+  const rightColumn = workspace.height - TAB_BAR_HEIGHT - GUTTER;
   const hapHeight = Math.max(PANELS.hierarchy.min.height, Math.floor((rightColumn - GUTTER) / 2));
   return normalize({
     version: LAYOUT_VERSION,
     tree: split('column', [
       split('row', [
-        stack('s1', ['tools']),
         { type: 'viewport' },
-        split('column', [stack('s2', ['hierarchy', 'assets', 'problems']), stack('s3', ['inspector'])], [hapHeight, null]),
-      ], [PANELS.tools.size, null, PANELS.inspector.size]),
-      stack('s4', ['timeline']),
-    ], [null, timeline]),
+        split('column', [stack('s1', ['hierarchy', 'assets', 'problems']), stack('s2', ['inspector'])], [hapHeight, null]),
+      ], [null, PANELS.inspector.size]),
+      stack('s3', [TIMELINE]),
+    ], [null, PANELS.timeline.size]),
     closed: {},
+    timelineFolded: true,
   });
 }
 
 /**
  * Normalizes a structurally valid layout: drops empty stacks, collapses single-child splits,
  * flattens nested splits of the same direction, gives freed space to the previous sibling (else the next),
- * re-derives the fill child of every split and fixes `active`.
+ * re-derives the fill child of every split, fixes `active` and keeps `timelineFolded`.
  * @param {Layout} layout
  * @returns {Readonly<Layout>} A new frozen layout.
  */
@@ -143,6 +147,7 @@ export function normalize(layout) {
     version: LAYOUT_VERSION,
     tree: normalizeNode(layout.tree) ?? { type: 'viewport' },
     closed,
+    timelineFolded: layout.timelineFolded === true,
   });
 }
 
@@ -154,6 +159,7 @@ export function normalize(layout) {
 export function validateLayout(value) {
   if (!isObject(value)) return 'not an object';
   if (value.version !== LAYOUT_VERSION) return `unsupported version ${JSON.stringify(value.version ?? null)}`;
+  if (typeof value.timelineFolded !== 'boolean') return 'timelineFolded is not a boolean';
   const state = { panels: new Set(), stacks: new Set(), viewports: 0 };
   const reason = checkNode(value.tree, state);
   if (reason) return reason;
@@ -188,7 +194,8 @@ export function restoreLayout(value, workspace) {
 }
 
 /**
- * Makes an open panel the active tab of its stack.
+ * Makes an open panel the active tab of its stack. Expands the Timeline when the stack holds it,
+ * even if the panel was already active.
  * @param {Layout} layout
  * @param {PanelId} id
  * @returns {Readonly<Layout>}
@@ -200,7 +207,35 @@ export function activatePanel(layout, id) {
   const location = findPanel(next.tree, id);
   if (!location) throw new Error(`Panel is not open: ${id}`);
   location.stack.active = id;
+  if (location.stack.panels.includes(TIMELINE)) next.timelineFolded = false;
   return normalize(next);
+}
+
+/**
+ * Tells whether the Timeline is foldable: open, the active tab of its stack, and that stack a fixed (non-fill)
+ * child of a `column` split.
+ * @param {Layout} layout
+ * @returns {{ stackId: string, folded: boolean } | null} The Timeline's stack and `layout.timelineFolded`,
+ *   or `null` when it is not foldable.
+ */
+export function timelineFold(layout) {
+  const location = findPanel(layout.tree, TIMELINE);
+  if (!location || location.stack.active !== TIMELINE) return null;
+  const parent = findParent(layout.tree, location.stack);
+  if (!parent || parent.node.dir !== 'column' || parent.node.sizes[parent.index] === null) return null;
+  return { stackId: location.stack.id, folded: layout.timelineFolded === true };
+}
+
+/**
+ * Folds or expands the Timeline. Not undoable; the stored size of its stack is kept.
+ * @param {Layout} layout
+ * @param {boolean} folded
+ * @returns {Readonly<Layout>}
+ * @throws {Error} When the Timeline is not foldable ({@link timelineFold} returns `null`).
+ */
+export function setTimelineFolded(layout, folded) {
+  if (!timelineFold(layout)) throw new Error('Timeline is not foldable');
+  return normalize({ ...layout, timelineFolded: folded === true });
 }
 
 /**
@@ -223,6 +258,7 @@ export function closePanel(layout, id) {
 /**
  * Reopens a panel by the reopen rule and activates it: its previous stack and index if that stack exists,
  * else a stack holding a panel of its default group, else its default workspace edge.
+ * Expands the Timeline when it is the reopened panel or the panel lands in its stack.
  * @param {Layout} layout
  * @param {PanelId} id
  * @param {{ width: number, height: number }} workspace Workspace size (px).
@@ -236,18 +272,17 @@ export function openPanel(layout, id, workspace) {
   const record = next.closed[id];
   delete next.closed[id];
   const previous = record ? findStack(next.tree, record.stackId) : null;
+  const groupStack = previous ? null : findGroupStack(next.tree, PANELS[id].group);
   if (previous) {
     previous.panels.splice(Math.min(record.index, previous.panels.length), 0, id);
     previous.active = id;
-    return normalize(next);
-  }
-  const groupStack = findGroupStack(next.tree, PANELS[id].group);
-  if (groupStack) {
+  } else if (groupStack) {
     groupStack.panels.push(id);
     groupStack.active = id;
-    return normalize(next);
+  } else {
+    dockAtEdge(next, id, PANELS[id].edge, workspace);
   }
-  dockAtEdge(next, id, PANELS[id].edge, workspace);
+  if (findPanel(next.tree, id).stack.panels.includes(TIMELINE)) next.timelineFolded = false;
   return normalize(next);
 }
 
@@ -278,6 +313,7 @@ export function canDrop(layout, id, drop) {
 
 /**
  * Moves an open panel with a drop accepted by {@link canDrop}, and activates it.
+ * Expands the Timeline when it is the moved panel or the drop is a tab drop into its stack.
  * @param {Layout} layout
  * @param {PanelId} id
  * @param {Drop} drop
@@ -290,8 +326,10 @@ export function movePanel(layout, id, drop, workspace) {
   if (!canDrop(layout, id, drop)) throw new Error(`Drop not allowed for panel ${id}`);
   const next = structuredClone(layout);
   const source = findPanel(next.tree, id);
+  if (id === TIMELINE) next.timelineFolded = false;
   if (drop.kind === 'tab') {
     const target = findStack(next.tree, drop.stackId);
+    if (target.panels.includes(TIMELINE)) next.timelineFolded = false;
     const index = target === source.stack && source.index < drop.index ? drop.index - 1 : drop.index;
     detachPanel(source);
     target.panels.splice(index, 0, id);
@@ -329,7 +367,7 @@ export function movePanel(layout, id, drop, workspace) {
  * @param {number} value Requested size (px).
  * @param {{ width: number, height: number }} workspace Workspace size (px).
  * @returns {Readonly<Layout>}
- * @throws {Error} When the path, index or value is invalid.
+ * @throws {Error} When the path, index or value is invalid, or the gutter would resize the folded Timeline.
  */
 export function resizeSplit(layout, path, index, value, workspace) {
   const node = nodeAt(layout.tree, path);
@@ -341,9 +379,9 @@ export function resizeSplit(layout, path, index, value, workspace) {
   const gutter = computeRects(layout, workspace).gutters.find(
     (candidate) => candidate.index === index && samePath(candidate.path, path),
   );
+  if (!gutter) throw new Error(`Gutter ${index} in split [${path.join(', ')}] resizes the folded Timeline`);
   const next = structuredClone(layout);
-  const target = nodeAt(next.tree, path);
-  target.sizes[controlledChild(target, index)] = Math.round(Math.min(gutter.max, Math.max(gutter.min, value)));
+  nodeAt(next.tree, path).sizes[gutter.controlled] = Math.round(Math.min(gutter.max, Math.max(gutter.min, value)));
   return normalize(next);
 }
 
@@ -351,37 +389,67 @@ export function resizeSplit(layout, path, index, value, workspace) {
  * Computes the rectangles of every stack, the viewport and every gutter.
  * Fixed children get their size and the fill child the rest; when the fill falls below its minimum the others
  * shrink in proportion to their size above their own minimum, and the content grows past the workspace when the
- * minimums do not fit.
+ * minimums do not fit. A folded Timeline stack is {@link TAB_BAR_HEIGHT} high, which is also its minimum, and the
+ * gutter that would resize it is left out.
  * @param {Layout} layout
  * @param {{ width: number, height: number }} workspace Workspace size (px).
  * @returns {LayoutRects}
  */
 export function computeRects(layout, workspace) {
-  const min = minSize(layout.tree);
+  const fold = timelineFold(layout);
+  const folded = fold?.folded ? fold.stackId : null;
+  const min = minSize(layout.tree, folded);
   const width = Math.max(workspace.width, min.width);
   const height = Math.max(workspace.height, min.height);
   const out = { stacks: new Map(), viewport: null, gutters: [], width, height };
-  placeNode(layout.tree, { x: 0, y: 0, width, height }, [], out);
+  placeNode(layout.tree, { x: 0, y: 0, width, height }, [], out, folded);
   return out;
 }
 
 /**
- * Finds the drop under a point while dragging a panel tab: workspace edge strips first, then a stack's tab bar,
- * then stack (or viewport) edge zones, then the stack center.
+ * Finds the drop under a point while dragging a panel tab. First match wins: a stack's tab bar (all of a folded
+ * stack), workspace edge strips, stack edge zones, the stack center, viewport edge zones.
  * @param {Layout} layout
  * @param {LayoutRects} rects Result of {@link computeRects}, optionally with measured `tabs`.
  * @param {{ x: number, y: number }} point Pointer position (px, workspace content coordinates).
  * @param {PanelId} panelId The dragged panel.
- * @returns {{ drop: Drop, preview: Rect } | null} `null` when nothing can be docked there.
+ * @param {{ width: number, height: number }} workspace Workspace size (px), which caps edge docks.
+ * @returns {{ drop: Drop, preview: Rect, caret?: Rect } | null} `null` when nothing can be docked there;
+ *   `caret` is the insertion caret of a center drop.
  */
-export function dropAt(layout, rects, point, panelId) {
+export function dropAt(layout, rects, point, panelId, workspace) {
   if (!inside(point, { x: 0, y: 0, width: rects.width, height: rects.height })) return null;
-  const result = edgeDrop(rects, point, panelId) ?? stackDrop(layout, rects, point, panelId) ?? viewportDrop(rects, point, panelId);
+  const result = tabBarDrop(layout, rects, point)
+    ?? edgeDrop(rects, point, panelId, workspace)
+    ?? stackDrop(layout, rects, point, panelId)
+    ?? viewportDrop(rects, point, panelId);
   if (!result || !canDrop(layout, panelId, result.drop)) return null;
   return result;
 }
 
-function edgeDrop(rects, point, panelId) {
+function tabBarDrop(layout, rects, point) {
+  for (const [stackId, rect] of rects.stacks) {
+    const bar = { x: rect.x, y: rect.y, width: rect.width, height: Math.min(rect.height, TAB_BAR_HEIGHT) };
+    if (!inside(point, bar)) continue;
+    const target = findStack(layout.tree, stackId);
+    if (!target) return null;
+    const tabs = rects.tabs?.get(stackId);
+    if (!tabs || tabs.length === 0) {
+      return { drop: { kind: 'tab', stackId, index: target.panels.length }, preview: bar };
+    }
+    const index = tabs.filter((tab) => tab.x + tab.width / 2 < point.x).length;
+    return { drop: { kind: 'tab', stackId, index }, preview: caretAt(rect, tabs, index) };
+  }
+  return null;
+}
+
+function caretAt(rect, tabs, index) {
+  const last = tabs[tabs.length - 1];
+  const x = index < tabs.length ? tabs[index].x : last.x + last.width;
+  return { x: x - 1, y: rect.y, width: 2, height: TAB_BAR_HEIGHT };
+}
+
+function edgeDrop(rects, point, panelId, workspace) {
   const distances = [
     ['left', point.x],
     ['right', rects.width - point.x],
@@ -390,7 +458,7 @@ function edgeDrop(rects, point, panelId) {
   ].filter(([, distance]) => distance < EDGE_STRIP);
   if (distances.length === 0) return null;
   const [side] = distances.reduce((best, entry) => (entry[1] < best[1] ? entry : best));
-  const size = edgeSize(panelId, side, rects);
+  const size = edgeSize(panelId, side, workspace);
   const previews = {
     left: { x: 0, y: 0, width: size, height: rects.height },
     right: { x: rects.width - size, y: 0, width: size, height: rects.height },
@@ -405,10 +473,12 @@ function stackDrop(layout, rects, point, panelId) {
     if (!inside(point, rect)) continue;
     const target = findStack(layout.tree, stackId);
     if (!target) return null;
-    if (point.y < rect.y + TAB_BAR) return tabBarDrop(target, rect, rects.tabs?.get(stackId), point);
     const side = zoneSide(point, rect);
     if (side) return splitDrop(stackId, rect, side, panelId, minSize(withoutPanel(target, panelId)));
-    return { drop: { kind: 'tab', stackId, index: target.panels.length }, preview: { ...rect } };
+    const result = { drop: { kind: 'tab', stackId, index: target.panels.length }, preview: { ...rect } };
+    const tabs = rects.tabs?.get(stackId);
+    if (tabs && tabs.length > 0) result.caret = caretAt(rect, tabs, tabs.length);
+    return result;
   }
   return null;
 }
@@ -417,20 +487,6 @@ function viewportDrop(rects, point, panelId) {
   if (!rects.viewport || !inside(point, rects.viewport)) return null;
   const side = zoneSide(point, rects.viewport);
   return side ? splitDrop(VIEWPORT_TARGET, rects.viewport, side, panelId, VIEWPORT_MIN) : null;
-}
-
-function tabBarDrop(target, rect, tabs, point) {
-  const bar = { x: rect.x, y: rect.y, width: rect.width, height: TAB_BAR };
-  if (!tabs || tabs.length === 0) {
-    return { drop: { kind: 'tab', stackId: target.id, index: target.panels.length }, preview: bar };
-  }
-  const index = tabs.filter((tab) => tab.x + tab.width / 2 < point.x).length;
-  const last = tabs[tabs.length - 1];
-  const caretX = index < tabs.length ? tabs[index].x : last.x + last.width;
-  return {
-    drop: { kind: 'tab', stackId: target.id, index },
-    preview: { x: caretX - 1, y: rect.y, width: 2, height: TAB_BAR },
-  };
 }
 
 function splitDrop(stackId, rect, side, panelId, targetMin) {
@@ -483,7 +539,7 @@ function dockAtEdge(layout, id, side, workspace) {
   );
 }
 
-function placeNode(node, rect, path, out) {
+function placeNode(node, rect, path, out, folded) {
   if (node.type === 'viewport') {
     out.viewport = rect;
     return;
@@ -494,32 +550,39 @@ function placeNode(node, rect, path, out) {
   }
   const key = axisKey(node.dir);
   const start = node.dir === 'row' ? 'x' : 'y';
-  const mins = node.children.map((child) => minSize(child)[key]);
-  const extents = distribute(node, rect[key], mins);
+  const mins = node.children.map((child) => minSize(child, folded)[key]);
+  const pinned = node.children.map((child) => isFoldedStack(child, folded));
+  const extents = distribute(node, rect[key], mins, pinned);
   const fillIndex = node.sizes.indexOf(null);
   let cursor = rect[start];
   node.children.forEach((child, index) => {
-    placeNode(child, { ...rect, [start]: cursor, [key]: extents[index] }, [...path, index], out);
+    placeNode(child, { ...rect, [start]: cursor, [key]: extents[index] }, [...path, index], out, folded);
     cursor += extents[index];
     if (index === node.children.length - 1) return;
     const controlled = controlledChild(node, index);
-    out.gutters.push({
-      path: Object.freeze([...path]),
-      index,
-      dir: node.dir,
-      rect: { ...rect, [start]: cursor, [key]: GUTTER },
-      value: extents[controlled],
-      min: mins[controlled],
-      max: extents[controlled] + Math.max(0, extents[fillIndex] - mins[fillIndex]),
-    });
+    if (!pinned[controlled]) {
+      out.gutters.push({
+        path: Object.freeze([...path]),
+        index,
+        controlled,
+        dir: node.dir,
+        rect: { ...rect, [start]: cursor, [key]: GUTTER },
+        value: extents[controlled],
+        min: mins[controlled],
+        max: extents[controlled] + Math.max(0, extents[fillIndex] - mins[fillIndex]),
+      });
+    }
     cursor += GUTTER;
   });
 }
 
-function distribute(node, extent, mins) {
+function distribute(node, extent, mins, pinned) {
   const fillIndex = node.sizes.indexOf(null);
   const available = extent - GUTTER * (node.children.length - 1);
-  const sizes = node.sizes.map((size, index) => (index === fillIndex ? 0 : Math.max(mins[index], Math.round(size))));
+  const sizes = node.sizes.map((size, index) => {
+    if (index === fillIndex) return 0;
+    return pinned[index] ? mins[index] : Math.max(mins[index], Math.round(size));
+  });
   let fill = available - sum(sizes);
   if (fill < mins[fillIndex]) {
     const deficit = mins[fillIndex] - fill;
@@ -537,17 +600,18 @@ function distribute(node, extent, mins) {
   return sizes;
 }
 
-function minSize(node) {
+function minSize(node, folded = null) {
   if (node.type === 'viewport') return VIEWPORT_MIN;
   if (node.type === 'stack') {
-    return node.panels.reduce(
-      (min, id) => ({ width: Math.max(min.width, PANELS[id].min.width), height: Math.max(min.height, PANELS[id].min.height) }),
+    const min = node.panels.reduce(
+      (acc, id) => ({ width: Math.max(acc.width, PANELS[id].min.width), height: Math.max(acc.height, PANELS[id].min.height) }),
       { width: 0, height: 0 },
     );
+    return isFoldedStack(node, folded) ? { width: min.width, height: TAB_BAR_HEIGHT } : min;
   }
   const along = axisKey(node.dir);
   const across = along === 'width' ? 'height' : 'width';
-  const mins = node.children.map(minSize);
+  const mins = node.children.map((child) => minSize(child, folded));
   return {
     [along]: sum(mins.map((min) => min[along])) + GUTTER * (mins.length - 1),
     [across]: Math.max(...mins.map((min) => min[across])),
@@ -674,6 +738,21 @@ function findPanel(node, id) {
     }
   }
   return null;
+}
+
+function findParent(node, target) {
+  if (node.type !== 'split') return null;
+  const index = node.children.indexOf(target);
+  if (index >= 0) return { node, index };
+  for (const child of node.children) {
+    const found = findParent(child, target);
+    if (found) return found;
+  }
+  return null;
+}
+
+function isFoldedStack(node, folded) {
+  return folded !== null && node.type === 'stack' && node.id === folded;
 }
 
 function findStack(node, stackId) {
