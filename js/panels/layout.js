@@ -83,6 +83,8 @@ export const LAYOUT_VERSION = 2;
 export const TAB_BAR_HEIGHT = 28;
 
 const GUTTER = 4;
+const MAX_DEPTH = 32;
+const MAX_SIZE = 100000;
 const TIMELINE = 'timeline';
 const EDGE_STRIP = 16;
 const ZONE_RATIO = 0.25;
@@ -376,12 +378,16 @@ export function resizeSplit(layout, path, index, value, workspace) {
     throw new Error(`No gutter ${index} in split [${path.join(', ')}]`);
   }
   if (!Number.isFinite(value)) throw new Error('Split size must be a finite number');
-  const gutter = computeRects(layout, workspace).gutters.find(
-    (candidate) => candidate.index === index && samePath(candidate.path, path),
-  );
+  const measured = measure(layout, workspace);
+  const gutter = measured.gutters.find((candidate) => candidate.index === index && samePath(candidate.path, path));
   if (!gutter) throw new Error(`Gutter ${index} in split [${path.join(', ')}] resizes the folded Timeline`);
+  const { extents, pinned } = measured.splits.get(path.join('.'));
   const next = structuredClone(layout);
-  nodeAt(next.tree, path).sizes[gutter.controlled] = Math.round(Math.min(gutter.max, Math.max(gutter.min, value)));
+  const sizes = nodeAt(next.tree, path).sizes;
+  sizes.forEach((size, child) => {
+    if (size !== null && !pinned[child]) sizes[child] = extents[child];
+  });
+  sizes[gutter.controlled] = Math.round(Math.min(gutter.max, Math.max(gutter.min, value)));
   return normalize(next);
 }
 
@@ -396,12 +402,17 @@ export function resizeSplit(layout, path, index, value, workspace) {
  * @returns {LayoutRects}
  */
 export function computeRects(layout, workspace) {
+  const { splits, ...rects } = measure(layout, workspace);
+  return rects;
+}
+
+function measure(layout, workspace) {
   const fold = timelineFold(layout);
   const folded = fold?.folded ? fold.stackId : null;
   const min = minSize(layout.tree, folded);
   const width = Math.max(workspace.width, min.width);
   const height = Math.max(workspace.height, min.height);
-  const out = { stacks: new Map(), viewport: null, gutters: [], width, height };
+  const out = { stacks: new Map(), viewport: null, gutters: [], width, height, splits: new Map() };
   placeNode(layout.tree, { x: 0, y: 0, width, height }, [], out, folded);
   return out;
 }
@@ -446,7 +457,7 @@ function tabBarDrop(layout, rects, point) {
 function caretAt(rect, tabs, index) {
   const last = tabs[tabs.length - 1];
   const x = index < tabs.length ? tabs[index].x : last.x + last.width;
-  return { x: x - 1, y: rect.y, width: 2, height: TAB_BAR_HEIGHT };
+  return { x: clamp(x - 1, rect.x, rect.x + rect.width - 2), y: rect.y, width: 2, height: TAB_BAR_HEIGHT };
 }
 
 function edgeDrop(rects, point, panelId, workspace) {
@@ -553,6 +564,7 @@ function placeNode(node, rect, path, out, folded) {
   const mins = node.children.map((child) => minSize(child, folded)[key]);
   const pinned = node.children.map((child) => isFoldedStack(child, folded));
   const extents = distribute(node, rect[key], mins, pinned);
+  out.splits.set(path.join('.'), { extents, pinned });
   const fillIndex = node.sizes.indexOf(null);
   let cursor = rect[start];
   node.children.forEach((child, index) => {
@@ -679,7 +691,8 @@ function normalizeNode(node) {
   };
 }
 
-function checkNode(node, state) {
+function checkNode(node, state, depth = 0) {
+  if (depth > MAX_DEPTH) return `tree deeper than ${MAX_DEPTH} levels`;
   if (!isObject(node)) return 'malformed node';
   if (node.type === 'viewport') {
     state.viewports += 1;
@@ -692,8 +705,9 @@ function checkNode(node, state) {
   if (!Array.isArray(node.sizes) || node.sizes.length !== node.children.length) return 'sizes do not match children';
   if (node.sizes.filter((size) => size === null).length !== 1) return 'split must have exactly one null size';
   if (node.sizes.some((size) => size !== null && !isPositive(size))) return 'size must be a finite number > 0';
+  if (node.sizes.some((size) => size > MAX_SIZE)) return `size must not exceed ${MAX_SIZE} px`;
   for (const child of node.children) {
-    const reason = checkNode(child, state);
+    const reason = checkNode(child, state, depth + 1);
     if (reason) return reason;
   }
   return null;

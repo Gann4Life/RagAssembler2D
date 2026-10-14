@@ -665,3 +665,53 @@ test('dropAt accepts viewport edges and refuses its center, own sole stack, gutt
   assert.equal(dropAt(layout, rects, { x: -1, y: 200 }, 'inspector', WS), null);
   assert.equal(dropAt(layout, rects, { x: 300, y: 700 }, 'inspector', WS), null);
 });
+
+test('resizeSplit keeps shrunk siblings on screen so the dragged edge follows the request', () => {
+  const ws = { width: 1070, height: 430 };
+  let layout = setTimelineFolded(defaultLayout(ws), false);
+  layout = movePanel(layout, 'problems', { kind: 'edge', side: 'bottom' }, ws);
+  const before = computeRects(layout, ws);
+  const gutter = before.gutters.find((candidate) => candidate.path.length === 0 && candidate.index === 0);
+  assert.equal(gutter.value < 220, true);
+  const resized = resizeSplit(layout, gutter.path, gutter.index, gutter.value + 10, ws);
+  const after = computeRects(resized, ws);
+  const timeline = stackWith(resized, 'timeline').id;
+  const problems = stackWith(resized, 'problems').id;
+  assert.equal(after.stacks.get(timeline).height, gutter.max);
+  assert.equal(after.stacks.get(timeline).height >= gutter.value, true);
+  assert.equal(after.stacks.get(problems).height, before.stacks.get(problems).height);
+  assert.equal(resized.tree.sizes[2], before.stacks.get(problems).height);
+});
+
+test('resizeSplit leaves a folded sibling stored size untouched', () => {
+  const layout = resizeSplit(defaultLayout(WS), [0], 0, 250, WS);
+  assert.equal(layout.tree.sizes[1], 220);
+});
+
+test('validateLayout rejects trees deeper than 32 levels and sizes above 100000 px', () => {
+  let deep = viewport();
+  for (let level = 0; level < 20000; level += 1) deep = split(level % 2 ? 'row' : 'column', [deep], [null]);
+  assert.match(validateLayout(layoutOf(deep)), /deeper than 32/);
+  const { layout, warning } = restoreLayout(layoutOf(deep), WS);
+  assert.match(warning, /deeper than 32/);
+  assert.deepEqual(plain(layout), plain(defaultLayout(WS)));
+  let shallow = viewport();
+  for (let level = 0; level < 32; level += 1) shallow = split('row', [shallow], [null]);
+  assert.equal(validateLayout(layoutOf(shallow)), null);
+  const huge = layoutOf(split('row', [viewport(), stack('a', ['assets'])], [null, 1e308]));
+  assert.match(validateLayout(huge), /must not exceed 100000 px/);
+  assert.equal(validateLayout(layoutOf(split('row', [viewport(), stack('a', ['assets'])], [null, 100000]))), null);
+});
+
+test('dropAt keeps the tab caret inside the stack', () => {
+  const layout = defaultLayout(WS);
+  const rects = { ...computeRects(layout, WS), tabs: new Map([['s1', [
+    { x: 980, y: 0, width: 150, height: 28 },
+    { x: 1130, y: 0, width: 150, height: 28 },
+    { x: 1280, y: 0, width: 0, height: 28 },
+  ]]]) };
+  const result = dropAt(layout, rects, { x: 1275, y: 10 }, 'inspector', WS);
+  assert.deepEqual(result.preview, { x: 1278, y: 0, width: 2, height: 28 });
+  const center = dropAt(layout, rects, { x: 1130, y: 160 }, 'inspector', WS);
+  assert.deepEqual(center.caret, { x: 1278, y: 0, width: 2, height: 28 });
+});
