@@ -10,7 +10,13 @@
 npx http-server -c-1 .     # editor: http://localhost:8080, demo: http://localhost:8080/demo/
 ```
 
-ES modules require HTTP. Opening `index.html` from disk does not work.
+ES modules require HTTP. Opening `index.html` from disk does not work. The demo page is **(planned)**.
+
+What the editor shows now (see [Editor boot](architecture.md#editor-boot)):
+- A header toolbar across the top: New, Load, Save | Undo, Redo | Play, Pause, Next frame, Stop, and Window, Settings at the right end. Every button is disabled (muted text, tooltip ends with "(not available yet)"), but stays focusable. Tab reaches the toolbar once; Left/Right/Home/End move between buttons. On narrow windows the header scrolls horizontally.
+- Below it, an empty dark PIXI viewport that fills the rest of the window and resizes with it. When focused with Tab it shows a blue focus ring.
+- If `vendor/pixi.min.js` or `vendor/liquidfun.js` fails to load, the page stays blank and the console shows an error naming the missing library.
+- The console also shows `pre-main prep time: 0 ms` from liquidfun.js (see [liquidfun.js](#liquidfunjs)).
 
 ## Tests
 
@@ -24,7 +30,11 @@ node --test tests/
 - Bare `node --test` also works: its default glob matches `*.test.js` and does not match `index.js`, so no test runs twice.
 - Any failing test makes the command exit with a non-zero code.
 
-Current coverage: `tests/smoke.test.js` checks that `lib/ragimporter.js` loads as an ES module and declares format version 1 as supported. Tests for validation, canonical serialization (round-trip), the animation evaluator and event timing are **(planned)**.
+Current coverage:
+- `tests/smoke.test.js` checks that `lib/ragimporter.js` loads as an ES module and declares format version 1 as supported.
+- `tests/editor-header.test.js` checks the header's roving-focus key handling, group order, unique action ids, shortcuts and tooltip text. It imports `js/roving-focus.js` and `js/header.js`, which load in Node without a DOM; DOM behavior (`createHeader`, the viewport) is checked in the browser.
+
+Tests for validation, canonical serialization (round-trip), the animation evaluator and event timing are **(planned)**.
 
 ## Vendored libraries
 
