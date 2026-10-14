@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(git log *)",
+      "PowerShell(git status *)",
+      "PowerShell(Select-Object *)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(gh issue view *)",
+      "PowerShell(ConvertFrom-Json *)",
+      "PowerShell(Select-String *)",
+      "PowerShell(node --test tests/)",
+      "PowerShell(gh issue list *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(gh pr view *)",
+      "PowerShell(Out-Null)"
+    ]
+  }
+}
