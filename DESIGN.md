@@ -313,21 +313,38 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 - Changing mode cancels the tool operation in progress (as Esc). If the active tool is disabled in the new mode, the Select tool becomes active.
 
 ### 5.2 Panels
-- All panels are resizable, modular and can snap to each other.
-- Handles sit at the middle of each edge that overlaps another panel.
-- When two or more panels share a slot, tabs let the user switch between them.
-- Panels can be closed and reopened from the **Window** menu. The layout is saved per browser, and *Reset layout* restores the default:
+The workspace below the header is tiled by panels: Tools, Viewport, Hierarchy, Assets, Problems, Inspector and Timeline. Panels never overlap. If the window is smaller than the sum of the minimum sizes, the workspace scrolls.
+
+- **Viewport is fixed.** It cannot be closed, tabbed or dragged, and nothing can be dropped onto its center; other panels dock around its edges. If every other panel is closed, it fills the workspace.
+- **Stacks and tabs.** Panels that share a slot form a stack. Every stack shows a tab bar, even with one panel; the tab is the panel's title and its drag handle. The tab bar is a tab list with a roving tabindex (Left/Right wrap, Home/End, activation follows focus). An overflowing tab bar scrolls horizontally and keeps the active tab visible.
+- **Docking.** Dragging a tab (more than 4 px) moves that panel. Dropping it on the center of a stack adds it as a tab there (the tab bar shows the insertion point); on an edge of a stack it splits that stack and takes half of it; on a 16 px strip at a workspace edge it docks across the full width or height with its default size, capped at 1/3 of the workspace. The resulting area is previewed while dragging. Esc, or a drop where nothing can be docked, cancels.
+- **Resize handles.** Neighbouring panels are separated by a 4 px gutter. The whole shared edge is draggable; a grip marks its middle. Sizes are clamped to the minimums below, and Esc during a drag restores the previous size. Handles are focusable separators: arrows move ±10 px, Shift + arrows ±50 px, Home/End go to the minimum/maximum. When the window is resized, only the area holding the Viewport (or the last area of a split without it) grows or shrinks.
+- **Window menu.** Panels are closed with the × on their tab (or a middle click), and reopened or closed from the **Window** menu ([§5.3](#53-header)). A reopened panel returns to its previous stack and position if that stack still exists; otherwise it joins a stack holding a panel of its default group; otherwise it docks to its default workspace edge with its default size.
+- **Persistence.** The layout is saved per browser after every change and restored on load. A stored layout that cannot be read is ignored with a console warning, and the default is used; panels missing from it are added by the reopen rule. If browser storage is unavailable, the layout lives only for the session.
+- **Reset layout** restores the default immediately, with no confirmation, and forgets the stored layout. Layout changes, including Reset, are not undoable.
+
+Default layout. The positions given as "Default location" in [§5.5–5.8](#55-tools-panel) refer to it:
 
 ```
-┌──────────────────────── Header ─────────────────────────┐
-├───────┬───────────────────────────────┬─────────────────┤
-│ Tools │                               │ Hierarchy │ Assets │ Problems
-│       │           Viewport            ├─────────────────┤
-│       │                               │ Inspector       │
-├───────┴───────────────────────────────┴─────────────────┤
-│                         Timeline                        │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────── Header ──────────────────────────┐
+├───────┬───────────────────────────┬──────────────────────┤
+│ Tools │                           │ Hierarchy|Assets|Prob│
+│       │         Viewport          ├──────────────────────┤
+│       │                           │ Inspector            │
+├───────┴───────────────────────────┴──────────────────────┤
+│                         Timeline                         │
+└──────────────────────────────────────────────────────────┘
 ```
+
+| Panel | Default group and edge | Default size | Minimum (w × h) |
+|---|---|---|---|
+| Tools | own stack, left | 72 px wide | 56 × 120 px |
+| Viewport | fixed, center | the remaining area | 240 × 160 px |
+| Hierarchy, Assets, Problems | one stack, right top | 300 px wide; half the right column | 200 × 96 px |
+| Inspector | own stack, right bottom | 300 px wide; the rest of the right column | 200 × 96 px |
+| Timeline | own stack, bottom, full width | 220 px high | 320 × 120 px |
+
+Minimum heights include the 28 px tab bar. Panels that are not built yet show a centered "*Name* (not available yet)" placeholder.
 
 ### 5.3 Header
 Location: top, full width. One toolbar row with four button groups divided by separators:
@@ -340,7 +357,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
 | Workspace | Window, Settings | Right end |
 
 - **Buttons** are text-labelled. Each tooltip shows the label, plus the hotkey from [§5.9](#59-hotkeys-defaults) if one exists. Buttons without a §5.9 hotkey show none.
-- **Keyboard:** the header is a single Tab stop (`role="toolbar"`, roving tabindex). Left/Right move between buttons and wrap around, and Home/End jump to the first/last button. While focus is in the header, these keys do not trigger global hotkeys.
+- **Keyboard:** the header is a single Tab stop (`role="toolbar"`, roving tabindex). Left/Right move between buttons and wrap around, and Home/End jump to the first/last button. These keys do not trigger global hotkeys ([§5.9](#59-hotkeys-defaults)).
 - **Unavailable actions** use `aria-disabled` and stay focusable, so keyboard users can still reach them. The tooltip adds "(not available yet)".
 - If the window is narrower than the row, the header scrolls horizontally. Buttons never wrap.
 
@@ -354,7 +371,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
 - **Play / Pause / Next frame / Stop**:
   - Next frame advances one fixed step (1/60 s).
   - Stop restores the pose and time that were active before Play.
-- **Window** menu: panel toggles, Reset layout.
+- **Window** menu: one checkbox per panel in the order Tools, Viewport, Hierarchy, Assets, Problems, Inspector, Timeline (Viewport is always checked and disabled), a separator, then *Reset layout* ([§5.2](#52-panels)). Checking a panel reopens it and activates its tab; unchecking closes it. The menu opens below the button, aligned to its right edge. Enter, Space or Down open it on the first item, Up on the last; Up/Down wrap and Home/End jump; Esc closes it and returns focus to the button; Tab closes it and moves on; Left/Right close it and move along the header. Choosing an item or clicking outside closes it. When a closed panel had focus, focus moves to the new active tab of its stack, or else to the viewport.
 - **Settings**: grid size, snapping, `pixelsPerMeter`, display options.
 
 ### 5.4 Viewport
@@ -376,7 +393,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
 - **Accessibility:** the viewport host is focusable (`tabindex="0"`) and labelled "Viewport". It uses `role="group"` until the viewport handles keys itself. From then on it uses `role="application"`, with `aria-roledescription="viewport"` and `aria-describedby` pointing to a summary of its keys. That way screen readers pass single-key hotkeys ([§5.9](#59-hotkeys-defaults)) to the editor instead of using them for browse-mode navigation. The role applies only to the viewport host, never to the page or a panel.
 
 ### 5.5 Tools panel
-Location: left middle.
+Default location ([§5.2](#52-panels)): left.
 
 - **Select** (`V`, cursor icon): click to select world objects (root, shapes, joints). SHIFT + click adds to or removes from the selection. SHIFT + drag starts a selection box.
 - **Select Box** (`B`, dotted box icon): drag to multi-select. With multiple shapes selected, they can be grouped (Ctrl+G) into one body.
@@ -408,7 +425,7 @@ Location: left middle.
   - Limits can be fine-tuned in the inspector.
 
 ### 5.6 Hierarchy, Assets and Problems panels
-Location: right top, as tabs.
+Default location ([§5.2](#52-panels)): right top, as tabs of one stack.
 
 **Hierarchy**
 - **Tree:**
@@ -433,7 +450,7 @@ Location: right top, as tabs.
 **Problems**: live list of validation errors and warnings ([§6.4](#64-validation)). Clicking one selects the object.
 
 ### 5.7 Inspector / Properties panel
-Location: right bottom. The inspector always shows the public properties of the selection and lets the user edit them. With multiple objects of the same type selected, it edits shared fields, and mixed values are shown as `—`.
+Default location ([§5.2](#52-panels)): right bottom. The inspector always shows the public properties of the selection and lets the user edit them. With multiple objects of the same type selected, it edits shared fields, and mixed values are shown as `—`.
 
 - **Display units:** pixels and degrees in the UI, meters and radians in the file. Multipliers are shown as %.
 - **Animation:** in Animate mode, animatable properties show a **key button ◆**. It is filled when a key exists at the playhead; clicking inserts or updates the key, and right-click removes it. The field shows the evaluated value at the playhead.
@@ -518,7 +535,7 @@ Location: right bottom. The inspector always shows the public properties of the 
 | data | Text field. Parsed as JSON when valid, otherwise stored as a string. |
 
 ### 5.8 Animation timeline
-Location: bottom, full width. Modeled after Godot's animation panel.
+Default location ([§5.2](#52-panels)): bottom, full width. Modeled after Godot's animation panel.
 
 ```
 ┌ [clip ▾ walk] [+ New] [⧉ Duplicate] [🗑]  length [1.00]s  snap [1/30]  [⟲ loop]  [● autokey]  [◆ Key selected (K)] ┐
@@ -576,6 +593,7 @@ Location: bottom, full width. Modeled after Godot's animation panel.
 | Esc | Abort tool / clear selection | | |
 
 - Hotkeys are ignored while focus is in a text field. Space also goes to a focused button or control instead of Play/Pause.
+- While focus is in a toolbar, a tab list, a resize handle or an open menu, their navigation keys (arrows, Home, End, Space, Enter, Esc) do not trigger global hotkeys.
 - In the viewport, Space + left drag pans. A Space press without a drag toggles Play/Pause when Space is released.
 
 ### 5.10 Inverse kinematics

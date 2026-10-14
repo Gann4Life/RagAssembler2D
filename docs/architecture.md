@@ -50,8 +50,8 @@ RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `
 
 | Layer | Modules | Rules |
 |---|---|---|
-| Core | `js/editor.js`, `js/model/*`, `js/commands/*`, `js/modes.js`, `js/hotkeys.js`, `js/actions.js`, `js/units.js`, `js/roving-focus.js`, `js/tools/*`, `js/viewport/camera.js`, `js/viewport/hit.js` | No DOM, no PIXI import, no globals. Load and run under `node --test`. Import only `lib/` and other core modules. Tools draw only through the `PIXI.Graphics` they are handed. |
-| UI | `js/main.js`, `js/header.js`, `js/viewport.js`, `js/viewport/*` (other than camera, hit), `js/panels/*`, `js/storage.js`, `js/files.js`, `js/asset-store.js` | May import core and `lib/`. Receive the editor object and `PIXI` as parameters. Panels never import other panels (except through `js/panels/dock.js`). Never mutate the model directly. |
+| Core | `js/editor.js`, `js/model/*`, `js/commands/*`, `js/modes.js`, `js/hotkeys.js`, `js/actions.js`, `js/units.js`, `js/roving-focus.js`, `js/tools/*`, `js/viewport/camera.js`, `js/viewport/hit.js`, `js/panels/layout.js` | No DOM, no PIXI import, no globals. Load and run under `node --test`. Import only `lib/` and other core modules. Tools draw only through the `PIXI.Graphics` they are handed. |
+| UI | `js/main.js`, `js/header.js`, `js/menu.js`, `js/viewport.js`, `js/viewport/*` (other than camera, hit), `js/panels/*` (other than layout), `js/storage.js`, `js/files.js`, `js/asset-store.js` | May import core and `lib/`. Receive the editor object and `PIXI` as parameters. Panel modules never import each other or `js/panels/dock.js`; `js/main.js` mounts them into the element the dock gives for their panel. Never mutate the model directly. |
 
 Pure modules (`lib/` pure set and the `js/` core) must not touch the DOM, PIXI or LiquidFun.
 
@@ -68,7 +68,7 @@ Columns: responsibility, public exports, and allowed imports beyond `lib/`. Rows
 | `js/main.js` | Editor bootstrap: checks the `PIXI` and `Box2D` globals, mounts the header and creates the viewport. | none | any `js/` |
 | `js/editor.js` | Empty. Reserved for the composition root **(planned, #10)**. | none | — |
 | `js/header.js` | Header toolbar: grouped action list, roving-tabindex keyboard navigation, `aria-disabled` buttons with tooltips, and a bubbling `header-action` CustomEvent (`detail.action`) on clicks of enabled buttons. | `HEADER_GROUPS`, `createHeader`, `actionTitle`, `setActionEnabled`, typedef `HeaderAction` | `js/roving-focus.js` |
-| `js/roving-focus.js` | Pure key-to-index mapping for roving-tabindex toolbars (Left/Right wrap, Home/End). | `rovingIndex` | — |
+| `js/roving-focus.js` | Pure key-to-index mapping for roving-tabindex toolbars (Left/Right wrap, Home/End). **#8** adds an optional fourth parameter `orientation` (`'horizontal'` default, `'vertical'` uses Up/Down) for menus. | `rovingIndex(current, key, count, orientation?)` | — |
 | `js/viewport.js` | PIXI viewport: creates an `Application` in a host element and keeps the renderer sized to the host and `devicePixelRatio`. | `createViewport`, typedef `Viewport` (`app`, `destroy`) | `js/viewport/*` (planned) |
 | `js/model/model.js` | Document model ([Document model](#document-model)). | `Model`, `ROOT_UID`, typedefs `Node`, `NodeType`, `NodeSnapshot`, `Change`, `Op` | `lib/emitter.js`, `lib/schema.js` |
 | `lib/emitter.js` | Synchronous event emitter ([Emitter](#emitter)). | `Emitter` | — |
@@ -123,6 +123,7 @@ The runtime split (`def`, `instance`, `render`, `collision`) is confirmed by the
 | `js/tools/select.js`, `select-box.js`, `manipulate.js`, `pose.js`, `circle.js`, `box.js`, `polygon.js`, `hinge.js` | One tool each ([`DESIGN.md` §5.5](../DESIGN.md#55-tools-panel)). | `selectTool`, `selectBoxTool`, `manipulateTool`, `poseTool`, `circleTool`, `boxTool`, `polygonTool`, `hingeTool` | tool, commands/*, model, queries | #13–#17, #24, #38 |
 | `js/viewport/camera.js` | Pure camera: center (m), zoom, world ⇄ screen with `pixelsPerMeter` and the Y flip. | `Camera` | — | #11 |
 | `js/viewport/hit.js` | Pure hit testing in root-local meters: root gizmo, joint gizmos, shapes, topmost first. | `hitTest` | model, camera | #12 |
+| `js/panels/layout.js` | Pure dock layout model ([Dock layout](#dock-layout)): panel table, default layout, normalize, validate and restore a stored layout, close/open/move/activate/resize, rectangles, drop targets. Immutable: every operation returns a new frozen `Layout`. | `LAYOUT_VERSION`, `PANELS`, `VIEWPORT_MIN`, `defaultLayout`, `normalize`, `validateLayout`, `restoreLayout`, `activatePanel`, `closePanel`, `openPanel`, `movePanel`, `canDrop`, `resizeSplit`, `computeRects`, `dropAt`, typedefs `PanelId`, `Layout`, `LayoutNode`, `Drop`, `Rect`, `Gutter` | — | #8 |
 
 ### js/ UI (planned)
 
@@ -132,9 +133,10 @@ The runtime split (`def`, `instance`, `render`, `collision`) is confirmed by the
 | `js/viewport/grid.js` | Grid (1 m / 0.1 m) and origin axes. | `createGrid` | #11 |
 | `js/viewport/gizmos.js` | Root, joint, selection and hover gizmos; strength fill in Animate. | `createGizmos` | #12, #36 |
 | `js/viewport/input.js` | DOM pointer/keyboard/wheel → navigation, then `ToolPointerEvent` → registry; click counting; context menu suppression. | `attachInput` | #11, #12 |
-| `js/panels/dock.js` | Dockable panels, tabs, resize handles, saved layout. | `createDock` | #8 |
+| `js/panels/dock.js` | DOM for the layout of `js/panels/layout.js`: splits, tab bars (tab list, roving tabindex), resize gutters (separators), pointer-event tab dragging with drop preview, placeholders for unbuilt panels, focus repair on close, and saving through `js/storage.js` ([Dock layout](#dock-layout)). Imports `js/panels/layout.js`, `js/roving-focus.js`, `js/storage.js`. | `createDock(workspace, { viewportElement }) → Dock`, typedef `Dock` (`panelElement(id)`, `isOpen(id)`, `open(id)`, `close(id)`, `reset()`, `windowItems()`, `on/off('layout')`, `destroy()`) | #8 |
+| `js/menu.js` | Generic popup menu anchored to a button: `role="menu"` with `menuitem`/`menuitemcheckbox`/separator items, `aria-expanded`/`aria-controls` on the button, keyboard per [`DESIGN.md` §5.3](../DESIGN.md#53-header), outside click closes. Imports `js/roving-focus.js`. | `openMenu(button, items, { onSelect, onNavigate }) → { close }`, typedef `MenuItem` (`id`, `label`, `kind`, `checked`, `disabled`) | #8 |
 | `js/panels/tools-panel.js`, `hierarchy.js`, `assets.js`, `problems.js`, `inspector.js`, `timeline.js` | One panel each ([`DESIGN.md` §5.5–5.8](../DESIGN.md#55-tools-panel)). The inspector builds its rows from `fieldsOf` ([schema.md](schema.md)). | `create<Panel>` | #19–#23, #26, #32–#35 |
-| `js/storage.js` | Browser storage: draft autosave and recovery, layout, settings. | `saveDraft`, `loadDraft`, `clearDraft`, `loadLayout`, `saveLayout` | #8, #29 |
+| `js/storage.js` | Browser storage: draft autosave and recovery, layout, settings. JSON in `localStorage` under `ragassembler.*` keys; never validates content. Every `localStorage` failure (missing, `SecurityError`, quota) means "unavailable" and is silent. No `js/` imports. #8 creates it with the layout functions only: `loadLayout() → { value } \| { error: 'missing' \| 'unavailable' \| 'parse' }`, `saveLayout(layout) → boolean`, `clearLayout() → void`, key `ragassembler.layout`. | `loadLayout`, `saveLayout`, `clearLayout` (#8); `saveDraft`, `loadDraft`, `clearDraft` (#29) | #8, #29 |
 | `js/files.js` | File and directory pickers, drag & drop, writing `.rag.json` and images. | `pickRagFile`, `pickAssetFolder`, `saveRagFile` | #28 |
 | `js/asset-store.js` | Image bytes and PIXI textures by sprite asset id. Not part of the model; entries are kept while any history step can bring their asset back. | `AssetStore` | #21 |
 
@@ -256,7 +258,7 @@ ToolContext      { model, history, selection, modes, settings, camera,
 
 ### Actions and hotkeys
 
-- **`ActionRegistry`** `js/actions.js` **(planned, #10)**: `register(id, { run, isEnabled })`, `run(id)`, `isEnabled(id)`. Ids reuse the header ids (`new`, `load`, `save`, `undo`, `redo`, `play`, `pause`, `next-frame`, `stop`, `window`, `settings`) and add `toggle-play`, `delete`, `group`, `ungroup`, `duplicate`, `key-selected`, `frame-selection`, `frame-all`, `sprite-edit`, `escape` and `tool:<id>`. The header and hotkeys both call `run`; the header refreshes `aria-disabled` from `isEnabled` on `history`, `mode` and `selection` events.
+- **`ActionRegistry`** `js/actions.js` **(planned, #10)**: `register(id, { run, isEnabled })`, `run(id)`, `isEnabled(id)`. Ids reuse the header ids (`new`, `load`, `save`, `undo`, `redo`, `play`, `pause`, `next-frame`, `stop`, `window`, `settings`) and add `toggle-play`, `delete`, `group`, `ungroup`, `duplicate`, `key-selected`, `frame-selection`, `frame-all`, `sprite-edit`, `escape`, `tool:<id>`, `panel:<id>` (toggle a panel) and `reset-layout`. Until #10 lands, `js/main.js` connects the Window button, `js/menu.js` and the dock directly; #10 moves that wiring to these actions. The header and hotkeys both call `run`; the header refreshes `aria-disabled` from `isEnabled` on `history`, `mode` and `selection` events.
 - **`HOTKEYS`** `js/hotkeys.js`: `{ keys: 'Ctrl+Shift+Z', action: 'redo' }` rows for §5.9, plus `tool:<id>` rows built from each tool's `hotkey`. `Meta` counts as `Ctrl`. The header's shortcut hints must equal this table (tested).
 - **`dispatchKey(event, { tools, actions, viewportFocused })`** order:
   1. ignore if `event.defaultPrevented` (the header already handled its arrow keys) or the target is a text field, `select` or `contenteditable`;
@@ -282,6 +284,30 @@ ToolContext      { model, history, selection, modes, settings, camera,
 | `file`, `history` | New/Load/Save, Undo/Redo |
 | `play`, `simulate.control` | Play / Pause, Next frame, Stop |
 | `settings.editor`, `layout`, `camera` | Editor settings, panels, navigation |
+
+### Dock layout
+
+`js/panels/layout.js` **(planned, #8)** holds the layout as data; `js/panels/dock.js` renders it and turns pointer and keyboard input into layout operations. Behavior and sizes: [`DESIGN.md` §5.2](../DESIGN.md#52-panels).
+
+```
+PanelId    'tools' | 'hierarchy' | 'assets' | 'problems' | 'inspector' | 'timeline'
+LayoutNode Split | Stack | { type: 'viewport' }
+Split      { type: 'split', dir: 'row' | 'column', children: LayoutNode[], sizes: (number | null)[] }
+Stack      { type: 'stack', id: string, panels: PanelId[], active: PanelId }
+Layout     { version: 1, tree: LayoutNode, closed: { [PanelId]: { stackId: string, index: number } } }
+Drop       { kind: 'tab', stackId, index } | { kind: 'split', stackId, side } | { kind: 'edge', side }
+           side = 'left' | 'right' | 'top' | 'bottom'
+Rect       { x, y, width, height }   CSS px, relative to the workspace content box
+Gutter     { path: number[], index, dir, rect: Rect, value, min, max }   px, the split at `path` (child indexes from the root), between children index and index + 1
+```
+
+- **Viewport** is a node, not a `PanelId`; it appears exactly once and never inside a stack. `PANELS` maps each `PanelId` to `{ title, group, edge, size, min: { width, height } }` from the §5.2 table; `group` is the default stack (`hap` for Hierarchy, Assets, Problems). `defaultLayout(workspace)` takes the workspace size because the Hierarchy stack starts at half the right column's height.
+- **Sizes** are px along the split axis. Exactly one child per split has `null` (fill): the one containing the viewport, otherwise the last. Every operation re-derives it. `computeRects(layout, workspace)` gives fixed children their size, the fill the rest; if the fill falls below its minimum, the others shrink in proportion to their size above their own minimum, and if the minimums still do not fit, the content size exceeds the workspace (it scrolls). Minimum sizes of splits are derived from their children plus 4 px gutters. It returns `{ stacks: Map<string, Rect>, viewport: Rect, gutters: Gutter[], width, height }`.
+- **Normalize** (after every operation): drop empty stacks; a split with one child becomes that child; a split nested in a split of the same `dir` is flattened; space freed by a removed child goes to its previous sibling, else the next; fill is re-derived; `active` must be one of `panels`.
+- **Operations** are pure, return a new frozen `Layout` and throw on an id that is unknown or in the wrong state. `closePanel` records `{ stackId, index }` in `closed`; `openPanel` applies the reopen rule and activates the panel; `movePanel` applies a `Drop` that `canDrop` accepts (not the viewport center, not the panel's own stack when it is its only tab); `resizeSplit(layout, path, index, value, workspace)` clamps to `[min, max]`. New stacks get id `s<n>` above every existing stack id. Edge splits give the moved panel half the target, edge docks the panel's default size capped at 1/3 of the workspace, both respecting minimums.
+- **`dropAt(layout, rects, point, panelId) → { drop, preview: Rect } | null`**: 16 px workspace edge strips first; then over a tab bar a `tab` drop at the insertion index; then stack edge zones of 25 % of the stack dimension clamped to 24–80 px; then the stack center.
+- **Stored layout:** `validateLayout(value) → string | null` returns the first reason it is invalid: not an object, `version !== 1`, malformed node, unknown or repeated panel id across `tree` and `closed`, viewport not exactly once, empty stack, `active` not in its stack, `sizes` not matching `children` in length, not exactly one `null`, or a size that is not finite and > 0. `restoreLayout(value, workspace) → { layout, warning }` returns the default layout and `warning: 'Stored layout ignored: <reason>'` when invalid, and adds every panel missing from both `tree` and `closed` by the reopen rule.
+- **Dock:** reads `loadLayout()` once on creation (`parse` → warning, `missing`/`unavailable` → default without warning), logs a warning with `console.warn`, and calls `saveLayout` after a drop, a resize end, a tab change, a close or a reopen; keyboard resizing saves 500 ms after the last key. `reset()` calls `clearLayout()` and applies `defaultLayout`. It emits `layout` with `{ layout }` after every change. Its tab lists and separators, like `js/menu.js`, call `preventDefault` on the keys they handle ([Actions and hotkeys](#actions-and-hotkeys)). Layout operations never go through history.
 
 ### Emitter
 
