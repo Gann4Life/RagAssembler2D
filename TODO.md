@@ -33,6 +33,7 @@
 - [ ] #27 Canonical .rag.json serializer and loader with migration
 - [ ] #28 Header Save/Load with sprite folder resolution
 - [ ] #29 Autosave draft and recovery on startup
+- [ ] #63 Duplicate selection with Ctrl+D
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
