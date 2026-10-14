@@ -1,4 +1,4 @@
-import { createHeader, setActionEnabled } from './header.js';
+import { createHeader, setActionEnabled, focusAdjacentAction } from './header.js';
 import { createViewport } from './viewport.js';
 import { createDock } from './panels/dock.js';
 import { openMenu } from './menu.js';
@@ -35,7 +35,7 @@ function toggleWindowMenu(focus) {
       else dock.open(item.id);
     },
     onNavigate(key) {
-      windowButton.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      focusAdjacentAction(header, windowButton, key);
     },
   });
 }

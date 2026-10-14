@@ -112,6 +112,21 @@ export function createHeader(doc) {
   return header;
 }
 
+/**
+ * Moves focus from a header button to the previous or next one, wrapping around, and makes it the roving Tab stop.
+ * Used when Left/Right close a menu opened from the header.
+ * @param {HTMLElement} header The toolbar created by {@link createHeader}.
+ * @param {HTMLButtonElement} button The button to move from.
+ * @param {'ArrowLeft' | 'ArrowRight'} key Direction of the move.
+ * @returns {void}
+ */
+export function focusAdjacentAction(header, button, key) {
+  const buttons = [...header.querySelectorAll('button')];
+  const current = buttons.indexOf(button);
+  if (current < 0 || (key !== 'ArrowLeft' && key !== 'ArrowRight')) return;
+  focusButton(buttons, rovingIndex(current, key, buttons.length));
+}
+
 function findAction(id) {
   return HEADER_GROUPS.flat().find((action) => action.id === id);
 }
