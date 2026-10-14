@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: partly built. The editor shell (header toolbar and an empty PIXI viewport), the document model with its emitter and property schema, a stub of `lib/ragimporter.js`, the test harness and the pinned `vendor/` libraries exist. Everything marked **(planned)** is the agreed design that issues implement; it is updated as code lands. Changes to this design go through the architect ([Conformance](#conformance)).
+> Status: partly built. The editor shell (header toolbar, dock with placeholder panels, Window menu and an empty PIXI viewport), the document model with its emitter and property schema, a stub of `lib/ragimporter.js`, the test harness and the pinned `vendor/` libraries exist. Everything marked **(planned)** is the agreed design that issues implement; it is updated as code lands. Changes to this design go through the architect ([Conformance](#conformance)).
 
 ## Components
 
@@ -31,9 +31,11 @@ RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `
 2. It loads `js/main.js` as the only module script. The markup holds a placeholder `<header id="header">` and `<main id="workspace">` with the viewport panel (`#panel-viewport` > `#viewport-host`, `role="group"`, `tabindex="0"`, labelled "Viewport"; [`DESIGN.md` §5.4](../DESIGN.md#54-viewport)).
 3. `js/main.js` reads the `PIXI` and `Box2D` globals and throws an `Error` naming the missing library and its `vendor/` file. The error only reaches the console; the page stays blank.
 4. It replaces the placeholder with `createHeader(document)`: a toolbar with every action disabled ([`DESIGN.md` §5.3](../DESIGN.md#53-header)).
-5. It awaits `createViewport(PIXI, #viewport-host)`: a PIXI `Application` whose canvas fills the host. A `ResizeObserver` resizes the renderer to the host size in CSS pixels, using the current `devicePixelRatio`.
+5. It creates the dock with `createDock(#workspace, { viewportElement: #panel-viewport })`, which restores the stored layout and renders every stack, with placeholders for the panels ([Dock layout](#dock-layout)).
+6. It enables the Window button and opens `openMenu(windowButton, dock.windowItems(), …)` on `header-action` (`window`), Down (first item) or Up (last item). Choosing an item opens or closes the panel, or resets the layout; Left/Right from the menu call `focusAdjacentAction(header, windowButton, key)`.
+7. It awaits `createViewport(PIXI, #viewport-host)`: a PIXI `Application` whose canvas fills the host. A `ResizeObserver` resizes the renderer to the host size in CSS pixels, using the current `devicePixelRatio`.
 
-`Box2D` is checked but not used yet. No editor state, command stack or modes exist; `js/editor.js` is an empty file reserved for the composition root. Nothing listens to the header's `header-action` event yet.
+`Box2D` is checked but not used yet. No editor state, command stack or modes exist; `js/editor.js` is an empty file reserved for the composition root. The Window button is the only `header-action` handled.
 
 **(planned)** Boot becomes: `main.js` checks the globals → `createEditor()` (core, no DOM) → mounts the dock, header, panels and viewport, passing them the editor object → registers action handlers that need the DOM (file pickers) → offers draft recovery ([`DESIGN.md` §1](../DESIGN.md#1-conventions)).
 
@@ -44,7 +46,7 @@ RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `
 | `js/` | `lib/`, other `js/` modules per the layers below. Only `js/main.js` reads the `PIXI` and `Box2D` globals; other modules receive them as parameters. |
 | `lib/` | Other `lib/` modules only. Only runtime modules (`def`, `instance`, `render`, `collision`) use `Box2D`/`PIXI`, and only through the namespaces resolved by `lib/ragimporter.js`. |
 | `demo/` | `lib/ragimporter.js` only (the public API), vendor globals. |
-| `tests/` | `lib/`, and `js/` **core** modules (they load without a DOM). |
+| `tests/` | `lib/`, and `js/` **core** modules (they load without a DOM). Exception: a `js/` UI module that loads without a DOM may be imported to test its DOM-free exports (`js/header.js`: `HEADER_GROUPS`, `actionTitle`), or with a fake browser global installed on `globalThis` for the test and restored after it (`js/storage.js` with a fake `localStorage`). DOM behavior is checked in the browser. |
 
 **Layers inside `js/`:**
 
