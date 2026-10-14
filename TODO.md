@@ -7,6 +7,8 @@
 - [ ] #3 Add node --test harness with a first smoke test
 - [ ] #4 Spike: check custom contact filter support in liquidfun.js
 - [ ] #5 Spike: verify the liquidfun.js API surface used by RagImporter
+- [ ] #65 Spike: define editor core architecture and module map
+- [ ] #66 Architecture conformance tests for imports, pure modules and comments
 
 ## Phase 1 – Editor: rigging
 - [ ] #6 Spike: verify sprite folder access across browsers
