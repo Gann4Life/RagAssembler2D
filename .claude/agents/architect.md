@@ -12,6 +12,8 @@ Responsibilities:
   - every format field is consumed by RagImporter or marked editor-only;
   - examples evaluate correctly under the stated rules.
 - Decide module boundaries and dependency direction (`js/` → `lib/`, never the reverse; `demo/` → `lib/` only), and keep `docs/architecture.md` aligned.
+- Own `docs/architecture.md` (module map, layers, contracts) and `docs/schema.md` (per-type fields).
+- Review every PR that adds, removes, renames or changes a module's responsibility or imports, and check it against `docs/architecture.md`.
 - Record every decision in `docs/decisions.md` (date, decision, reason, DESIGN section).
 - Bump the format `version` and specify the migration whenever a change breaks existing files.
 

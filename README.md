@@ -34,7 +34,7 @@ lib/                 RagImporter runtime (stub; runtime planned)
 vendor/              pinned liquidfun.js v1.1.0 and PIXI.js 8.21.0 builds
 demo/                production preview using only RagImporter (planned)
 tests/               node --test suite (smoke and header tests; round-trip and runtime tests planned)
-docs/                architecture and development documentation
+docs/                architecture, format schema and development documentation
 ```
 
 ## Getting started
@@ -49,7 +49,7 @@ node --test tests/
 ## Documentation
 
 - [DESIGN.md](DESIGN.md): full product spec (object model, animation model, file format, runtime API).
-- [docs/](docs/README.md): architecture, development setup and design decisions.
+- [docs/](docs/README.md): architecture, format property schema, development setup and design decisions.
 - [CHANGELOG.md](CHANGELOG.md) and [TODO.md](TODO.md).
 - [CLAUDE.md](CLAUDE.md): contribution guidelines.
 

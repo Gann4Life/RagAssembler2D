@@ -5,6 +5,7 @@
 | Document | Contents |
 |---|---|
 | [architecture.md](architecture.md) | Modules, dependency rules, data flow, runtime loop. |
+| [schema.md](schema.md) | Property schema of every format object: types, defaults, ranges, units, canonical order. |
 | [development.md](development.md) | Setup, local server, tests, vendored libraries, docstring style. |
 | [decisions.md](decisions.md) | Dated log of design and technical decisions. |
 
