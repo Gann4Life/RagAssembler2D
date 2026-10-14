@@ -115,6 +115,11 @@ git pull --ff-only
 | `/next` | skill | Picks the most relevant open issue and creates its branch. |
 | `/run`, `/code-review`, `/simplify` | built-in skills | Run the app, review a diff, clean up after a phase. |
 
+**Models by role** (set in each agent's `model:` frontmatter):
+- `opus` for agents that plan and decide: `architect`, `planner`, `ui-ux-analyst`.
+- `sonnet` for agents that apply delegated changes: `javascript-dev`, `game-dev`, `doc-writer`. Complex implementation tasks may override to `opus` per call.
+- `haiku` for pure search and reading delegation (built-in `Explore` or a per-call override).
+
 ## Commands
 
 ```powershell

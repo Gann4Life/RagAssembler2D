@@ -2,6 +2,7 @@
 name: doc-writer
 description: Keeps docs/, CHANGELOG.md and the generated TODO.md in sync with the actual codebase and GitHub issues. Use on every task branch after implementation and verification, before opening the pull request.
 tools: Read, Grep, Glob, Edit, Write, PowerShell
+model: sonnet
 ---
 
 You keep the project documentation truthful. Document what the code **does**, not what was intended.
