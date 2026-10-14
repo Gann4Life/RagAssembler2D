@@ -1,12 +1,13 @@
 # Property schema
 
-> Status: **(planned)**. The code version is `lib/schema.js` ([architecture](architecture.md#schema)). This document describes it and must match it field for field.
+> Status: built. The code version is `lib/schema.js` ([architecture](architecture.md#schema)). This document describes it and must match it field for field. Its consumers other than the model are planned.
 
 One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](../DESIGN.md#6-file-format-ragjson)). It is the **single source** for:
 
 | Consumer | Uses |
 |---|---|
-| Editor model (#9) | `defaultsOf(type)` for every new object. |
+| Editor model (#9) | `defaultsOf('root')` and `defaultsOf('document')` for the empty document. |
+| Creation commands (#14–#16, #19, #21) | `defaultsOf(type, variant)` for every new object, plus the fields the tool sets. |
 | Validation (#25) | Field types, ranges and enums: one generic error per violation ([`DESIGN.md` §6.4](../DESIGN.md#64-validation)). Cross-field rules (limits around 0, convex polygons, key order, references) stay hand-written in `lib/validate.js`. |
 | Serializer (#27) | Key order: the row order below is the canonical order of [`DESIGN.md` §6.5](../DESIGN.md#65-round-trip-guarantee). Only schema fields are written. |
 | Inspector (#20, #22, #23) | Rows, read-only flags, ranges, enums, and the display unit derived from the data unit. |
@@ -14,8 +15,8 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](../DESIG
 ## Columns
 
 - **Path:** dotted path inside the object's JSON record. Consecutive rows with the same prefix form one nested object (`limits.enabled`, `limits.lower`, `limits.upper` → `"limits": { … }`).
-- **Type:** `string`, `number`, `integer`, `boolean`, `vec2` (`[x, y]`), `vec2[]`, `enum`, `ref:<type>` (an id of that type, or `null` where noted), `color` (`#rrggbb`), `json` (any JSON value), `list:<type>` (ordered child collection).
-- **Default:** value given to new objects. Loaded files never get defaults: every field is explicit ([`DESIGN.md` §6.2](../DESIGN.md#62-field-reference)), and a missing field is an error unless marked *optional*.
+- **Type:** `string`, `number`, `integer`, `boolean`, `vec2` (`[x, y]`), `vec2[]`, `enum`, `ref:<type>` (an id of that type, or `null` where noted), `ref` (an id of one of the kinds given in Range), `color` (`#rrggbb`), `json` (any JSON value), `channel` (a key value, typed by the track's channel), `root` / `sprite` (a nested record described by its own table), `list:<type>` (ordered child collection).
+- **Default:** value given to new objects. "Set by the creating tool", "generated" and context-dependent defaults are `undefined` in `lib/schema.js`; the creating command supplies them. Loaded files never get defaults: every field is explicit ([`DESIGN.md` §6.2](../DESIGN.md#62-field-reference)), and a missing field is an error unless marked *optional*.
 - **Range:** per-field constraint checked by validation. `>0` means exclusive.
 - **Unit:** data unit (file and model). The UI unit follows [`DESIGN.md` §1](../DESIGN.md#1-conventions): `m` → px (× `pixelsPerMeter`), `rad` → degrees, `mult` (0–1) → %. Other units are shown as stored.
 - **Flags:** `E` editor-only (RagImporter ignores it), `R` read-only in the inspector, `V` variant (only for the listed shape type), `A` base value of an animation channel.
@@ -156,7 +157,9 @@ The motor defaults are provisional until the motor stability spike (#52) tunes t
 
 **`autoClipKey(name, takenKeys)`:** lower-case `name`, replace every run of characters outside `[a-z0-9]` with `_`, trim leading and trailing `_`, use `clip` if the result is empty, then append `_2`, `_3`, … until it is not in `takenKeys`. "New Clip" → `new_clip`.
 
-**Key follows name:** when a clip is renamed, if its current `key` equals `autoClipKey(oldName, otherKeys)`, the rename command also sets `key = autoClipKey(newName, otherKeys)`. A hand-edited key no longer matches, so it stops following ([`DESIGN.md` §4.1](../DESIGN.md#41-clips)).
+The schema default `new_clip` is `autoClipKey("New Clip")` with no taken keys; the create command (#19) recomputes it against the existing keys.
+
+**Key follows name:** when a clip is renamed, if its current `key` equals `autoClipKey(oldName, otherKeys)`, the rename command (`setProps` in `js/commands/props.js`, #10) also sets `key = autoClipKey(newName, otherKeys)` in the same transaction. The model and the schema do not apply this rule. A hand-edited key no longer matches, so it stops following ([`DESIGN.md` §4.1](../DESIGN.md#41-clips)).
 
 ## track (`tracks[]`)
 
@@ -193,6 +196,8 @@ The motor defaults are provisional until the motor stability spike (#52) tunes t
 | joint | `strength`, `gain`, `damping` | multiplier | number 0–1 | mult | `1` |
 | shape | `sprite` | discrete | sprite asset id or `null` | — | the shape's `sprite.asset` |
 
+Code form: `CHANNELS[target][channel] = { kind, unit, min?, max?, default, basePath }`. `kind` is `multiplier`, `angle` or `discrete`; `min`/`max` (0, 1) are given for multipliers only. When `basePath` is a string, the not-animated value is the target's prop at that path (`null` when it is absent, e.g. a shape without `sprite`) and `default` is `null`; otherwise `default` is the constant.
+
 ## Code form
 
 `lib/schema.js` is pure data plus small helpers. It imports nothing.
@@ -222,9 +227,9 @@ The motor defaults are provisional until the motor stability spike (#52) tunes t
 | `SCHEMA` | Frozen `Record<ObjectType, ReadonlyArray<FieldSpec>>` for `document`, `root`, `spriteAsset`, `body`, `shape`, `sprite`, `joint`, `clip`, `track`, `key`, `event`, in canonical order. |
 | `CHANNELS` | Frozen table above. |
 | `fieldsOf(type, variant?)` | Fields of a type, filtered by shape variant, in canonical order. |
-| `defaultsOf(type, variant?)` | Fresh nested object with every default; list fields are `[]`. |
+| `defaultsOf(type, variant?)` | Fresh, mutable nested object with every defined default, in canonical order. Fields with an `undefined` default are left out, except `shape.type`, which is the variant when one is given. List fields are `[]`: callers building a model snapshot move them to `children`, since the model rejects collection names in props. |
 | `autoClipKey(name, takenKeys)` | Rule above. |
 
 ## Open items
 
-- **`meta.name` vs `ragdoll.name`, and `meta.editorVersion` on Save:** [`DESIGN.md` §6](../DESIGN.md#6-file-format-ragjson) does not say whether Save rewrites them, which affects byte-identical round-trip across editor versions. Until decided, the serializer writes the model's values unchanged.
+- **`meta.name` vs `ragdoll.name`, and `meta.editorVersion` on Save:** [`DESIGN.md` §6](../DESIGN.md#6-file-format-ragjson) does not say whether Save rewrites them, which affects byte-identical round-trip across editor versions. Until decided, the serializer writes the model's values unchanged. A new document has no `meta.editorVersion` in the model (its default is `undefined`), so `toJson` (#27) must supply it.

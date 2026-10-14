@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: partly built. The editor shell (header toolbar and an empty PIXI viewport), a stub of `lib/ragimporter.js`, the test harness and the pinned `vendor/` libraries exist. Everything marked **(planned)** is the agreed design that issues implement; it is updated as code lands. Changes to this design go through the architect ([Conformance](#conformance)).
+> Status: partly built. The editor shell (header toolbar and an empty PIXI viewport), the document model with its emitter and property schema, a stub of `lib/ragimporter.js`, the test harness and the pinned `vendor/` libraries exist. Everything marked **(planned)** is the agreed design that issues implement; it is updated as code lands. Changes to this design go through the architect ([Conformance](#conformance)).
 
 ## Components
 
@@ -70,18 +70,22 @@ Columns: responsibility, public exports, and allowed imports beyond `lib/`. Rows
 | `js/header.js` | Header toolbar: grouped action list, roving-tabindex keyboard navigation, `aria-disabled` buttons with tooltips, and a bubbling `header-action` CustomEvent (`detail.action`) on clicks of enabled buttons. | `HEADER_GROUPS`, `createHeader`, `actionTitle`, `setActionEnabled`, typedef `HeaderAction` | `js/roving-focus.js` |
 | `js/roving-focus.js` | Pure key-to-index mapping for roving-tabindex toolbars (Left/Right wrap, Home/End). | `rovingIndex` | — |
 | `js/viewport.js` | PIXI viewport: creates an `Application` in a host element and keeps the renderer sized to the host and `devicePixelRatio`. | `createViewport`, typedef `Viewport` (`app`, `destroy`) | `js/viewport/*` (planned) |
+| `js/model/model.js` | Document model ([Document model](#document-model)). | `Model`, `ROOT_UID`, typedefs `Node`, `NodeType`, `NodeSnapshot`, `Change`, `Op` | `lib/emitter.js`, `lib/schema.js` |
+| `lib/emitter.js` | Synchronous event emitter ([Emitter](#emitter)). | `Emitter` | — |
+| `lib/schema.js` | Property schema: types, defaults, ranges, units, canonical order, channels ([schema.md](schema.md)). | `FORMAT`, `FORMAT_VERSION`, `SCHEMA`, `CHANNELS`, `fieldsOf`, `defaultsOf`, `autoClipKey`, typedef `FieldSpec` | — |
 | `lib/ragimporter.js` | RagImporter entry point. Currently a stub that only declares the supported format versions. | `RagImporter` (frozen object with `supportedVersions: [1]`) | `lib/*` (planned) |
 | `tests/index.js` | Test aggregator for `node --test tests/`: recursively imports every `*.test.js` under `tests/`. | none | — |
 | `tests/smoke.test.js` | Smoke test: `lib/ragimporter.js` loads as an ES module and supports format version 1. | none | — |
 | `tests/editor-header.test.js` | Header tests: `rovingIndex` navigation, header group order and unique ids against `DESIGN.md` §5.3, shortcuts against §5.9, and `actionTitle` text. | none | — |
+| `tests/emitter.test.js`, `tests/schema.test.js`, `tests/model.test.js` | Contract tests for the emitter, the schema tables and helpers against [schema.md](schema.md), and the document model. | none | — |
 
 ### lib/ (planned)
 
+A module whose functions serve several issues is created by the first of them to land, with only the functions it needs; later issues add theirs and update this row.
+
 | Module | Responsibility | Public exports | Imports | Issue |
 |---|---|---|---|---|
-| `lib/emitter.js` | Synchronous event emitter ([Emitter](#emitter)). | `Emitter` | — | #9 |
-| `lib/schema.js` | Property schema: types, defaults, ranges, units, canonical order ([schema.md](schema.md)). | `FORMAT`, `FORMAT_VERSION`, `SCHEMA`, `CHANNELS`, `fieldsOf`, `defaultsOf`, `autoClipKey`, typedef `FieldSpec` | — | #9 |
-| `lib/geometry.js` | Pure 2D math in meters/radians: transforms, polygon convexity/CCW/centroid, shape local frame, area/mass, point-in-shape. | `transformPoint`, `composeTransforms`, `polygonProblems`, `polygonCentroid`, `shapeFrame`, `shapeMass`, `bodyMass`, `pointInShape` | — | #9 |
+| `lib/geometry.js` | Pure 2D math in meters/radians: transforms, polygon convexity/CCW/centroid, shape local frame, area/mass, point-in-shape. | `transformPoint`, `composeTransforms`, `polygonProblems`, `polygonCentroid`, `shapeFrame`, `shapeMass`, `bodyMass`, `pointInShape` | — | first of #11, #20, #25 |
 | `lib/validate.js` | `validate(json) → { errors, warnings }` ([`DESIGN.md` §6.4](../DESIGN.md#64-validation)). Generic checks from the schema, cross-field checks by hand. | `validate`, typedef `Problem` (`severity`, `code`, `message`, `path`, `target`) | schema, geometry | #25 |
 | `lib/serialize.js` | Canonical writer: schema key order, numbers rounded to 1e-5, `-0` → `0`, 2-space indent, `\n`, final newline ([`DESIGN.md` §6.5](../DESIGN.md#65-round-trip-guarantee)). | `serialize(json) → string` | schema | #27 |
 | `lib/migrate.js` | Migrates older format versions to `FORMAT_VERSION`; throws on unknown versions. Used by the editor loader only. | `migrate(json) → { json, notes }` | schema | #27 |
@@ -99,12 +103,11 @@ The runtime split (`def`, `instance`, `render`, `collision`) is confirmed by the
 | Module | Responsibility | Public exports | Imports (js/) | Issue |
 |---|---|---|---|---|
 | `js/editor.js` | Composition root without DOM: builds model, history, selection, modes, tools, actions and settings, and wires mode changes to tool/gesture cancellation. | `createEditor() → Editor`, typedef `Editor` | core | #10 |
-| `js/model/model.js` | Document model ([Model](#document-model)). | `Model`, `ROOT_UID`, typedefs `Node`, `NodeType`, `NodeSnapshot`, `Change`, `Op` | — | #9 |
-| `js/model/io.js` | File JSON ⇄ model: `loadJson` (migrate, validate, reset, drop unknown fields with warnings), `newDocument`, `toJson`, `uidAtPath`. | `loadJson`, `newDocument`, `toJson`, `uidAtPath` | model | #9, #27 |
-| `js/model/queries.js` | Derived read-only views: joint tree from `rootBody`, loop joints, unlinked bodies, body subtree, references to an id (joints, tracks, sprite users). | `jointTree`, `bodySubtree`, `referencesTo`, `spriteUsers` | model | #9 |
+| `js/model/io.js` | File JSON ⇄ model: `loadJson` (migrate, validate, reset, drop unknown fields with warnings), `newDocument`, `toJson`, `uidAtPath`. | `loadJson`, `newDocument`, `toJson`, `uidAtPath` | model | #27 |
+| `js/model/queries.js` | Derived read-only views: joint tree from `rootBody`, loop joints, unlinked bodies, body subtree, references to an id (joints, tracks, sprite users). Created with the same rule as `lib/geometry.js`. | `jointTree`, `bodySubtree`, `referencesTo`, `spriteUsers` | model | first of #13, #19 |
 | `js/model/selection.js` | Selection: `objects` (root, bodies, shapes, joints, assets, clips) and `timeline` (keys, events) uid sets, plus `focus`. Prunes removed uids. Not undoable. | `Selection` | model | #10 |
 | `js/commands/history.js` | Command stack, transactions and gestures ([Commands and undo](#commands-and-undo)). | `History`, typedefs `Command`, `Transaction` | model | #10 |
-| `js/commands/props.js` | Property edits (single or multi-object). | `setProps` | model | #10 |
+| `js/commands/props.js` | Property edits (single or multi-object). Renaming a clip also applies the key-follows-name rule ([schema.md](schema.md#clip-clips)); the model does not. | `setProps` | model | #10 |
 | `js/commands/create.js` | Shape bodies, joints, clips, sprite assets; assigns `rootBody` when it is `null`. | `createShapeBody`, `createJoint`, `createClip`, `importSpriteAssets` | model, queries | #14–#16, #19, #21 |
 | `js/commands/delete.js` | Deletion with cascade ([`DESIGN.md` §5.6](../DESIGN.md#56-hierarchy-assets-and-problems-panels)), plus the plan shown in the confirmation. | `deletionPlan`, `deleteObjects` | model, queries | #19 |
 | `js/commands/group.js` | Group / Ungroup. | `group`, `ungroup` | model, queries | #18 |
@@ -139,19 +142,24 @@ The runtime split (`def`, `instance`, `render`, `collision`) is confirmed by the
 
 ### Document model
 
-`js/model/model.js` **(planned, #9)** holds the document as a tree of nodes, in file units (meters, radians, Y up).
+`js/model/model.js` holds the document as a tree of nodes, in file units (meters, radians, Y up).
 
 ```
 Node         { uid: number, type: NodeType, parent: number|null, collection: string|null, props: object }
 NodeType     'root' | 'spriteAsset' | 'body' | 'shape' | 'joint' | 'clip' | 'track' | 'key' | 'event'
-NodeSnapshot { uid, type, props, children: { [collection]: NodeSnapshot[] } }
+NodeSnapshot { uid?, type, props, children?: { [collection]: NodeSnapshot[] } }
 ```
 
-- **Identity:** every node has a session `uid` (positive integer, never serialized, never reused in the session). Display objects, selection, change payloads and history refer to uids. `ROOT_UID` is the root. File ids (`root`, `b_…`, `f_…`, `j_…`, `s_…`) are props, and references between objects (`bodyA`, `rootBody`, `target`, `sprite.asset`, key values) store file ids exactly as in the file.
-- **Tree:** the root owns the collections `sprites`, `bodies`, `joints`, `clips`. A body owns `fixtures`, a clip owns `tracks` and `events`, a track owns `keys`. The root's props hold the `ragdoll` record fields plus the document fields `meta`, `units`, `preview` ([schema.md](schema.md#document-file-top-level)). A shape's `sprite` is a prop (object or `null`), not a node.
-- **Props** are plain JSON values shaped like the file record minus child collections, and are frozen. A change replaces the value at a path.
-- **Read API:** `get(uid)`, `prop(uid, path)`, `children(uid, collection) → readonly number[]`, `uidOf(id)` (file id → uid), `clipByKey(key)`, `nextId(prefix)` (allocates `b_<n>`, `f_<n>`, `j_<n>`, `s_<n>`, with `n` above every id of that prefix seen in the session), `on/off`.
-- **Mutation:** only through `applyOps(ops)` and `reset(snapshot)`. `applyOps` is called by `js/commands/history.js` only, and `reset` by `js/model/io.js` only.
+- **Identity:** every node has a session `uid` (positive integer, never serialized, never reused in the session). Display objects, selection, change payloads and history refer to uids. `ROOT_UID` (1) is the root. File ids (`root`, `b_…`, `f_…`, `j_…`, `s_…`) are props, and references between objects (`bodyA`, `rootBody`, `target`, `sprite.asset`, key values) store file ids exactly as in the file.
+- **Tree:** the root owns the collections `sprites`, `bodies`, `joints`, `clips`. A body owns `fixtures`, a clip owns `tracks` and `events`, a track owns `keys`. The root's props hold the `ragdoll` record fields plus the document fields `meta`, `units`, `preview` ([schema.md](schema.md#document-file-top-level)); `format` and `version` are not props (the serializer writes them). A shape's `sprite` is a prop (object or `null`), not a node. A new `Model` holds an empty document with schema defaults and emits nothing.
+- **Props** are plain JSON values shaped like the file record minus child collections, and are frozen. A props key or a `set` path whose first segment names a child collection of the node type (`fixtures`, `tracks`, `events`, `keys`, and the root's `sprites`, `bodies`, `joints`, `clips`) is rejected. A change replaces the value at a dotted path, creating missing intermediate objects; `value: undefined` removes the key (inverse of a `set` on an absent path).
+- **Read API:** `get(uid)`, `prop(uid, path)`, `children(uid, collection) → readonly number[]`, `uidOf(id)` (file id → uid; the first holder when a draft or invalid file duplicates an id), `clipByKey(key)`, `nextId(prefix)`, `on/off`.
+- **`nextId(prefix)`** takes `'b'`, `'f'`, `'j'` or `'s'` and returns `<prefix>_<n>`, with `n` above every `<prefix>_<n>` string seen in any prop during the session (ids, references, key values, names), so a dangling reference is never bound to a new object. Counters only grow, and survive `reset` ([`DESIGN.md` §1](../DESIGN.md#1-conventions)). `root` cannot be generated.
+- **Not enforced by the model:** unique ids and clip keys, the reserved `root` id on other nodes, names, ranges and references. These are command preconditions and validation rules (#25). The model only refuses to change the root id, to remove or move the root, wrong child types and moves into a node's own subtree.
+- **Mutation:** only through `applyOps`, `batch` and `reset`. `applyOps` and `batch` are called by `js/commands/history.js` only, and `reset` by `js/model/io.js` only.
+  - **`applyOps(ops, cause = 'do') → ReadonlyArray<Op>`** applies the ops in order, atomically: if one throws, the call is reverted and nothing is emitted. Input ops may leave out derived fields (`previous`, `index`, move `from`, remove `snapshot`/`parent`/`collection`, snapshot uids); the returned ops are complete and are what history records and inverts. Outside a batch it emits one `change` with the effective changes, or nothing when every op was a no-op (a `set` to a JSON-equal value, a `move` to the same slot). A no-op op is still returned.
+  - **`batch(fn) → { ops, changes }`** runs `fn` with change emission deferred. Every `applyOps` inside it applies immediately (so later reads see it) and must use cause `do`. If `fn` throws, every op applied in the batch is reverted in reverse order, nothing is emitted and the error is rethrown. Otherwise it emits one `change` (`cause: 'do'`) with all effective changes in application order, if any, and returns the applied ops and those changes, both frozen. Batches do not nest, and `reset` inside a batch throws.
+  - **`reset(snapshot, cause = 'new')`** replaces the document from a root snapshot and emits `reset`. Every node but the root gets a fresh uid, whatever uids the snapshot carries. On an invalid snapshot it throws and leaves the model unchanged.
 
 ### Commands and undo
 
@@ -168,7 +176,8 @@ Op          { op: 'set',    uid, path, value, previous }
 ```
 
 - **Commands are factories** in `js/commands/*.js` that return a `Command` (e.g. `setProps(uids, { 'limits.upper': 1.2 })`). They validate their preconditions and throw before mutating.
-- **`history.execute(command)`** opens a transaction, calls `run(tx)`, and records the ops. `tx` applies each op to the model immediately (so `run` reads its own writes) and stores its inverse data (`previous`, the removed subtree snapshot with its uids). If `run` throws, the applied ops are reverted, nothing is recorded and no event fires. An entry with no effective ops is discarded.
+- **`history.execute(command)`** runs `model.batch(() => command.run(tx))`. Each `tx` call is one `model.applyOps([op])`, applied immediately so `run` reads its own writes; `tx.add` returns the uid from the completed op. The batch returns the complete ops, which carry their inverse data (`previous`, the removed subtree snapshot with its uids), and the model emits one `change` for the whole command. If `run` throws, the batch reverts the applied ops, nothing is recorded and no event fires. An entry whose batch returned no changes is discarded.
+- **Undo, redo and cancel** are one `model.applyOps(ops, cause)` call each, with cause `undo`, `redo` or `cancel`.
 - **Entries** (`do` / `undo` / `merge`): `undo` applies the inverse ops in reverse order; `redo` re-applies the recorded ops (it never calls `run` again, so ids and uids are identical); `merge` appends the ops of the next command and coalesces `set` ops on the same `uid + path` (first `previous`, last `value`).
 - **Compound operations are one command:** delete with cascade (joints, tracks, `rootBody` reassignment), group/ungroup, duplicate, create + assign `rootBody`, set key + create track. Whatever `run` does is one undo step.
 - **Continuous edits merge through gestures:** `beginGesture()`, `endGesture()`, `cancelGesture()`. Every command executed while a gesture is open merges into the gesture's single entry. The tool registry opens a gesture on a primary pointer press and closes it on release; inspector drag-scrubbing and sliders do the same. `cancelGesture()` (Esc, tool switch, mode change, or Undo during a gesture) reverts the gesture's ops and records nothing.
@@ -181,7 +190,7 @@ All emitters are `lib/emitter.js` instances owned privately; owners expose `on` 
 
 | Source | Event | Payload | When |
 |---|---|---|---|
-| `model` | `change` | `{ changes: Change[], cause: 'do' \| 'undo' \| 'redo' \| 'cancel' }` | Once per committed transaction, undo, redo, merge step or cancelled gesture, after the model is consistent. |
+| `model` | `change` | `{ changes: Change[], cause: 'do' \| 'undo' \| 'redo' \| 'cancel' }` | Once per committed transaction (`batch`), undo, redo, merge step or cancelled gesture, after the model is consistent. Not emitted when nothing changed. |
 | `model` | `reset` | `{ cause: 'new' \| 'load' \| 'recover' }` | After the whole document was replaced. Views rebuild. |
 | `history` | `history` | `{ canUndo, canRedo, undoLabel, redoLabel, dirty }` | After any stack change. |
 | `selection` | `selection` | `{ objects: number[], timeline: number[], focus: 'objects' \| 'timeline' }` | After any selection change. |
@@ -198,7 +207,7 @@ Change = { kind: 'add',    uid, type, parent, collection, index }
        | { kind: 'move',   uid, type, from: Slot, to: Slot }
 ```
 
-Adding or removing a subtree produces one change per node: parents before children on `add`, children before parents on `remove`.
+Adding or removing a subtree produces one change per node: parents before children on `add`, children before parents on `remove`. Changes are listed in application order, and one event may add and then remove the same uid; listeners process them in order.
 
 ### View sync
 
@@ -276,7 +285,7 @@ ToolContext      { model, history, selection, modes, settings, camera,
 
 ### Emitter
 
-`lib/emitter.js` **(planned, #9)**, used by the editor core and by `RagInstance` (#47).
+`lib/emitter.js`, used by the editor core and by `RagInstance` (#47).
 
 ```
 class Emitter {
@@ -294,7 +303,7 @@ class Emitter {
 
 ### Schema
 
-`lib/schema.js` **(planned, #9)** is the single code source of field types, defaults, ranges, enums, units, editor-only flags and canonical order; [schema.md](schema.md) documents it. It lives in `lib/` because `lib/validate.js` and `lib/serialize.js` need it and `lib/` cannot import `js/`. Model defaults, validation, the serializer and the inspector never redeclare a default, range or key order.
+`lib/schema.js` is the single code source of field types, defaults, ranges, enums, units, editor-only flags and canonical order; [schema.md](schema.md) documents it. It lives in `lib/` because `lib/validate.js` and `lib/serialize.js` need it and `lib/` cannot import `js/`. Model defaults, validation, the serializer and the inspector never redeclare a default, range or key order.
 
 ## Data flow
 
@@ -313,6 +322,6 @@ rag.sync()        body transforms → PIXI sprites
 
 A change conforms when its modules, exports and imports match this document.
 
-- **Automated (#66):** conformance tests check the dependency rules and layers above (static import scan), that core and pure modules load under Node without a DOM, that `applyOps` and `reset` are only called from their owners, and that source files have no code comments.
+- **Automated (#66):** conformance tests check the dependency rules and layers above (static import scan), that core and pure modules load under Node without a DOM, that `applyOps`, `batch` and `reset` are only called from their owners, and that source files have no code comments.
 - **Pull requests:** the PR template has a conformance item. A PR that adds, removes, renames or changes the responsibility or imports of a module updates the module map on the same branch, through the architect, and is reviewed by the architect before merge.
 - **Disagreement:** if code needs a module or import this document does not allow, stop and ask the architect; do not merge a deviation.
