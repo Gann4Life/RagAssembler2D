@@ -115,15 +115,64 @@ body {
 }
 
 .dock-tabbar {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.dock-tablist {
   position: relative;
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: nowrap;
+  align-self: stretch;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+}
+
+.dock-tablist::-webkit-scrollbar {
+  display: none;
+}
+
+.dock-tablist.is-clipped-start {
+  mask-image: linear-gradient(to right, transparent, #000 12px);
+}
+
+.dock-tablist.is-clipped-end {
+  mask-image: linear-gradient(to left, transparent, #000 12px);
+}
+
+.dock-tablist.is-clipped-start.is-clipped-end {
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+}
+
+.dock-fold {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dock-fold:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.dock-fold:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .dock-tab {
@@ -243,7 +292,7 @@ body {
   width: 4px;
   height: 24px;
   border-radius: 2px;
-  background: var(--border);
+  background: var(--text-muted);
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
@@ -267,9 +316,14 @@ body {
 
 .dock-preview {
   z-index: 3;
-  border: 2px solid var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
   background: color-mix(in srgb, var(--focus) 25%, transparent);
   pointer-events: none;
+}
+
+.dock-caret {
+  background: var(--focus);
 }
 
 .dock-preview[hidden] {

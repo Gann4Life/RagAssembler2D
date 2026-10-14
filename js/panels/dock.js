@@ -10,6 +10,8 @@ import {
   openPanel,
   movePanel,
   resizeSplit,
+  timelineFold,
+  setTimelineFolded,
   computeRects,
   dropAt,
 } from './layout.js';
@@ -33,8 +35,11 @@ const KEY_STEP = 10;
 const KEY_STEP_LARGE = 50;
 const MIDDLE_BUTTON = 1;
 const GHOST_OFFSET = 12;
+const FADE_WIDTH = 12;
+const WHEEL_LINE = 16;
+const TIMELINE = 'timeline';
 const PANEL_IDS = Object.freeze(Object.keys(PANELS));
-const WINDOW_ORDER = Object.freeze(['tools', 'viewport', 'hierarchy', 'assets', 'problems', 'inspector', 'timeline']);
+const WINDOW_ORDER = Object.freeze(['viewport', ...PANEL_IDS]);
 const WIDGET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', ' ', 'Escape']);
 
 /**
@@ -54,8 +59,12 @@ export function createDock(workspace, { viewportElement }) {
   const preview = doc.createElement('div');
   preview.className = 'dock-preview';
   preview.hidden = true;
-  content.append(viewportElement, preview);
+  const caret = doc.createElement('div');
+  caret.className = 'dock-preview dock-caret';
+  caret.hidden = true;
+  content.append(viewportElement, preview, caret);
 
+  const foldButton = createFoldButton(doc);
   const panelElements = new Map(PANEL_IDS.map((id) => [id, createPanelElement(doc, id)]));
   const stackElements = new Map();
   const gutterElements = new Map();
@@ -77,8 +86,11 @@ export function createDock(workspace, { viewportElement }) {
   content.addEventListener('pointercancel', onPointerCancel);
   content.addEventListener('lostpointercapture', onPointerCancel);
   content.addEventListener('click', onClick);
+  content.addEventListener('dblclick', onDoubleClick);
   content.addEventListener('auxclick', onAuxClick);
   content.addEventListener('keydown', onKeyDown);
+  content.addEventListener('wheel', onWheel, { passive: false });
+  content.addEventListener('scroll', onScroll, true);
 
   function workspaceSize() {
     return { width: workspace.clientWidth, height: workspace.clientHeight };
@@ -103,16 +115,17 @@ export function createDock(workspace, { viewportElement }) {
       element.remove();
       stackElements.delete(id);
     }
-    for (const node of stacks) renderStack(node);
+    const fold = timelineFold(layout);
+    if (!fold || foldButton.closest('.dock-stack')?.dataset.stack !== fold.stackId) foldButton.remove();
+    for (const node of stacks) renderStack(node, fold?.stackId === node.id ? fold : null);
     for (const id of PANEL_IDS) {
       if (!stacks.some((node) => node.panels.includes(id))) panelElements.get(id).remove();
     }
     place();
-    for (const node of stacks) revealActiveTab(node);
     if (focusPanel) tabElement(focusPanel)?.focus();
   }
 
-  function renderStack(node) {
+  function renderStack(node, fold) {
     let element = stackElements.get(node.id);
     if (!element) {
       element = createStackElement(doc, node.id);
@@ -120,12 +133,19 @@ export function createDock(workspace, { viewportElement }) {
       content.insertBefore(element, preview);
     }
     const [tabBar, body] = element.children;
-    tabBar.setAttribute('aria-label', `${node.panels.map((id) => PANELS[id].title).join(', ')} tabs`);
-    tabBar.replaceChildren(...node.panels.map((id) => createTab(doc, id, id === node.active)));
+    const tablist = tabBar.firstElementChild;
+    tablist.setAttribute('aria-label', `${node.panels.map((id) => PANELS[id].title).join(', ')} tabs`);
+    tablist.replaceChildren(...node.panels.map((id) => createTab(doc, id, id === node.active)));
+    if (fold) {
+      updateFoldButton(foldButton, fold.folded);
+      if (foldButton.parentElement !== tabBar) tabBar.append(foldButton);
+    }
+    const folded = fold?.folded === true;
+    element.classList.toggle('is-folded', folded);
     for (const id of node.panels) {
       const panel = panelElements.get(id);
       if (panel.parentElement !== body) body.append(panel);
-      panel.hidden = id !== node.active;
+      panel.hidden = id !== node.active || folded;
     }
     for (const child of [...body.children]) {
       if (!node.panels.includes(child.dataset.panel)) child.remove();
@@ -140,7 +160,7 @@ export function createDock(workspace, { viewportElement }) {
     setRect(viewportElement, rects.viewport);
     const keys = new Set();
     for (const gutter of rects.gutters) {
-      const key = `${gutter.path.join('.')}:${gutter.index}`;
+      const key = gutterKey(gutter.path, gutter.index);
       keys.add(key);
       let element = gutterElements.get(key);
       if (!element) {
@@ -155,24 +175,54 @@ export function createDock(workspace, { viewportElement }) {
       element.remove();
       gutterElements.delete(key);
     }
+    orderContent();
+    for (const node of collectStacks(layout.tree)) revealActiveTab(node);
+    for (const element of stackElements.values()) updateFades(tablistOf(element));
     return rects;
+  }
+
+  function orderContent() {
+    const desired = [];
+    const visit = (node, path) => {
+      if (node.type === 'viewport') desired.push(viewportElement);
+      else if (node.type === 'stack') desired.push(stackElements.get(node.id));
+      else {
+        node.children.forEach((child, index) => {
+          visit(child, [...path, index]);
+          const gutter = gutterElements.get(gutterKey(path, index));
+          if (gutter && index < node.children.length - 1) desired.push(gutter);
+        });
+      }
+    };
+    visit(layout.tree, []);
+    desired.push(preview, caret);
+    const pivot = desired.findIndex((element) => element.contains(doc.activeElement));
+    let anchor = pivot >= 0 ? desired[pivot] : null;
+    for (let index = (pivot >= 0 ? pivot : desired.length) - 1; index >= 0; index -= 1) {
+      const element = desired[index];
+      if (element.parentElement !== content || element.nextElementSibling !== anchor) content.insertBefore(element, anchor);
+      anchor = element;
+    }
+    if (pivot < 0) return;
+    anchor = desired[pivot];
+    for (const element of desired.slice(pivot + 1)) {
+      if (anchor.nextElementSibling !== element) anchor.after(element);
+      anchor = element;
+    }
   }
 
   function updateGutter(element, gutter) {
     const node = nodeAt(layout.tree, gutter.path);
-    const controlled = gutter.index < node.sizes.indexOf(null) ? gutter.index : gutter.index + 1;
-    gutterData.set(element, { gutter, sign: controlled === gutter.index ? 1 : -1 });
+    const area = node.children[gutter.controlled];
+    gutterData.set(element, { gutter, sign: gutter.controlled === gutter.index ? 1 : -1 });
     element.className = `dock-gutter dock-gutter-${gutter.dir}`;
     element.setAttribute('aria-orientation', gutter.dir === 'row' ? 'vertical' : 'horizontal');
     element.setAttribute('aria-valuenow', String(Math.round(gutter.value)));
     element.setAttribute('aria-valuemin', String(Math.round(gutter.min)));
     element.setAttribute('aria-valuemax', String(Math.round(gutter.max)));
     element.setAttribute('aria-valuetext', `${Math.round(gutter.value)} px`);
-    element.setAttribute(
-      'aria-label',
-      `Resize ${nodeLabel(node.children[gutter.index])} / ${nodeLabel(node.children[gutter.index + 1])}`,
-    );
-    const controls = nodeElementId(node.children[controlled]);
+    element.setAttribute('aria-label', `${nodeLabel(area)} ${gutter.dir === 'row' ? 'width' : 'height'}`);
+    const controls = nodeElementId(area);
     if (controls) element.setAttribute('aria-controls', controls);
     else element.removeAttribute('aria-controls');
     if (gutterDrag?.element === element) element.classList.add('is-dragging');
@@ -226,11 +276,22 @@ export function createDock(workspace, { viewportElement }) {
 
   function activate(id) {
     const owner = stackOf(layout.tree, id);
-    if (owner.active === id) {
+    const fold = timelineFold(layout);
+    const folded = fold?.folded === true && fold.stackId === owner.id;
+    if (owner.active === id && !folded) {
+      revealActiveTab(owner);
       tabElement(id)?.focus();
       return;
     }
     commit(activatePanel(layout, id), { focusPanel: id });
+  }
+
+  function toggleFold() {
+    const fold = timelineFold(layout);
+    if (!fold) return;
+    const focusInside = !fold.folded && panelElements.get(TIMELINE).contains(doc.activeElement);
+    commit(setTimelineFolded(layout, !fold.folded));
+    if (focusInside) foldButton.focus();
   }
 
   function open(id) {
@@ -251,6 +312,10 @@ export function createDock(workspace, { viewportElement }) {
 
   function onClick(event) {
     if (suppressClick) return;
+    if (event.target.closest('.dock-fold')) {
+      toggleFold();
+      return;
+    }
     const closeButton = event.target.closest('.dock-tab-close');
     if (closeButton) {
       close(closeButton.dataset.panel);
@@ -258,6 +323,28 @@ export function createDock(workspace, { viewportElement }) {
     }
     const tab = event.target.closest('.dock-tab-label');
     if (tab) activate(tab.dataset.panel);
+  }
+
+  function onDoubleClick(event) {
+    const tabBar = event.target.closest?.('.dock-tabbar');
+    if (!tabBar || event.target.closest('.dock-tab, .dock-fold')) return;
+    if (tabBar.closest('.dock-stack').dataset.stack === timelineFold(layout)?.stackId) toggleFold();
+  }
+
+  function onWheel(event) {
+    const list = event.target.closest?.('.dock-tablist');
+    if (!list || event.ctrlKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    const max = list.scrollWidth - list.clientWidth;
+    if (max <= 0) return;
+    const delta = event.deltaY * wheelUnit(event, list);
+    const canScroll = delta < 0 ? list.scrollLeft > 0 : list.scrollLeft < max - 0.5;
+    if (!canScroll) return;
+    event.preventDefault();
+    list.scrollLeft += delta;
+  }
+
+  function onScroll(event) {
+    if (event.target.classList?.contains('dock-tablist')) updateFades(event.target);
   }
 
   function onAuxClick(event) {
@@ -281,10 +368,14 @@ export function createDock(workspace, { viewportElement }) {
   function onTabKey(event, tab) {
     if (!WIDGET_KEYS.has(event.key)) return;
     event.preventDefault();
-    const tabs = [...tab.closest('.dock-tabbar').querySelectorAll('.dock-tab-label')];
-    const next = rovingIndex(tabs.indexOf(tab), event.key, tabs.length);
-    if (next >= 0) activate(tabs[next].dataset.panel);
-    else if (event.key === 'Enter' || event.key === ' ') activate(tab.dataset.panel);
+    const tabs = [...tab.closest('.dock-tablist').querySelectorAll('.dock-tab-label')];
+    const current = tabs.indexOf(tab);
+    const next = rovingIndex(current, event.key, tabs.length);
+    if (next >= 0) {
+      if (next !== current) activate(tabs[next].dataset.panel);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      activate(tab.dataset.panel);
+    }
   }
 
   function onGutterKey(event, element) {
@@ -324,6 +415,7 @@ export function createDock(workspace, { viewportElement }) {
       startX: event.clientX,
       startY: event.clientY,
       active: false,
+      workspace: null,
       rects: null,
       result: null,
       ghost: null,
@@ -380,7 +472,8 @@ export function createDock(workspace, { viewportElement }) {
   function beginTabDrag() {
     tabDrag.active = true;
     tabDrag.source.setPointerCapture(tabDrag.pointerId);
-    tabDrag.rects = { ...computeRects(layout, workspaceSize()), tabs: measureTabs() };
+    tabDrag.workspace = workspaceSize();
+    tabDrag.rects = { ...computeRects(layout, tabDrag.workspace), tabs: measureTabs() };
     const ghost = doc.createElement('div');
     ghost.className = 'dock-ghost';
     ghost.textContent = PANELS[tabDrag.panelId].title;
@@ -395,10 +488,13 @@ export function createDock(workspace, { viewportElement }) {
     tabDrag.ghost.style.top = `${event.clientY + GHOST_OFFSET}px`;
     const origin = content.getBoundingClientRect();
     const point = { x: event.clientX - origin.left, y: event.clientY - origin.top };
-    tabDrag.result = dropAt(layout, tabDrag.rects, point, tabDrag.panelId);
-    doc.body.classList.toggle('dock-no-drop', !tabDrag.result);
-    preview.hidden = !tabDrag.result;
-    if (tabDrag.result) setRect(preview, tabDrag.result.preview);
+    const result = dropAt(layout, tabDrag.rects, point, tabDrag.panelId, tabDrag.workspace);
+    tabDrag.result = result;
+    doc.body.classList.toggle('dock-no-drop', !result);
+    preview.hidden = !result;
+    caret.hidden = !result?.caret;
+    if (result) setRect(preview, result.preview);
+    if (result?.caret) setRect(caret, result.caret);
   }
 
   function endTabDrag() {
@@ -408,6 +504,7 @@ export function createDock(workspace, { viewportElement }) {
     if (!drag.active) return;
     drag.ghost?.remove();
     preview.hidden = true;
+    caret.hidden = true;
     doc.body.classList.remove('dock-dragging', 'dock-no-drop');
     doc.removeEventListener('keydown', onDragKey, true);
     if (drag.source.hasPointerCapture?.(drag.pointerId)) drag.source.releasePointerCapture(drag.pointerId);
@@ -467,12 +564,12 @@ export function createDock(workspace, { viewportElement }) {
 
   function revealActiveTab(node) {
     const tab = tabElement(node.active)?.parentElement;
-    const bar = tab?.parentElement;
-    if (!bar) return;
-    const left = tab.offsetLeft;
-    const right = left + tab.offsetWidth;
-    if (left < bar.scrollLeft) bar.scrollLeft = left;
-    else if (right > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = right - bar.clientWidth;
+    const list = tab?.parentElement;
+    if (!list) return;
+    const left = tab.offsetLeft - FADE_WIDTH;
+    const right = tab.offsetLeft + tab.offsetWidth + FADE_WIDTH;
+    if (left < list.scrollLeft) list.scrollLeft = Math.max(0, left);
+    else if (right > list.scrollLeft + list.clientWidth) list.scrollLeft = right - list.clientWidth;
   }
 
   return {
@@ -517,8 +614,11 @@ export function createDock(workspace, { viewportElement }) {
       content.removeEventListener('pointercancel', onPointerCancel);
       content.removeEventListener('lostpointercapture', onPointerCancel);
       content.removeEventListener('click', onClick);
+      content.removeEventListener('dblclick', onDoubleClick);
       content.removeEventListener('auxclick', onAuxClick);
       content.removeEventListener('keydown', onKeyDown);
+      content.removeEventListener('wheel', onWheel);
+      content.removeEventListener('scroll', onScroll, true);
       events.clear();
     },
   };
@@ -546,11 +646,49 @@ function createStackElement(doc, id) {
   element.dataset.stack = id;
   const tabBar = doc.createElement('div');
   tabBar.className = 'dock-tabbar';
-  tabBar.setAttribute('role', 'tablist');
+  const tablist = doc.createElement('div');
+  tablist.className = 'dock-tablist';
+  tablist.setAttribute('role', 'tablist');
+  tabBar.append(tablist);
   const body = doc.createElement('div');
   body.className = 'dock-body';
   element.append(tabBar, body);
   return element;
+}
+
+function tablistOf(stackElement) {
+  return stackElement.firstElementChild.firstElementChild;
+}
+
+function createFoldButton(doc) {
+  const button = doc.createElement('button');
+  button.type = 'button';
+  button.className = 'dock-fold';
+  button.setAttribute('aria-controls', 'panel-timeline');
+  button.setAttribute('aria-label', 'Timeline content');
+  return button;
+}
+
+function updateFoldButton(button, folded) {
+  button.textContent = folded ? '▸' : '▾';
+  button.title = folded ? 'Expand' : 'Fold';
+  button.setAttribute('aria-expanded', String(!folded));
+}
+
+function updateFades(list) {
+  const max = list.scrollWidth - list.clientWidth;
+  list.classList.toggle('is-clipped-start', list.scrollLeft > 0.5);
+  list.classList.toggle('is-clipped-end', list.scrollLeft < max - 0.5);
+}
+
+function wheelUnit(event, list) {
+  if (event.deltaMode === 1) return WHEEL_LINE;
+  if (event.deltaMode === 2) return list.clientWidth;
+  return 1;
+}
+
+function gutterKey(path, index) {
+  return `${path.join('.')}:${index}`;
 }
 
 function createTab(doc, id, active) {
