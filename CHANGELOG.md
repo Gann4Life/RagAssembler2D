@@ -40,6 +40,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - The toolbar switches to two columns when the viewport is too short for one, and framing (`F`, `Home`) keeps the content clear of it.
 - Select tool (V), active when the editor loads: click selects the shape, joint or root under the pointer; SHIFT + click toggles it, CTRL + click removes it, ALT + click cycles through overlapping objects, and clicking empty space clears the selection. Any drag draws a selection box that picks the shapes entirely inside it and the joints whose anchor is inside, at the release: SHIFT adds, CTRL removes, none replaces. Works in every mode and leaves no undo step.
 - Select Box tool (B): drag a selection box with the same rules; a click without a drag clears the selection.
+- Hinge Joint tool (H): click where two shapes overlap to create a pin joint at the snapped point, or drag from it to set symmetric ±θ limits (SHIFT snaps to 15° steps). The parent body is chosen automatically, a pair of bodies that already has a joint is refused, and each joint is one undo step.
 
 ### Changed
 - Tools is now a floating toolbar over the viewport instead of a dock panel; it no longer appears in the Window menu, and a saved layout that still lists it resets to the default layout.
