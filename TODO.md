@@ -6,7 +6,7 @@
 - [x] #2 Pin PIXI.js v8 and liquidfun.js builds in vendor/
 - [x] #3 Add node --test harness with a first smoke test
 - [ ] #4 Spike: check custom contact filter support in liquidfun.js
-- [ ] #5 Spike: verify the liquidfun.js API surface used by RagImporter
+- [x] #5 Spike: verify the liquidfun.js API surface used by RagImporter
 - [x] #65 Spike: define editor core architecture and module map
 - [ ] #66 Architecture conformance tests for imports, pure modules and comments
 - [x] #75 Add read-only permission allowlist for routine commands
@@ -86,6 +86,7 @@
 - [ ] #54 Editor Simulate mode running on RagImporter
 - [ ] #55 Procedural preview and preview stack playback in Simulate
 - [ ] #56 Spike: verify determinism between editor and host page
+- [ ] #100 Native-memory regression test for ragdoll spawn, update and destroy
 
 ## Phase 5 – Demo
 - [ ] #57 Author the demo humanoid with sprites and clips in the editor
@@ -97,6 +98,6 @@
 ## No milestone
 - [ ] #70 Publish editor into host provider
 - [x] #80 Assign models to project agents by role
-- [ ] #95 Keep commit messages and descriptions concise
+- [x] #95 Keep commit messages and descriptions concise
 - [ ] #97 Document version tags and release branches in CLAUDE.md
-- [ ] #98 Extend read-only PowerShell permission allowlist
+- [x] #98 Extend read-only PowerShell permission allowlist

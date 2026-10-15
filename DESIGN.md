@@ -107,7 +107,7 @@ v1 supports **revolute (hinge) joints** only.
 - RagImporter (and the editor's Simulate mode) must reproduce these rules exactly:
   - **Preferred:** a contact filter (`ShouldCollide`) that checks instance and `selfCollide` flags.
   - **Fallback**, when the liquidfun.js binding cannot install a contact filter: every shape of an instance gets `groupIndex = −instanceId`, which disables *all* self-collision. A one-time warning is logged if any shape has `selfCollide = true`.
-  - ⚠ Whether liquidfun.js exposes a contact filter must be verified ([§12](#12-open-items--to-verify)).
+  - The pinned build exposes a JS contact filter (`Box2D.JSContactFilter` + `b2World.SetContactFilter`), so the preferred path is available. How RagImporter installs it (one per world, alongside the host's own filtering) is still open ([§12](#12-open-items--to-verify)).
 
 ---
 
@@ -130,6 +130,7 @@ enableMotor    = S > 0
 - `motor.maxTorque` (N·m), `motor.gain` (1/s), `motor.damping` (unitless) and `motor.maxSpeed` (rad/s) are per-joint **base values** set in the inspector.
 - The channels `strength`, `gain` and `damping` (joint and root) are **multipliers in 0–1, default 1**.
 - `S = 0` → the joint is fully limp, but **limits are still enforced**.
+- `jointAngle` and `jointSpeed` are `GetJointAngle()` and `GetJointSpeed()` of the `b2RevoluteJoint` (rad, rad/s, relative to the reference angle, so 0 at rest). The outputs go to `SetMotorSpeed`, `SetMaxMotorTorque` and `EnableMotor`. These methods exist only on the `b2RevoluteJoint` wrapper ([§7.2](#72-spawn-and-flipx)). This loop allocates nothing on the Emscripten heap ([§7.4](#74-native-memory)).
 - This model is the same in the editor and at runtime. The editor's Simulate mode uses RagImporter itself, so **preview equals production**.
 
 ---
@@ -823,7 +824,9 @@ import { RagImporter } from './lib/ragimporter.js';
 // liquidfun.js (global Box2D) and PIXI.js v8 (global PIXI) loaded by the host with <script> tags.
 
 const app   = new PIXI.Application(); await app.init({ resizeTo: window });
-const world = new Box2D.b2World(new Box2D.b2Vec2(0, -10));
+const gravity = new Box2D.b2Vec2(0, -10);
+const world = new Box2D.b2World(gravity);
+Box2D.destroy(gravity);                                       // copied by the world (§7.4)
 
 const json = await (await fetch('assets/humanoid.rag.json')).json();
 const def  = RagImporter.parse(json);                         // validates; throws on errors or unsupported version
@@ -900,10 +903,13 @@ app.ticker.add(() => {
 | `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun (`Box2D.b2Body`, `Box2D.b2RevoluteJoint`, `Box2D.b2Fixture`) / PIXI objects, looked up by name. |
 | `bodies` / `joints` | Maps id → native object. |
 | `position`, `angle` | Follow `rootBody`. |
-| `destroy()` | Removes bodies and joints from the world, destroys the view and clears listeners and overrides. |
+| `destroy()` | Removes joints, then bodies, from the world ([§7.4](#74-native-memory)), destroys the view and clears listeners and overrides. Native objects obtained from the instance are invalid afterwards. |
 
 ### 7.2 Spawn and flipX
-- Every body's world transform is `spawnTransform × rootLocal`. Joints are created with `Box2D.b2RevoluteJointDef` and its `Initialize(bodyA, bodyB, anchorWorld)` while the bodies are at rest, so LiquidFun computes the reference angle that matches the rest pose.
+- Every body's world transform is `spawnTransform × rootLocal`. Joints are created with `Box2D.b2RevoluteJointDef` and its `Initialize(bodyA, bodyB, anchorWorld)` while the bodies are at rest, so LiquidFun computes the reference angle that matches the rest pose (`referenceAngle = angleB − angleA`).
+- `world.CreateJoint` returns a base `b2Joint`. Spawn casts it once with `Box2D.castObject(joint, Box2D.b2RevoluteJoint)` and stores that wrapper; it is what `rag.joint(name)` and `rag.joints` return. Casts and `wrapPointer` return cached wrappers for the same pointer, so the cast is never repeated in `update()`.
+- Filter data is written with `fixture.GetFilterData()`, its `set_categoryBits` / `set_maskBits` / `set_groupIndex`, then `fixture.SetFilterData(filter)`. The 16-bit bit fields read back signed (`maskBits` defaults to −1), so values read from LiquidFun are masked with `& 0xffff`.
+- Boolean getters of the binding (`IsMotorEnabled`, `IsLimitEnabled`, …) return `1`/`0`, not `true`/`false`.
 - `flipX` mirrors the ragdoll horizontally:
   - x coordinates and body angles are negated;
   - polygon vertex order is reversed (to stay CCW);
@@ -919,6 +925,19 @@ app.ticker.add(() => {
 - `update()` applies the resolved `sprite` channel by swapping `sprite.texture` (or hiding the sprite when the value is `null`). Textures are resolved once per asset and cached per `RagDef`.
 - **Atlases:** the default resolver uses `src` as a URL. A host that packs sprites in a spritesheet passes `textures: (src, asset) => PIXI.Texture.from(asset.name)` (or any mapping). The file stays the same.
 - With `debug: true`, a `PIXI.Graphics` layer draws shapes (`editor.color`), joint anchors and limits.
+
+### 7.4 Native memory
+The pinned liquidfun.js build has a **fixed 16 MiB heap that cannot grow**. Every object created with `new Box2D.*` lives there until `Box2D.destroy`. When the heap runs out, the module aborts ("Cannot enlarge memory arrays") and is unusable until the page reloads. RagImporter therefore follows these rules (the editor's Simulate mode and `demo/` follow them too):
+
+1. **Copied inputs are destroyed right away.** Body, fixture and joint defs, shapes and `b2Filter` objects are copied by the world: `Box2D.destroy` them right after the `Create*` / `Set*` call that uses them.
+2. **Vectors passed to setters are copied** (`set_position`, `set_target`, `SetTransform`, `ApplyLinearImpulse`), so they can be overwritten or destroyed afterwards.
+3. **World-owned objects and getter results are never passed to `Box2D.destroy`:** bodies, fixtures and joints (use `world.DestroyBody` / `DestroyJoint`), the results of `GetFilterData`, `GetPosition`, `GetLinearVelocity` and similar, and an installed contact filter.
+4. **`update()` and `sync()` allocate nothing.** Vector arguments use one scratch `b2Vec2`, per instance or per module, written with `set_x` / `set_y`.
+5. **By-value vector getters share one static temporary** (`GetLinearVelocity`, `GetWorldPoint`, …): read its components into numbers before the next such call.
+6. **Teardown destroys joints before bodies** and drops the cached wrappers. `DestroyBody` removes attached joints natively, but their JS wrappers stay and point at freed memory.
+7. **The contact filter lives as long as the world.** It is created once per host world and destroyed only when the host tears the world down.
+
+Under these rules the heap does not grow: `tests/liquidfun-api.test.js` checks 20,000 create/destroy cycles of two bodies and a joint, and 10⁶ `SetTransform` + `ApplyLinearImpulse` calls with one reused `b2Vec2`. A leaked `b2Vec2` costs 16 bytes, so about 676,000 leaks, under 10 minutes of one leak per joint per step for a 20-joint ragdoll at 60 Hz, abort the module.
 
 ---
 
@@ -1000,8 +1019,8 @@ demo/                      production preview (§10)
 
 ## 12. Open items / to verify
 
-- **liquidfun.js contact filter:** confirm whether the pinned build lets JavaScript implement a contact filter on the `Box2D` namespace (a JS-implementable `ShouldCollide` class plus `b2World.SetContactFilter`). If not, the fallback in §2.5 applies, and per-shape `selfCollide` cannot be honored.
-- **liquidfun.js API surface:** confirm that the pinned build exposes, through `Box2D.*` and WebIDL accessors, `b2RevoluteJointDef.Initialize`, the motor setters (`SetMotorSpeed`, `SetMaxMotorTorque`, `EnableMotor`), `GetJointAngle`/`GetJointSpeed`, limits and fixture filter data (`categoryBits`, `maskBits`, `groupIndex`). Also confirm how objects created with `new` (defs, `b2Vec2`) are released (`Box2D.destroy`), so `spawn`, `update` and `destroy` do not leak Emscripten heap memory.
+- **Contact filter integration:** the pinned build exposes `new Box2D.JSContactFilter()`, whose `ShouldCollide(fixtureAPtr, fixtureBPtr)` receives raw pointers (wrap with `Box2D.wrapPointer(ptr, Box2D.b2Fixture)`), installed with `world.SetContactFilter`; returning `false` disables the contact (verified). Still to decide: a world holds one filter, shared by every instance and possibly wanted by the host; a JS filter replaces Box2D's default category/mask/group test, which must then be reproduced (not yet verified); and who creates and destroys it per world ([§7.4](#74-native-memory)). `JSContactListener` also exists. Until decided, the §2.5 fallback stays specified.
+- **Resolved – liquidfun.js API surface:** the pinned build exposes `b2RevoluteJointDef.Initialize`, the `b2RevoluteJoint` motor, limit, angle and speed methods (after `Box2D.castObject`), fixture filter data, `b2MouseJointDef` / `b2MouseJoint.SetTarget`, `world.DestroyBody` / `DestroyJoint`, `getPointer`, `compare` and `Box2D.destroy` (§3, §7.2). Heap behavior and allocation rules are in §7.4. Verified in Node by `tests/liquidfun-api.test.js`. Side effect: in Node the build installs a `process.on('uncaughtException')` handler.
 - **Resolved – liquidfun.js build:** pinned to the doebi/liquidfun.js v1.1.0 Emscripten (asm.js) build. It exposes a single global `Box2D` namespace with WebIDL accessors (§7). Checksum and provenance in `docs/development.md`.
 - **Resolved – PIXI.js version:** pinned to 8.21.0. `Assets`, `sortableChildren`/`zIndex` and `eventMode` + `pointermove` were verified in the browser (`docs/development.md`).
 - **Motor stability:** verify the PD-over-motor behavior with high `gain` and light bodies, and with procedural overrides that jump far from the clip angle. Tune the default `motor` values for the demo humanoid. Consider velocity/position iterations ≥ 8/3.

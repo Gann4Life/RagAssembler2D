@@ -36,6 +36,7 @@ Current coverage:
 - `tests/emitter.test.js` checks `lib/emitter.js` (ordering, unsubscribe, error handling, listener validation).
 - `tests/schema.test.js` checks `lib/schema.js` (field table against `docs/schema.md`, defaults, channels, clip keys).
 - `tests/model.test.js` checks `js/model/model.js` (uids, schema defaults, `applyOps` and `batch` change events and rollback, reset, id allocation, collection rejection in props).
+- `tests/liquidfun-api.test.js` loads `vendor/liquidfun.js` in Node and checks the API surface RagImporter uses and the heap rules of `DESIGN.md` §7.4 (20,000 create/destroy cycles, 10⁶ vector-setter calls).
 
 Tests for validation, canonical serialization (round-trip), the animation evaluator and event timing are **(planned)**.
 
@@ -55,6 +56,8 @@ Both files are loaded with plain `<script>` tags, as served, with no build step.
 - The doebi/liquidfun.js repository declares no license of its own. It ships only the Box2D notice (`NOTICE`).
 - **API exposure:** loading the script defines a single global, `Box2D`. The classes live on it (`Box2D.b2World`, `Box2D.b2Vec2`, `Box2D.b2RevoluteJointDef`, …). There are **no** global `b2World` / `b2Vec2`. Fields use WebIDL accessors (`bd.set_type(Box2D.b2_dynamicBody)`, `body.GetPosition().get_y()`).
 - The file is self-contained: no `.mem` or `.wasm` side file is requested.
+- **Heap:** fixed 16 MiB that cannot grow; objects created with `new Box2D.*` stay until `Box2D.destroy`. Rules: [`DESIGN.md` §7.4](../DESIGN.md#74-native-memory).
+- Under Node it installs a `process.on('uncaughtException')` handler as a side effect of loading.
 - On load it writes `pre-main prep time: 0 ms` with `console.log`. This is informational, not an error.
 
 ### PIXI.js

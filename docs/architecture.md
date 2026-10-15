@@ -21,7 +21,7 @@
         vendor/liquidfun.js                    vendor/pixi.min.js
 ```
 
-RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `b2*` names) and PIXI.js through `PIXI`; either can be injected with `RagImporter.configure({ Box2D, PIXI })` **(planned)** ([`DESIGN.md` §7](../DESIGN.md#7-ragimporter)). Both libraries are pinned in `vendor/` ([Vendored libraries](development.md#vendored-libraries)).
+RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `b2*` names) and PIXI.js through `PIXI`; either can be injected with `RagImporter.configure({ Box2D, PIXI })` **(planned)** ([`DESIGN.md` §7](../DESIGN.md#7-ragimporter)). Both libraries are pinned in `vendor/` ([Vendored libraries](development.md#vendored-libraries)). Every runtime module that creates or destroys LiquidFun objects follows the native memory rules ([`DESIGN.md` §7.4](../DESIGN.md#74-native-memory)): the heap is fixed and cannot grow.
 
 `demo/` is a separate host page **(planned)**. It imports only `lib/ragimporter.js` and the vendored libraries.
 
@@ -46,7 +46,7 @@ RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `
 | `js/` | `lib/`, other `js/` modules per the layers below. Only `js/main.js` reads the `PIXI` and `Box2D` globals; other modules receive them as parameters. |
 | `lib/` | Other `lib/` modules only. Only runtime modules (`def`, `instance`, `render`, `collision`) use `Box2D`/`PIXI`, and only through the namespaces resolved by `lib/ragimporter.js`. |
 | `demo/` | `lib/ragimporter.js` only (the public API), vendor globals. |
-| `tests/` | `lib/`, and `js/` **core** modules (they load without a DOM). Exception: a `js/` UI module that loads without a DOM may be imported to test its DOM-free exports (`js/header.js`: `HEADER_GROUPS`, `actionTitle`; `js/viewport/toolbar.js` (planned): `TOOL_BUTTONS`), or with a fake browser global installed on `globalThis` for the test and restored after it (`js/storage.js` with a fake `localStorage`). DOM behavior is checked in the browser. |
+| `tests/` | `lib/`, `vendor/liquidfun.js` (loaded with `createRequire`, only by `tests/liquidfun-api.test.js`), and `js/` **core** modules (they load without a DOM). Exception: a `js/` UI module that loads without a DOM may be imported to test its DOM-free exports (`js/header.js`: `HEADER_GROUPS`, `actionTitle`; `js/viewport/toolbar.js` (planned): `TOOL_BUTTONS`), or with a fake browser global installed on `globalThis` for the test and restored after it (`js/storage.js` with a fake `localStorage`). DOM behavior is checked in the browser. |
 
 **Layers inside `js/`:**
 
@@ -85,6 +85,7 @@ Columns: responsibility, public exports, and allowed imports beyond `lib/`. Rows
 | `tests/editor-header.test.js` | Header tests: `rovingIndex` navigation in both orientations, header group order and unique ids against `DESIGN.md` §5.3, shortcuts against §5.9, and `actionTitle` text. | none | — |
 | `tests/layout.test.js` | Dock layout tests: `PANELS` against the `DESIGN.md` §5.2 table, default layout, rects and gutters, normalize, stored-layout validation (including the depth and size limits) and restore, close/open (reopen rule), move, `canDrop`, resize (shrunk siblings stay on screen), Timeline folding, `dropAt`, immutability and JSON round trip. | none | — |
 | `tests/storage.test.js` | Storage tests with a fake `localStorage` installed on `globalThis` and restored after each test: `missing`, `parse` and `unavailable` results (`getItem` throwing or `localStorage` undefined), `saveLayout` success and failure (`setItem` throwing or storage undefined), silent `clearLayout`. | none | — |
+| `tests/liquidfun-api.test.js` | Verifies the pinned liquidfun.js API surface used by RagImporter in Node: revolute joint creation and reference angle, motor, limit, angle and speed methods after `castObject`, filter data, contact filter, mouse joint, teardown order, and heap behavior under repeated create/destroy and per-step calls ([`DESIGN.md` §7.4](../DESIGN.md#74-native-memory)). | none | — |
 | `tests/emitter.test.js`, `tests/schema.test.js`, `tests/model.test.js` | Contract tests for the emitter, the schema tables and helpers against [schema.md](schema.md), and the document model. | none | — |
 
 ### lib/ (planned)
@@ -99,8 +100,8 @@ A module whose functions serve several issues is created by the first of them to
 | `lib/migrate.js` | Migrates older format versions to `FORMAT_VERSION`; throws on unknown versions. Used by the editor loader only. | `migrate(json) → { json, notes }` | schema | #27 |
 | `lib/evaluate.js` | Pure animation evaluator: track sampling, interpolation, channel resolution ([`DESIGN.md` §4.3–4.4](../DESIGN.md#43-keys-and-interpolation)). | `sampleTrack`, `evaluateClip`, `resolveChannels`, typedef `ResolvedPose` | schema | #30, #31 |
 | `lib/ragimporter.js` | Public entry: `configure`, `parse`, `validate`, `supportedVersions`; resolves `Box2D`/`PIXI`. | `RagImporter`, `RagFormatError` | all `lib/` | #44 |
-| `lib/def.js` | `RagDef`: immutable parsed definition, `spriteUrls`, `spawn`. | `RagDef` (via `parse`) | validate, schema, geometry, instance | #44 |
-| `lib/instance.js` | `RagInstance`: playback, events, overrides, motor controller, `update`, `sync`, `destroy`. | `RagInstance` (via `spawn`) | emitter, evaluate, geometry, render, collision | #44–#48 |
+| `lib/def.js` | `RagDef`: immutable parsed definition, `spriteUrls`, `spawn` (destroys every def, shape and filter it creates, casts each joint once to `b2RevoluteJoint`; [§7.4](../DESIGN.md#74-native-memory)). | `RagDef` (via `parse`) | validate, schema, geometry, instance | #44 |
+| `lib/instance.js` | `RagInstance`: playback, events, overrides, motor controller, `update`, `sync` (both allocate nothing) and `destroy` (joints before bodies); [§7.4](../DESIGN.md#74-native-memory). | `RagInstance` (via `spawn`) | emitter, evaluate, geometry, render, collision | #44–#48 |
 | `lib/render.js` | PIXI sprites, texture resolver and cache, z order, debug draw. | internal | geometry | #50, #51 |
 | `lib/collision.js` | Contact filter or `groupIndex` fallback ([`DESIGN.md` §2.5](../DESIGN.md#25-collision-rules)). | internal | — | #49 |
 
