@@ -240,6 +240,117 @@ export function checkPureGlobals(files, architecture) {
   return violations;
 }
 
+const OPENERS = new Set(['(', '[', '{', '${']);
+const CLOSERS = new Set([')', ']', '}']);
+const CONDITION_KEYWORDS = new Set(['if', 'while', 'for', 'switch', 'with']);
+const DECLARATION_KEYWORDS = new Set(['const', 'let', 'var', 'function', 'class']);
+
+function isPunct(token, value) {
+  return token?.type === 'punct' && token.value === value;
+}
+
+function matchingCloser(tokens, openIndex) {
+  let depth = 0;
+  for (let index = openIndex; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.type !== 'punct') continue;
+    if (OPENERS.has(token.value)) depth++;
+    else if (CLOSERS.has(token.value) && --depth === 0) return index;
+  }
+  return tokens.length - 1;
+}
+
+function enclosingBlockEnd(tokens, fromIndex) {
+  let depth = 0;
+  for (let index = fromIndex; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.type !== 'punct') continue;
+    if (OPENERS.has(token.value)) depth++;
+    else if (CLOSERS.has(token.value) && --depth < 0) return index;
+  }
+  return tokens.length - 1;
+}
+
+function arrowBodyEnd(tokens, bodyStart) {
+  if (isPunct(tokens[bodyStart], '{')) return matchingCloser(tokens, bodyStart);
+  let depth = 0;
+  for (let index = bodyStart; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.type !== 'punct') continue;
+    if (OPENERS.has(token.value)) depth++;
+    else if (CLOSERS.has(token.value) && --depth < 0) return index - 1;
+    else if (depth === 0 && (token.value === ',' || token.value === ';')) return index - 1;
+  }
+  return tokens.length - 1;
+}
+
+function isParameterList(tokens, open, close) {
+  const before = tokens[open - 1];
+  if (before?.type === 'ident' && CONDITION_KEYWORDS.has(before.value)) return false;
+  return isPunct(tokens[close + 1], '{') || (isPunct(tokens[close + 1], '=') && isPunct(tokens[close + 2], '>'));
+}
+
+function bindsInParameters(tokens, open, close, name) {
+  let parenDepth = 0;
+  for (let index = open; index <= close; index++) {
+    const token = tokens[index];
+    if (isPunct(token, '(')) parenDepth++;
+    else if (isPunct(token, ')')) parenDepth--;
+    if (token.type !== 'ident' || token.value !== name || parenDepth !== 1) continue;
+    const before = tokens[index - 1];
+    const after = tokens[index + 1];
+    const startsBinding = ['(', ',', '{', '[', '.'].some((value) => isPunct(before, value));
+    const endsBinding = [',', ')', '=', '}', ']'].some((value) => isPunct(after, value));
+    if (startsBinding && endsBinding) return true;
+  }
+  return false;
+}
+
+function boundRanges(tokens, name) {
+  const ranges = [];
+  tokens.forEach((token, index) => {
+    if (token.type === 'ident' && token.value === name) {
+      const before = tokens[index - 1];
+      if (before?.type === 'ident' && DECLARATION_KEYWORDS.has(before.value)) {
+        ranges.push([index, enclosingBlockEnd(tokens, index)]);
+      }
+      return;
+    }
+    if (!isPunct(token, '(')) return;
+    const close = matchingCloser(tokens, index);
+    if (!isParameterList(tokens, index, close) || !bindsInParameters(tokens, index, close, name)) return;
+    const isArrow = isPunct(tokens[close + 1], '=');
+    const bodyStart = isArrow ? close + 3 : close + 1;
+    ranges.push([index, isArrow ? arrowBodyEnd(tokens, bodyStart) : matchingCloser(tokens, bodyStart)]);
+  });
+  return ranges;
+}
+
+/**
+ * Checks that no `js/` module other than `js/main.js` references the `PIXI` or `Box2D` globals; they are received as
+ * parameters. Property accesses and object keys are not references, and a name bound by a function parameter or a
+ * `const`/`let`/`var` declaration is not the global within the scope of that binding.
+ * @param {import('./scan.js').SourceFile[]} files Source files to check; files outside `js/` are skipped.
+ * @returns {string[]} One `path:line: message` entry per violation.
+ */
+export function checkMainOnlyGlobals(files) {
+  const violations = [];
+  for (const { path, source } of files) {
+    if (!path.startsWith('js/') || path === 'js/main.js') continue;
+    const tokens = tokenize(source).filter((token) => token.type !== 'comment');
+    const ranges = new Map(['PIXI', 'Box2D'].map((name) => [name, boundRanges(tokens, name)]));
+    tokens.forEach((token, index) => {
+      if (token.type !== 'ident' || !ranges.has(token.value)) return;
+      const before = tokens[index - 1];
+      if (before?.type === 'punct' && ['.', '?.', '#'].includes(before.value)) return;
+      if (isPropertyKey(tokens, index)) return;
+      if (ranges.get(token.value).some(([start, end]) => index >= start && index <= end)) return;
+      violations.push(`${path}:${token.line}: only js/main.js may reference the global ${token.value}; receive it as a parameter`);
+    });
+  }
+  return violations;
+}
+
 /**
  * Checks that `applyOps` and `batch` are called on a model only by `js/commands/history.js`, and `reset` only by
  * `js/model/io.js`. A call counts when its receiver is an identifier ending in `model` (`model.reset(…)`,
