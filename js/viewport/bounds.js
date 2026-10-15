@@ -90,6 +90,7 @@ class Collector {
 
   addJoint(jointUid) {
     const props = this.model.get(jointUid).props;
+    if (!Array.isArray(props.anchor)) return;
     const anchor = vec(props.anchor);
     const bodyA = typeof props.bodyA === 'string' ? this.model.uidOf(props.bodyA) : null;
     const posed = bodyA !== null && this.model.get(bodyA)?.type === 'body' ? this.pose?.get(bodyA) : undefined;
