@@ -14,7 +14,7 @@
 ## Phase 1 – Editor: rigging
 - [ ] #6 Spike: verify sprite folder access across browsers
 - [x] #7 Editor shell with index.html, PIXI app and header
-- [ ] #8 Dockable panel system with tabs, resize handles and saved layout
+- [x] #8 Dockable panel system with tabs, resize handles and saved layout
 - [x] #9 Editor data model for ragdolls, clips and sprite assets
 - [ ] #10 Command stack with undo/redo and editor modes
 - [ ] #11 Viewport navigation, grid, snapping and display modes
@@ -42,6 +42,16 @@
 - [x] #73 Clarify header alignment and viewport ARIA role in the spec
 - [ ] #77 Decide how Save writes meta.name and meta.editorVersion
 - [ ] #78 Warn about duplicate body, joint and shape names
+- [ ] #83 Drag a whole panel stack by its tab bar
+- [ ] #84 Maximize a panel by double-clicking its tab
+- [ ] #85 Cycle focus between panels with F6 and Shift+F6
+- [ ] #87 Tools overlay toolbar on top of the viewport
+- [ ] #88 Guard panel minimum widths against clipped tab titles
+- [ ] #89 Use the default cursor on tabs at rest and grabbing only while dragging
+- [ ] #90 Dim the drag ghost over invalid drop targets
+- [ ] #91 Place workspace edge drop strips on the visible area
+- [ ] #92 Make panel bodies a Tab stop only when they have no focusable content
+- [ ] #94 Show a sprite edit indicator on the Manipulate tool button
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
@@ -54,6 +64,7 @@
 - [ ] #37 Preview stack for evaluating several clips together
 - [ ] #38 Pose tool with mouse-joint posing
 - [ ] #39 Autokey, Key selected (K) and inspector key buttons
+- [ ] #93 Show the mode and clip summary in the folded Timeline bar
 
 ## Phase 3 – Round-trip verification
 - [ ] #40 Valid round-trip fixture set
@@ -86,3 +97,6 @@
 ## No milestone
 - [ ] #70 Publish editor into host provider
 - [x] #80 Assign models to project agents by role
+- [ ] #95 Keep commit messages and descriptions concise
+- [ ] #97 Document version tags and release branches in CLAUDE.md
+- [ ] #98 Extend read-only PowerShell permission allowlist
