@@ -10,6 +10,10 @@
 - [x] #65 Spike: define editor core architecture and module map
 - [x] #66 Architecture conformance tests for imports, pure modules and comments
 - [x] #75 Add read-only permission allowlist for routine commands
+- [x] #104 Enforce vendor and demo import limits for tests
+- [x] #105 Enforce that only js/main.js reads the PIXI and Box2D globals
+- [x] #106 Load core and pure modules in Node without a DOM
+- [x] #107 Anchor Pure and Runtime parsing to the component diagram
 
 ## Phase 1 – Editor: rigging
 - [ ] #6 Spike: verify sprite folder access across browsers
