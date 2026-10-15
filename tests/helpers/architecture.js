@@ -107,6 +107,12 @@ function importViolation(path, architecture, target) {
     return 'demo/ may import only lib/ragimporter.js';
   }
   if (path.startsWith('tests/')) {
+    if (target === 'vendor/liquidfun.js' && !/^tests\/liquidfun-[^/]*\.test\.js$/.test(path)) {
+      return 'only tests/liquidfun-*.test.js may load vendor/liquidfun.js';
+    }
+    if (target === 'vendor/pixi.min.js' || target.startsWith('demo/')) {
+      return 'tests/ may not import demo/ or vendor/pixi.min.js';
+    }
     if (isUi(target, architecture) && !architecture.testableUi.includes(target)) {
       return 'tests/ may import only js/ core modules and the listed DOM-free UI modules';
     }
