@@ -1,8 +1,9 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadLayout, saveLayout, clearLayout } from '../js/storage.js';
+import { loadLayout, saveLayout, clearLayout, loadSettings, saveSettings } from '../js/storage.js';
 
 const KEY = 'ragassembler.layout';
+const SETTINGS_KEY = 'ragassembler.settings';
 
 let original;
 
@@ -70,6 +71,31 @@ test('saveLayout returns false when setItem throws or storage is undefined', () 
   assert.equal(saveLayout({ version: 2 }), false);
   install(undefined);
   assert.equal(saveLayout({ version: 2 }), false);
+});
+
+test('loadSettings reads ragassembler.settings with the same failure results', () => {
+  install(memoryStorage({ [SETTINGS_KEY]: '{"version":1}', [KEY]: '{"version":2}' }));
+  assert.deepEqual(loadSettings(), { value: { version: 1 } });
+  install(memoryStorage());
+  assert.deepEqual(loadSettings(), { error: 'missing' });
+  install(memoryStorage({ [SETTINGS_KEY]: '{' }));
+  assert.deepEqual(loadSettings(), { error: 'parse' });
+  install(failing());
+  assert.deepEqual(loadSettings(), { error: 'unavailable' });
+  install(undefined);
+  assert.deepEqual(loadSettings(), { error: 'unavailable' });
+});
+
+test('saveSettings writes JSON under ragassembler.settings and reports failures', () => {
+  const storage = memoryStorage();
+  install(storage);
+  assert.equal(saveSettings({ version: 1, snap: { grid: true } }), true);
+  assert.equal(storage.data.get(SETTINGS_KEY), '{"version":1,"snap":{"grid":true}}');
+  assert.equal(storage.data.has(KEY), false);
+  install(failing());
+  assert.equal(saveSettings({ version: 1 }), false);
+  install(undefined);
+  assert.equal(saveSettings({ version: 1 }), false);
 });
 
 test('clearLayout removes the key and swallows errors', () => {

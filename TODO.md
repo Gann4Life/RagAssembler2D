@@ -21,7 +21,7 @@
 - [x] #8 Dockable panel system with tabs, resize handles and saved layout
 - [x] #9 Editor data model for ragdolls, clips and sprite assets
 - [x] #10 Command stack with undo/redo and editor modes
-- [ ] #11 Viewport navigation, grid, snapping and display modes
+- [x] #11 Viewport navigation, grid, snapping and display modes
 - [ ] #12 Viewport selection, hover, gizmos and overlays
 - [ ] #13 Select and Select Box tools
 - [ ] #14 Circle and Box tools with SHIFT/ALT/CTRL modifiers
@@ -56,6 +56,8 @@
 - [ ] #91 Place workspace edge drop strips on the visible area
 - [ ] #92 Make panel bodies a Tab stop only when they have no focusable content
 - [ ] #94 Show a sprite edit indicator on the Manipulate tool button
+- [ ] #112 Add shortcuts to toggle grid snap and cycle display mode
+- [ ] #113 Review Settings popover focus handling and grid colors
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults

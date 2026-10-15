@@ -381,14 +381,45 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - Next frame advances one fixed step (1/60 s).
   - Stop restores the pose and time that were active before Play.
 - **Window** menu: one checkbox per panel in the order Viewport, Hierarchy, Assets, Problems, Inspector, Timeline (Viewport is always checked and disabled), a separator, then *Reset layout* ([§5.2](#52-panels)). The Tools overlay is not listed ([§5.5](#55-tools)). Checking a panel reopens it and activates its tab (expanding the Timeline); unchecking closes it. The menu opens below the button, aligned to its right edge. Enter, Space or Down open it on the first item, Up on the last; Up/Down wrap and Home/End jump; Esc closes it and returns focus to the button; Tab closes it and moves on; Left/Right close it and move along the header. Choosing an item or clicking outside closes it. When a closed panel had focus, focus moves to the new active tab of its stack, or else to the viewport.
-- **Settings**: grid size, snapping, `pixelsPerMeter`, display options.
+- **Settings** opens a popover below the button, aligned to its right edge: `role="dialog"` labelled "Settings", not modal. Focus moves to its first control; Tab and Shift+Tab move through its controls and wrap. Esc or the Settings button closes it and returns focus to the button; a press outside closes it without moving focus. Controls, in order:
+  - **Grid:** Show grid (checkbox, default on), Grid size (default 1 m, 0.01–100 m), Subdivisions (integer 1–20, default 10) ([§5.4](#54-viewport));
+  - **Snapping:** Snap to grid (checkbox, default off);
+  - **Display:** Shapes / Sprites / Both (radio group, default Both);
+  - **Document:** Pixels per meter (the root's `units.pixelsPerMeter`, [§5.7](#57-inspector--properties-panel)).
+
+  Grid size is shown in px at the current `pixelsPerMeter` and stored in meters. Checkboxes and radios apply at once; number fields apply on commit (Enter or blur), and an invalid value is marked `aria-invalid` and reverted on blur. Closing the popover with the Settings button or a press outside commits a pending number like blur does; Esc reverts the field being edited, then closes. Pixels per meter is a document edit: one undo step per commit, read-only outside Edit mode ([§5.1](#51-editor-modes)). Every other control is an **editor setting**: per browser, saved at once, restored on load (a stored value that is missing or invalid falls back to its default, with a console warning for invalid ones; a stored record of another or no version is ignored as a whole, with one warning), not undoable, available in every mode. If browser storage is unavailable, settings live only for the session. Overlay toggles ([§5.4](#54-viewport)) are added to this popover when the overlays are built.
 
 ### 5.4 Viewport
-- **Navigation:** pan with middle mouse or Space + left drag. Mouse wheel zooms around the cursor. `F` frames the selection, `Home` frames everything; framing leaves a left inset equal to the Tools overlay width plus 16 px, so nothing framed sits under it.
-- **Grid:** 1 m major / 0.1 m minor lines, with the origin axes highlighted.
-  - Grid snap is a toggle in Settings.
-  - SHIFT while rotating snaps to 15°.
-- **Display modes:** Shapes / Sprites / Both. In Both, shapes are translucent outlines over the sprites.
+- **Camera:** a `center` in meters and a `scale` in CSS px per meter, independent of `pixelsPerMeter`. Screen coordinates are CSS px from the top-left corner of the viewport host, Y down:
+
+  ```
+  screen.x = (x − center.x) · scale + width / 2
+  screen.y = (center.y − y) · scale + height / 2        screen angle = −angle
+  ```
+
+  - `scale` is clamped to 2–10 000 px/m, and each coordinate of `center` to ±10 000 m.
+  - Changing `pixelsPerMeter` keeps the camera: shapes stay in place on screen and sprites change size ([§1](#1-conventions)).
+  - Resizing the viewport keeps `center` and `scale`.
+  - The camera is not saved and not undoable. After New, Load and draft recovery, and when the editor starts, the view frames everything.
+- **Navigation** works in every mode and never reaches the active tool. A press on the canvas focuses the viewport host.
+  - **Pan:** middle-button drag, or Space + left drag while the viewport has focus. The world point under the pointer follows it. The cursor is `grab`, and `grabbing` while dragging. Panning or zooming during a tool gesture does not end the gesture.
+  - **Zoom:** the mouse wheel zooms around the pointer, keeping the world point under it fixed: `scale · 2^(−Δy / 400)`, with Δy in px (line deltas × 16, page deltas × the viewport height). A wheel with Ctrl (trackpad pinch) uses `2^(−Δy / 100)`. A wheel over the viewport never scrolls or zooms the page. With the viewport focused, `+` (or `=`) and `-` zoom by √2 around the viewport center, and keep zooming while held (they are navigation keys, not [§5.9](#59-hotkeys-defaults) hotkeys).
+  - **Framing:** `F` frames the selection, or everything when the selection has nothing to frame; `Home` frames everything. The framed box is the world bounding box of the shapes as displayed (rest pose in Edit, FK pose in Animate, live bodies in Simulate), the joint anchors (in Animate, each anchor moves with its `bodyA`) and the root's position. Of the selection, a body counts its shapes, a shape itself, a joint its anchor and the root its position; other objects count nothing. Sprite images are not included. The box is grown around its center to at least 1 × 1 m (4 × 4 m around the root when the ragdoll has no bodies and no joints), then fitted as large as the scale limits allow into the viewport minus insets of 16 px at the top, right and bottom and, at the left, the Tools overlay width plus 16 px, so nothing framed sits under the overlay. Framing is instant.
+- **Grid:** world-space lines behind everything, with the X axis (`y = 0`) in red and the Y axis (`x = 0`) in green over them. Its major spacing is the *grid size* setting (default 1 m) and its minor spacing that size divided by *subdivisions* (default 10, so 0.1 m) ([§5.3](#53-header)). *Show grid* hides it, axes included.
+  - **Levels:** the minor spacing, the major spacing, then the major spacing × 10ⁿ for n ≥ 1, equal spacings counted once. At most two levels are drawn: the finest level whose lines are at least 8 px apart on screen, whose opacity ramps from 0 at 8 px to full at 32 px, and the next coarser level, drawn stronger. Zooming out therefore turns 1 m lines into the fine level under 10 m lines.
+  - Lines are 1 CSS px wide at every zoom, aligned to device pixels.
+- **Snapping:**
+  - **Grid snap** (*Snap to grid*, default off) rounds the points that tools place or drag to the nearest multiple of the minor spacing, in world coordinates, whether the grid is shown or not: creation points and polygon vertices, the Hinge anchor, and the position a Manipulate move reaches (root position, body position with its subtree following, joint anchor). Sizes follow from snapped points, and a circle's radius is rounded to the minor spacing, never below it. Sprite edit, Pose, inspector fields and Hierarchy additions do not snap.
+  - **Angle snap:** SHIFT while rotating (Manipulate rotate handle, `aimAxis` handle, sprite edit ring) rounds the resulting angle to a multiple of 15°: the body's root-local `angle` in Edit mode, the parent joint's `angle` channel in Animate mode, `aimAxis` and the sprite `angle` in their own frames.
+- **Display modes** (Settings, default Both), in every editor mode:
+
+  | Mode | Sprites | Shapes |
+  |---|---|---|
+  | Shapes | Hidden | Filled with `editor.color` at 40 % opacity, outlined in `editor.color` |
+  | Sprites | Shown | Hidden, except hover and selection outlines |
+  | Both | Shown | Outlined in `editor.color` at 60 % opacity, no fill, over the sprites |
+
+  Outlines are 1 CSS px wide at every zoom. Hit testing does not depend on the display mode, so a hidden shape can still be hovered and selected. A sprite whose image is missing is drawn as a placeholder whenever sprites are shown.
 - **Gizmos:**
   - root: pivot cross + ring;
   - joints: circle at the anchor, an arc from `lower` to `upper` relative to bodyA, a needle for the current angle, the strength fill in Animate mode, and an `aimAxis` arrow when selected;
@@ -399,7 +430,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - optional ground line, by default at the lowest point of the rest pose;
   - *pin rootBody* option to hang the ragdoll;
   - gravity.
-- **Accessibility:** the viewport host is focusable (`tabindex="0"`) and labelled "Viewport". It uses `role="group"` until the viewport handles keys itself. From then on it uses `role="application"`, with `aria-roledescription="viewport"` and `aria-describedby` pointing to a summary of its keys. That way screen readers pass single-key hotkeys ([§5.9](#59-hotkeys-defaults)) to the editor instead of using them for browse-mode navigation. The role applies only to the viewport host, never to the page or a panel.
+- **Accessibility:** the viewport host is focusable (`tabindex="0"`) and labelled "Viewport". Since it handles keys itself (navigation above), it uses `role="application"`, with `aria-roledescription="viewport"` and `aria-describedby` pointing to a visually hidden summary of its keys: "Space and drag, or middle drag, pans. Wheel, plus and minus zoom. F frames the selection, Home frames everything." Features that add viewport keys extend the summary. That way screen readers pass single-key hotkeys ([§5.9](#59-hotkeys-defaults)) to the editor instead of using them for browse-mode navigation. The role applies only to the viewport host, never to the page or a panel.
 
 ### 5.5 Tools
 The tools live in a **floating toolbar overlay inside the Viewport panel**, not in a dock panel. It is always visible, has no toggle and is not listed in the Window menu.
@@ -639,7 +670,7 @@ Default location ([§5.2](#52-panels)): bottom, full width. Modeled after Godot'
 - Holding a key repeats only Undo, Redo and Next frame; other hotkeys act once per press.
 - While a drag or scrub is in progress, hotkeys that edit the document (Delete, Group, Duplicate, Key selected, …) do nothing; Undo and Esc cancel the drag.
 - While focus is in a toolbar, a tab list, a resize handle or an open menu, their navigation keys (arrows, Home, End, Space, Enter, Esc) do not trigger global hotkeys.
-- In the viewport, Space + left drag pans. A Space press without a drag toggles Play/Pause when Space is released.
+- In the viewport, Space + left drag pans. A Space press without a drag toggles Play/Pause when Space is released; a left press while Space is held counts as a drag, even without movement.
 
 ### 5.10 Inverse kinematics
 Out of scope for v1. It was considered mostly for feet placement, but not all ragdolls have feet and not all are humanoid. Procedural joint control ([§4.8](#48-procedural-joint-control)) covers the single-joint cases (look at, aim). If IK is added later, it should be a runtime helper in RagImporter that produces procedural `angle` targets for a chain, not an editor-only feature.
@@ -1048,6 +1079,7 @@ demo/                      production preview (§10)
 - **Performance:** measure the cost of `update()` + `sync()` with many instances (target: 20 humanoids at 60 Hz without noticeable cost).
 - **`meta` on Save:** decide whether Save rewrites `meta.name` (from `ragdoll.name`) and `meta.editorVersion` (to the running editor), and how that fits the byte-identical round-trip of [§6.5](#65-round-trip-guarantee) across editor versions. Until then the serializer writes the loaded values unchanged.
 - **Mode switching with a folded Timeline:** Edit/Animate mode is chosen with the Timeline clip selector ([§5.1](#51-editor-modes)), which is hidden while the Timeline is folded, as it is by default. Decide whether the folded tab bar shows a summary (mode and open clip) or another control exposes the clip selector, before the Timeline panel is built.
+- **Viewport input and line rendering:** verify in the browser, with the pinned PIXI.js 8.21.0, that strokes stay 1 CSS px and crisp under a scaled world container and at `devicePixelRatio` > 1 (`pixelLine` strokes or a redraw with width `1 / scale`), and that redrawing the grid on every camera change is cheap; that the wheel factors of [§5.4](#54-viewport) feel alike for mouse wheels and trackpad pinch (`ctrlKey`) in Chromium, Firefox and Safari, and that a non-passive `wheel` listener prevents page zoom; and that a middle-button press does not start autoscroll or, on Linux, paste. Also that with `sharedTicker: true` the application's render runs on `Ticker.shared` after the viewport's redraw callbacks (added at normal priority, render at low), so scene and grid changes appear in the same frame, and that destroying the application leaves `Ticker.shared` running.
 - **Determinism:** the same file plus the same inputs should give the same simulation on the same machine, so the editor preview can be compared against the host page.
 
 ## 13. Out of scope for v1 (backlog)

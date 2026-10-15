@@ -1,13 +1,10 @@
 const LAYOUT_KEY = 'ragassembler.layout';
+const SETTINGS_KEY = 'ragassembler.settings';
 
-/**
- * Reads the stored dock layout. Never validates its content.
- * @returns {{ value: unknown } | { error: 'missing' | 'unavailable' | 'parse' }}
- */
-export function loadLayout() {
+function load(key) {
   let raw;
   try {
-    raw = globalThis.localStorage.getItem(LAYOUT_KEY);
+    raw = globalThis.localStorage.getItem(key);
   } catch {
     return { error: 'unavailable' };
   }
@@ -19,18 +16,30 @@ export function loadLayout() {
   }
 }
 
+function save(key, value) {
+  try {
+    globalThis.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reads the stored dock layout. Never validates its content.
+ * @returns {{ value: unknown } | { error: 'missing' | 'unavailable' | 'parse' }}
+ */
+export function loadLayout() {
+  return load(LAYOUT_KEY);
+}
+
 /**
  * Stores the dock layout as JSON.
  * @param {object} layout
  * @returns {boolean} `false` when storage is unavailable or full.
  */
 export function saveLayout(layout) {
-  try {
-    globalThis.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
-    return true;
-  } catch {
-    return false;
-  }
+  return save(LAYOUT_KEY, layout);
 }
 
 /**
@@ -43,4 +52,21 @@ export function clearLayout() {
   } catch {
     return;
   }
+}
+
+/**
+ * Reads the stored editor settings record. Never validates its content.
+ * @returns {{ value: unknown } | { error: 'missing' | 'unavailable' | 'parse' }}
+ */
+export function loadSettings() {
+  return load(SETTINGS_KEY);
+}
+
+/**
+ * Stores the editor settings record as JSON.
+ * @param {object} record Record from `Settings#toJSON`.
+ * @returns {boolean} `false` when storage is unavailable or full.
+ */
+export function saveSettings(record) {
+  return save(SETTINGS_KEY, record);
 }

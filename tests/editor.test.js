@@ -7,6 +7,8 @@ import { Selection } from '../js/model/selection.js';
 import { Modes } from '../js/modes.js';
 import { ActionRegistry } from '../js/actions.js';
 import { setProps } from '../js/commands/props.js';
+import { Settings } from '../js/settings.js';
+import { Camera } from '../js/viewport/camera.js';
 import { defaultsOf } from '../lib/schema.js';
 
 function addClip(editor) {
@@ -28,6 +30,46 @@ test('createEditor builds the core objects', () => {
   for (const id of ['undo', 'redo', 'escape']) assert.equal(editor.actions.has(id), true, id);
   for (const id of ['new', 'load', 'save', 'play', 'pause', 'next-frame', 'stop', 'toggle-play']) {
     assert.equal(editor.actions.reason(id), 'not available yet', id);
+  }
+});
+
+test('createEditor owns default settings and a camera when no settings are given', () => {
+  const editor = createEditor();
+  assert.ok(editor.settings instanceof Settings);
+  assert.deepEqual(editor.settings.toJSON(), new Settings().toJSON());
+  assert.ok(editor.camera instanceof Camera);
+  assert.deepEqual(editor.camera.center, { x: 0, y: 0 });
+  assert.notEqual(createEditor().settings, editor.settings);
+  assert.notEqual(createEditor().camera, editor.camera);
+});
+
+test('createEditor uses the given settings instance', () => {
+  const { settings } = Settings.restore({ version: 1, grid: { size: 2 }, display: { mode: 'shapes' } });
+  const editor = createEditor({ settings });
+  assert.equal(editor.settings, settings);
+  assert.equal(editor.settings.get('grid.size'), 2);
+  assert.equal(editor.settings.get('display.mode'), 'shapes');
+  assert.throws(() => createEditor({ settings: { get: () => 1 } }), TypeError);
+});
+
+test('settings, camera and mode changes stay out of history', () => {
+  const editor = createEditor();
+  const { history, settings, camera, modes } = editor;
+  settings.set('snap.grid', true);
+  camera.setSize(800, 600);
+  camera.zoomAt({ x: 100, y: 100 }, 2);
+  history.beginGesture();
+  modes.startSimulate();
+  assert.equal(history.canUndo, false);
+  assert.equal(settings.get('snap.grid'), true);
+  assert.equal(camera.scale, 64);
+});
+
+test('the editor registers no viewport or settings actions', () => {
+  const { actions } = createEditor();
+  for (const id of ['settings', 'frame-selection', 'frame-all']) {
+    assert.equal(actions.has(id), false, id);
+    assert.equal(actions.reason(id), 'not available yet', id);
   }
 });
 
