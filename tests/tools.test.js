@@ -467,21 +467,32 @@ test('a handler that throws during a press cancels it and rethrows', () => {
   assertNoStep(services);
 });
 
-test('a release whose handler throws still closes the gesture', () => {
+test('a release whose handler throws aborts the press and rethrows', () => {
   const services = core();
+  let cancels = 0;
   const registry = new ToolRegistry(services, [
     defineTool({
       id: 'select',
+      pointerMove() {
+        services.history.execute(setProps([ROOT_UID], { name: 'moved' }));
+      },
       pointerUp() {
         services.history.execute(setProps([ROOT_UID], { name: 'released' }));
         throw new Error('boom');
       },
+      cancel() {
+        cancels++;
+        return true;
+      },
     }),
   ]);
   registry.pointer(input('down', 0));
+  registry.pointer(input('move', 0, 210, 200));
   assert.throws(() => registry.pointer(input('up', 0)), /boom/);
+  assert.equal(cancels, 1);
   assert.equal(services.history.inGesture, false);
-  assert.equal(rootName(services.model), 'released');
+  assert.equal(rootName(services.model), 'ragdoll');
+  assertNoStep(services);
 });
 
 test('keys reach the active tool converted, except Escape', () => {

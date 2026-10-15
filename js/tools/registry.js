@@ -287,9 +287,11 @@ export class ToolRegistry {
       if (press.cancelled) return;
       try {
         tool.pointerUp(event);
-      } finally {
-        this.#core.history.endGesture();
+      } catch (error) {
+        this.cancel();
+        throw error;
       }
+      this.#core.history.endGesture();
     } else if (event.button === SECONDARY && !this.#press) {
       tool.pointerUp(event);
     }
