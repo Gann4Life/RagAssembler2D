@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { composeTransforms, shapeBounds, transformPoint } from '../lib/geometry.js';
+import {
+  bodyMass,
+  composeTransforms,
+  invertTransform,
+  pointInShape,
+  shapeBounds,
+  shapeMass,
+  transformPoint,
+} from '../lib/geometry.js';
 
 const EPSILON = 1e-9;
 
@@ -52,4 +60,118 @@ test('shapeBounds of a polygon covers its vertices', () => {
 test('shapeBounds throws on unknown types and empty polygons', () => {
   assert.throws(() => shapeBounds({ type: 'capsule' }, IDENTITY), TypeError);
   assert.throws(() => shapeBounds({ type: 'polygon', vertices: [] }, IDENTITY), TypeError);
+});
+
+test('invertTransform undoes a transform', () => {
+  const t = { x: 2, y: -3, angle: 0.9 };
+  const inverse = invertTransform(t);
+  near(inverse.angle, -0.9);
+  const point = { x: 0.4, y: 1.7 };
+  const back = transformPoint(inverse, transformPoint(t, point));
+  near(back.x, point.x);
+  near(back.y, point.y);
+  const identity = composeTransforms(t, inverse);
+  near(identity.x, 0);
+  near(identity.y, 0);
+  near(identity.angle, 0);
+  assert.ok(Object.is(invertTransform(IDENTITY).x, 0));
+});
+
+test('pointInShape tests circles under the body transform with a tolerance', () => {
+  const circle = { type: 'circle', center: [1, 0], radius: 0.5 };
+  const body = { x: 0, y: 2, angle: Math.PI / 2 };
+  assert.equal(pointInShape(circle, body, { x: 0, y: 3 }), true);
+  assert.equal(pointInShape(circle, body, { x: 0, y: 3.6 }), false);
+  assert.equal(pointInShape(circle, body, { x: 0, y: 3.6 }, 0.11), true);
+  assert.equal(pointInShape(circle, body, { x: 1, y: 2 }), false);
+});
+
+test('pointInShape tests rotated boxes, with the tolerance measured from the edges', () => {
+  const box = { type: 'box', center: [0, 0], width: 2, height: 1, angle: Math.PI / 2 };
+  assert.equal(pointInShape(box, IDENTITY, { x: 0, y: 0.9 }), true);
+  assert.equal(pointInShape(box, IDENTITY, { x: 0.9, y: 0 }), false);
+  assert.equal(pointInShape(box, IDENTITY, { x: 0.55, y: 0 }, 0.1), true);
+  assert.equal(pointInShape(box, IDENTITY, { x: 0.55, y: 1.05 }, 0.06), false);
+  assert.equal(pointInShape(box, IDENTITY, { x: 0.53, y: 1.03 }, 0.06), true);
+  assert.equal(pointInShape(box, { x: 5, y: 0, angle: 0 }, { x: 5.9, y: 0 }), false);
+  assert.equal(pointInShape(box, { x: 5, y: 0, angle: Math.PI / 2 }, { x: 5.9, y: 0 }), true);
+});
+
+test('pointInShape tests polygons, concave drafts included', () => {
+  const triangle = { type: 'polygon', vertices: [[0, 0], [2, 0], [0, 2]] };
+  assert.equal(pointInShape(triangle, IDENTITY, { x: 0.5, y: 0.5 }), true);
+  assert.equal(pointInShape(triangle, IDENTITY, { x: 1.2, y: 1.2 }), false);
+  assert.equal(pointInShape(triangle, IDENTITY, { x: 1.2, y: 1.2 }, 0.3), true);
+  assert.equal(pointInShape(triangle, { x: 10, y: 0, angle: 0 }, { x: 10.5, y: 0.5 }), true);
+  const notch = { type: 'polygon', vertices: [[0, 0], [4, 0], [4, 4], [2, 1], [0, 4]] };
+  assert.equal(pointInShape(notch, IDENTITY, { x: 2, y: 3 }), false);
+  assert.equal(pointInShape(notch, IDENTITY, { x: 1, y: 1.5 }), true);
+});
+
+test('pointInShape returns false for invalid geometry and never throws', () => {
+  const p = { x: 0, y: 0 };
+  for (const shape of [
+    null,
+    undefined,
+    {},
+    { type: 'capsule' },
+    { type: 'circle', center: [0, 0], radius: 0 },
+    { type: 'circle', center: [0, 0], radius: -1 },
+    { type: 'circle', center: [0, Number.NaN], radius: 1 },
+    { type: 'box', center: [0, 0], width: 0, height: 1, angle: 0 },
+    { type: 'box', center: [0, 0], width: 1, height: -1, angle: 0 },
+    { type: 'box', center: [0, 0], width: 1, height: 1 },
+    { type: 'polygon', vertices: [[-1, -1], [1, -1]] },
+    { type: 'polygon', vertices: [[-1, -1], [1, -1], [0, 'x']] },
+    { type: 'polygon' },
+  ]) {
+    assert.equal(pointInShape(shape, IDENTITY, p, 10), false, JSON.stringify(shape));
+  }
+  const circle = { type: 'circle', center: [0, 0], radius: 1 };
+  assert.equal(pointInShape(circle, { x: Number.NaN, y: 0, angle: 0 }, p), false);
+  assert.equal(pointInShape(circle, IDENTITY, { x: Number.POSITIVE_INFINITY, y: 0 }), false);
+  assert.equal(pointInShape(circle, IDENTITY, p, Number.NaN), true);
+});
+
+test('shapeMass is area × density at the shape center or centroid', () => {
+  const circle = shapeMass({ type: 'circle', center: [1, 2], radius: 0.5 }, 2);
+  near(circle.mass, Math.PI * 0.5);
+  assert.deepEqual(circle.center, { x: 1, y: 2 });
+  const box = shapeMass({ type: 'box', center: [-1, 0], width: 2, height: 3, angle: 0.4 }, 0.5);
+  near(box.mass, 3);
+  assert.deepEqual(box.center, { x: -1, y: 0 });
+  const triangle = shapeMass({ type: 'polygon', vertices: [[0, 0], [3, 0], [0, 3]] }, 1);
+  near(triangle.mass, 4.5);
+  near(triangle.center.x, 1);
+  near(triangle.center.y, 1);
+  const clockwise = shapeMass({ type: 'polygon', vertices: [[0, 3], [3, 0], [0, 0]] }, 1);
+  near(clockwise.mass, 4.5);
+  near(clockwise.center.x, 1);
+  near(clockwise.center.y, 1);
+});
+
+test('shapeMass gives no mass for invalid geometry or density', () => {
+  const none = { mass: 0, center: null };
+  assert.deepEqual(shapeMass({ type: 'circle', center: [0, 0], radius: 0 }, 1), none);
+  assert.deepEqual(shapeMass({ type: 'polygon', vertices: [[0, 0], [1, 1], [2, 2]] }, 1), none);
+  assert.deepEqual(shapeMass({ type: 'capsule' }, 1), none);
+  assert.deepEqual(shapeMass({ type: 'circle', center: [0, 0], radius: 1 }, -1), none);
+  assert.deepEqual(shapeMass({ type: 'circle', center: [0, 0], radius: 1 }, Number.NaN), none);
+  assert.equal(shapeMass({ type: 'circle', center: [0, 0], radius: 1 }, 0).mass, 0);
+});
+
+test('bodyMass weights the shape centers by mass, sensors included, and has no center without mass', () => {
+  const result = bodyMass([
+    { shape: { type: 'box', center: [0, 0], width: 1, height: 1, angle: 0 }, density: 1, isSensor: false },
+    { shape: { type: 'box', center: [3, 0], width: 1, height: 1, angle: 0 }, density: 2, isSensor: true },
+    { shape: { type: 'circle', center: [9, 9], radius: 0 }, density: 5 },
+  ]);
+  near(result.mass, 3);
+  near(result.center.x, 2);
+  near(result.center.y, 0);
+  assert.deepEqual(bodyMass([]), { mass: 0, center: null });
+  assert.deepEqual(
+    bodyMass([{ shape: { type: 'circle', center: [1, 1], radius: 1 }, density: 0 }]),
+    { mass: 0, center: null },
+  );
 });
