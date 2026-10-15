@@ -117,6 +117,16 @@ test('imports: tests may import core and listed UI modules only', () => {
   assert.equal(checkImports(file('tests/a.test.js', "import { x } from './helpers/scan.js';"), architecture).length, 0);
 });
 
+test('imports: non-relative specifiers are rejected outside tests', () => {
+  const url = checkImports(file('lib/x.js', "import a from 'https://example.com/a.js';"), architecture);
+  assert.equal(url.length, 1);
+  assert.match(url[0], /^lib\/x\.js:1: .*external or non-relative imports are not allowed/);
+  assert.equal(checkImports(file('js/a.js', "import fs from 'node:fs';"), architecture).length, 1);
+  assert.equal(checkImports(file('demo/a.js', "import x from 'some-package';"), architecture).length, 1);
+  assert.equal(checkImports(file('tests/a.test.js', "import { test } from 'node:test';"), architecture).length, 0);
+  assert.equal(checkImports(file('tests/a.test.js', "import x from 'some-package';"), architecture).length, 1);
+});
+
 test('globals: pure modules may not reference document, window, PIXI, Box2D or b2 names', () => {
   const source = 'const a = 1;\nconst b = document.body;\nconst c = new Box2D.b2World();\nconst d = b2Vec2;\nconst e = window;\nconst f = PIXI;\n';
   const violations = checkPureGlobals(file('js/model/x.js', source), architecture);

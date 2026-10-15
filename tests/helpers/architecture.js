@@ -93,6 +93,11 @@ function resolveTarget(path, specifier) {
   return null;
 }
 
+function externalImportViolation(path, specifier) {
+  if (path.startsWith('tests/')) return specifier.startsWith('node:') ? null : 'tests/ may import only relative paths and node: built-ins';
+  return 'external or non-relative imports are not allowed';
+}
+
 function importViolation(path, architecture, target) {
   if (path.startsWith('lib/')) {
     return target.startsWith('lib/') ? null : 'lib/ may import only lib/ modules';
@@ -131,7 +136,11 @@ export function checkImports(files, architecture) {
   for (const { path, source } of files) {
     for (const { specifier, line } of importsOf(tokenize(source))) {
       const target = resolveTarget(path, specifier);
-      if (target === null) continue;
+      if (target === null) {
+        const external = externalImportViolation(path, specifier);
+        if (external) violations.push(`${path}:${line}: imports ${specifier}: ${external}`);
+        continue;
+      }
       const reason = importViolation(path, architecture, target);
       if (reason) violations.push(`${path}:${line}: imports ${target}: ${reason}`);
     }
