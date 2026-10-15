@@ -1,7 +1,8 @@
 import { Emitter } from '../lib/emitter.js';
 
 /**
- * @typedef {'grid.visible'|'grid.size'|'grid.subdivisions'|'snap.grid'|'display.mode'} SettingKey
+ * @typedef {'grid.visible'|'grid.size'|'grid.subdivisions'|'snap.grid'|'display.mode'
+ *   |'overlay.names'|'overlay.centers'|'overlay.contacts'} SettingKey
  */
 
 /** Version of the stored settings record. */
@@ -17,6 +18,9 @@ export const SETTING_SPECS = Object.freeze({
   'grid.subdivisions': Object.freeze({ type: 'integer', default: 10, min: 1, max: 20 }),
   'snap.grid': Object.freeze({ type: 'boolean', default: false }),
   'display.mode': Object.freeze({ type: 'enum', default: 'both', enum: Object.freeze(['shapes', 'sprites', 'both']) }),
+  'overlay.names': Object.freeze({ type: 'boolean', default: false }),
+  'overlay.centers': Object.freeze({ type: 'boolean', default: false }),
+  'overlay.contacts': Object.freeze({ type: 'boolean', default: false }),
 });
 
 const KEYS = Object.keys(SETTING_SPECS);
@@ -89,7 +93,8 @@ export class Settings {
   }
 
   /**
-   * Builds the record to store: `{ version, grid: { visible, size, subdivisions }, snap: { grid }, display: { mode } }`.
+   * Builds the record to store: `{ version, grid: { visible, size, subdivisions }, snap: { grid }, display: { mode },
+   * overlay: { names, centers, contacts } }`.
    * @returns {object} Plain JSON record.
    */
   toJSON() {
