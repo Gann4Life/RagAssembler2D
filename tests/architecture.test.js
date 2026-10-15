@@ -9,6 +9,9 @@ import {
   checkPureGlobals,
   checkModelMutationCalls,
   checkNoComments,
+  pureModulePaths,
+  definedForbiddenGlobals,
+  checkModulesLoad,
 } from './helpers/architecture.js';
 
 const root = join(import.meta.dirname, '..');
@@ -43,4 +46,13 @@ test('architecture: applyOps, batch and reset are called only by their owners', 
 
 test('architecture: source files contain only JSDoc comments', () => {
   assertNoViolations(checkNoComments(files));
+});
+
+test('architecture: core and pure modules on disk load without DOM, PIXI or LiquidFun globals', async () => {
+  const paths = pureModulePaths(files, architecture);
+  assert.ok(paths.includes('js/model/model.js') && paths.includes('lib/schema.js'), 'expected modules not enumerated');
+  assert.deepEqual(definedForbiddenGlobals(), [], 'forbidden globals are defined before loading');
+  const failures = await checkModulesLoad(root, paths);
+  assert.deepEqual(definedForbiddenGlobals(), [], 'a module defined a forbidden global while loading');
+  assertNoViolations(failures);
 });
