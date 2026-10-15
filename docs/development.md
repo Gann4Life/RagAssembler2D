@@ -19,6 +19,10 @@ What the editor shows now (see [Editor boot](architecture.md#editor-boot)):
 - If `vendor/pixi.min.js` or `vendor/liquidfun.js` fails to load, the page stays blank and the console shows an error naming the missing library.
 - The console also shows `pre-main prep time: 0 ms` from liquidfun.js (see [liquidfun.js](#liquidfunjs)).
 
+## Deploy
+
+Every push to `main` runs `.github/workflows/pages.yml`: it runs `node --test tests/` and, only if the tests pass, publishes `index.html`, `css/`, `js/`, `lib/`, `vendor/` and `demo/` (when present) to GitHub Pages at `https://gann4life.github.io/RagAssembler2D/`. There is no build step; the files are served as they are in the repository. The workflow uses the built-in `GITHUB_TOKEN` with Pages permissions, so no secrets are stored. It can also be started by hand from the Actions tab (`workflow_dispatch`). Pages must be set to the "GitHub Actions" source in the repository settings.
+
 ## Tests
 
 ```powershell
