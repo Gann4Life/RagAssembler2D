@@ -143,3 +143,20 @@ export function framingBounds(model, uids, pose = null) {
   }
   return collector.box ? grow(collector.box, FRAME_MIN_SIZE) : null;
 }
+
+
+/** Margin kept free around the framed box on every side, CSS px. */
+export const FRAME_MARGIN = 16;
+
+/**
+ * Framing insets: `FRAME_MARGIN` at the top, right and bottom, and the Tools overlay width plus `FRAME_MARGIN` at the left.
+ * @param {number} [overlayWidth] Current width of the Tools overlay, CSS px; `0` when there is none.
+ * @returns {import('./camera.js').Insets}
+ * @throws {RangeError} When the width is not a finite number or is negative.
+ */
+export function framingInsets(overlayWidth = 0) {
+  if (!Number.isFinite(overlayWidth) || overlayWidth < 0) {
+    throw new RangeError(`Overlay width must be a finite number >= 0, got ${overlayWidth}`);
+  }
+  return { top: FRAME_MARGIN, right: FRAME_MARGIN, bottom: FRAME_MARGIN, left: overlayWidth + FRAME_MARGIN };
+}
