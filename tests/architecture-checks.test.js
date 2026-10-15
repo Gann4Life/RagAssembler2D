@@ -184,3 +184,34 @@ test('mutation calls: applyOps, batch and reset on a model are restricted to the
 test('architecture doc: parsing fails loudly when a section is missing', () => {
   assert.throws(() => parseArchitecture('# nothing'), /not found/);
 });
+
+const layersRows = [
+  '| Core | `js/editor.js` |',
+  '| `tests/` | `js/header.js` |',
+].join('\n');
+
+const diagram = ['```', '│  Pure:    emitter · schema │', '│  Runtime: ragimporter │', '```'].join('\n');
+
+const documentWith = ({ before = '', block = diagram, after = '', heading = '## Components' } = {}) =>
+  [layersRows, before, heading, '', block, after].join('\n');
+
+test('architecture doc: Pure and Runtime lines outside the component diagram do not change the result', () => {
+  const expected = parseArchitecture(documentWith()).pureLib;
+  assert.deepEqual(expected, ['emitter', 'schema']);
+  const stray = 'Pure: bogus · other\nRuntime: nothing\n';
+  assert.deepEqual(parseArchitecture(documentWith({ before: stray })).pureLib, expected);
+  assert.deepEqual(parseArchitecture(documentWith({ after: stray })).pureLib, expected);
+  assert.deepEqual(parseArchitecture(documentWith({ before: stray, after: stray })).pureLib, expected);
+});
+
+test('architecture doc: a missing Components heading, diagram block, Pure line or Runtime line is reported', () => {
+  assert.throws(() => parseArchitecture(documentWith({ heading: '## Other' })), /Components heading not found/);
+  assert.throws(() => parseArchitecture(documentWith({ block: 'no block here' })), /diagram block not found/);
+  assert.throws(() => parseArchitecture(documentWith({ block: '```\nPure: a\n' })), /not closed/);
+  assert.throws(() => parseArchitecture(documentWith({ block: '```\nRuntime: a\n```' })), /Pure line not found/);
+  assert.throws(() => parseArchitecture(documentWith({ block: '```\nPure: a\n```' })), /Runtime line not found/);
+  assert.throws(
+    () => parseArchitecture(documentWith({ block: '```\nx\n```', after: 'Pure: a\nRuntime: b' })),
+    /Pure line not found/,
+  );
+});
