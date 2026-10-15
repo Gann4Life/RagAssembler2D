@@ -25,6 +25,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - Editor keyboard shortcuts of the hotkey table (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+S, Ctrl+O, Ctrl+G, Ctrl+D, Space, Del and others) are captured by the editor and no longer trigger the browser's own shortcuts; they are ignored while typing in a text field.
 - Undo and Redo buttons enable once there is history to step through (a 200-step command stack with Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y). No editing tool records commands yet, so they stay disabled for now.
 - Editor modes (Edit, Animate, Simulate) with a per-mode policy; a disabled header button's tooltip now says why, e.g. "Undo (Ctrl+Z) (not available in Simulate mode)".
+- Viewport navigation: pan with the middle mouse button or Space + left drag, zoom with the wheel about the pointer or with `+`/`-`. Pressing and releasing Space without dragging still toggles play.
+- Framing: `F` frames the selection and `Home` frames the whole ragdoll in the viewport.
+- Viewport grid with axes: adaptive minor and major lines that stay readable at any zoom, and the shapes of the rest pose drawn in the viewport.
+- Settings popover (Settings button): grid visibility, grid size and subdivisions, snap to grid, display mode (Shapes, Sprites, Both) and the document's pixels per meter, which is one undo step and read-only outside Edit mode. Editor settings are saved in the browser and restored on the next visit.
 
 ### Changed
 - Documentation: `docs/architecture.md` now defines the editor core architecture and module conformance rules, and the new `docs/schema.md` lists the property schema of every `.rag.json` object.
