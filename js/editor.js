@@ -6,6 +6,8 @@ import { ActionRegistry } from './actions.js';
 import { Settings } from './settings.js';
 import { Camera } from './viewport/camera.js';
 import { ToolRegistry } from './tools/registry.js';
+import { circleTool } from './tools/circle.js';
+import { boxTool } from './tools/box.js';
 
 /**
  * Editor core, shared by every UI module.
@@ -22,7 +24,7 @@ import { ToolRegistry } from './tools/registry.js';
 
 const MODE_NAMES = Object.freeze({ edit: 'Edit', animate: 'Animate', simulate: 'Simulate' });
 
-const TOOLS = Object.freeze([]);
+const TOOLS = Object.freeze([circleTool, boxTool]);
 
 /**
  * Builds the editor core without DOM: model, history, selection, modes, settings, camera, tool registry and

@@ -105,6 +105,8 @@ Inspector-only, derived: `mass` (kg, from `lib/geometry.js`), `shapes` list.
 
 Variant rows keep their relative order, so a box is written `type, center, width, height, angle` and a circle `type, center, radius`.
 
+In default names (`body_<n>`, `<type>_<n>`, `joint_<n>`), `<n>` is the number of the object's own generated id: body `b_3` is `body_3`, shape `f_5` of type circle is `circle_5`. Shape creation (#14) uses the circle and box size defaults above for a click without a drag ([`DESIGN.md` §5.5](../DESIGN.md#55-tools)).
+
 ## sprite (`fixtures[].sprite`)
 
 | Path | Type | Default | Range | Unit | Flags |

@@ -145,17 +145,36 @@ test('escape cancels an open gesture, else clears the selection', () => {
   assert.deepEqual(selection.objects, []);
 });
 
-test('createEditor builds a tool registry with no tools before the tool issues', () => {
+const REGISTERED_TOOLS = ['circle', 'box'];
+
+test('createEditor builds a tool registry with the built tools', () => {
   const editor = createEditor();
   assert.ok(editor.tools instanceof ToolRegistry);
   assert.notEqual(createEditor().tools, editor.tools);
-  assert.deepEqual(editor.tools.list(), []);
+  assert.deepEqual(editor.tools.list().map((tool) => tool.id).sort(), [...REGISTERED_TOOLS].sort());
   assert.equal(editor.tools.active, null);
+});
+
+test('tool actions of registered tools activate them in Edit mode and give the mode reason in Simulate', () => {
+  const { actions, tools, modes } = createEditor();
+  for (const id of REGISTERED_TOOLS) {
+    const action = `tool:${id}`;
+    assert.equal(actions.has(action), true, action);
+    assert.equal(actions.isEnabled(action), true, action);
+    actions.run(action);
+    assert.equal(tools.active?.id, id, action);
+  }
+  modes.startSimulate();
+  for (const id of REGISTERED_TOOLS) {
+    const action = `tool:${id}`;
+    assert.equal(actions.isEnabled(action), false, action);
+    assert.equal(actions.reason(action), 'not available in Simulate mode', action);
+  }
 });
 
 test('tool actions of unregistered tools report not available yet', () => {
   const { actions, tools } = createEditor();
-  for (const { id } of TOOL_SPECS) {
+  for (const { id } of TOOL_SPECS.filter((row) => !REGISTERED_TOOLS.includes(row.id))) {
     const action = `tool:${id}`;
     assert.equal(tools.has(id), false, id);
     assert.equal(actions.has(action), false, action);

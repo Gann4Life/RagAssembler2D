@@ -24,7 +24,7 @@
 - [x] #11 Viewport navigation, grid, snapping and display modes
 - [x] #12 Viewport selection, hover, gizmos and overlays
 - [ ] #13 Select and Select Box tools
-- [ ] #14 Circle and Box tools with SHIFT/ALT/CTRL modifiers
+- [x] #14 Circle and Box tools with SHIFT/ALT/CTRL modifiers
 - [ ] #15 Convex Polygon tool with up to 8 vertices
 - [ ] #16 Hinge Joint tool with pin and drag-limits
 - [ ] #17 Manipulate tool: move and rotate root and body subtrees
