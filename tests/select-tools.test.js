@@ -439,7 +439,7 @@ for (const id of ['select', 'select-box']) {
     [10, 20, 30, 100].forEach((value, index) => near(g.calls[0][index + 1], value, `flipped ${index}`));
     camera.panBy(50, 0);
     tools.drawOverlay(g);
-    [60, 20, 30, 100].forEach((value, index) => near(g.calls[0][index + 1], value, `panned ${index}`));
+    [10, 20, 80, 100].forEach((value, index) => near(g.calls[0][index + 1], value, `panned ${index}`));
     send(tools, 'up', 10, 20);
     tools.drawOverlay(g);
     assert.deepEqual(g.calls, []);

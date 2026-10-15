@@ -91,7 +91,7 @@ export function marqueeTool({ id, cursor, hover, click }) {
     drawOverlay(g) {
       if (!press?.dragging) return;
       const a = ctx.camera.worldToScreen(press.anchor);
-      const b = ctx.camera.worldToScreen(press.last.world);
+      const b = press.last.screen;
       const minX = Math.min(a.x, b.x);
       const minY = Math.min(a.y, b.y);
       g.rect(minX, minY, Math.abs(b.x - a.x), Math.abs(b.y - a.y));
