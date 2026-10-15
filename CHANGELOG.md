@@ -38,6 +38,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Both tools preview the shape while dragging, create one body with one shape per operation (one undo step) and select the new shape. The first body created becomes the root body.
 - Tools toolbar: a floating strip of icon buttons at the top-left of the viewport, one per tool and in groups, with tooltips that show the name, hotkey and why a button is disabled. Arrow keys, Home and End move between buttons, and the pressed button shows the active tool.
 - The toolbar switches to two columns when the viewport is too short for one, and framing (`F`, `Home`) keeps the content clear of it.
+- Select tool (V), active when the editor loads: click selects the shape, joint or root under the pointer; SHIFT + click toggles it, CTRL + click removes it, ALT + click cycles through overlapping objects, and clicking empty space clears the selection. Any drag draws a selection box that picks the shapes entirely inside it and the joints whose anchor is inside, at the release: SHIFT adds, CTRL removes, none replaces. Works in every mode and leaves no undo step.
+- Select Box tool (B): drag a selection box with the same rules; a click without a drag clears the selection.
 
 ### Changed
 - Tools is now a floating toolbar over the viewport instead of a dock panel; it no longer appears in the Window menu, and a saved layout that still lists it resets to the default layout.
