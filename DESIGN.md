@@ -507,11 +507,11 @@ The tools live in a **floating toolbar overlay inside the Viewport panel**, not 
 - **Circle** (`C`): press to place the center at the anchor, drag to set the radius, release to create. The radius is the distance from the anchor to the pointer (not snapped as a point), rounded to the minor grid spacing and never below it when grid snap is on ([§5.4](#54-viewport)). No modifiers. Esc aborts.
 - **Box** (`R`): press to place the anchor, drag to define the rectangle against the grid-snapped pointer, release to create. By default the anchor is the corner opposite the pointer, so it can be any of the four corners, and the final size is never negative. Modifiers combine:
   - SHIFT enforces a square: both sides take the longer one, growing away from the anchor.
-  - ALT enforces symmetry across the drag: along the drag's shorter axis (vertical when the horizontal and vertical distances are equal) the box is centered on the anchor, so the anchor is the middle of an edge. Pressing at a joint and dragging along a limb draws the limb centered on it, in any direction.
-  - CTRL puts the anchor at the center (both axes centered). With CTRL, ALT has no effect.
+  - ALT enforces symmetry in both axes: the box is centered on the anchor.
+  - CTRL puts the anchor at the center, the same effect as ALT. ALT and CTRL together are the same as either one.
   - Esc aborts.
 
-  With `d` the vector from the anchor to the snapped pointer: each axis is either *centered* (CTRL: both; ALT: the axis with the smaller `|d|`, the vertical one on a tie; else neither) or *edge-anchored*. The size along an axis is `2·|d|` when centered, else `|d|`; SHIFT then sets both sizes to the larger one. A centered axis keeps the anchor as the box center; an edge-anchored one puts the center at `anchor + sign(d)·size / 2`, with `sign(0) = +1`. Example: anchor (0, 0), pointer (2, 1) gives center (1, 0.5) and size 2 × 1; with ALT, center (1, 0) and 2 × 2; with CTRL, center (0, 0) and 4 × 2; with SHIFT, center (1, 1) and 2 × 2.
+  With `d` the vector from the anchor to the snapped pointer: both axes are *centered* when ALT or CTRL is held, else both are *edge-anchored*. The size along an axis is `2·|d|` when centered, else `|d|`; SHIFT then sets both sizes to the larger one. A centered axis keeps the anchor as the box center; an edge-anchored one puts the center at `anchor + sign(d)·size / 2`, with `sign(0) = +1`. Example: anchor (0, 0), pointer (2, 1) gives center (1, 0.5) and size 2 × 1; with ALT, CTRL or both, center (0, 0) and 4 × 2; with SHIFT, center (1, 1) and 2 × 2; with SHIFT and ALT or CTRL, center (0, 0) and 4 × 4.
 - **Polygon** (`N`):
   - Click adds a vertex linked to the previous one.
   - Double click closes the shape (last vertex to first).
