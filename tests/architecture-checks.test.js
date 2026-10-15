@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { tokenize, importsOf } from './helpers/scan.js';
 import {
   parseArchitecture,
@@ -9,6 +12,9 @@ import {
   checkPureGlobals,
   checkModelMutationCalls,
   checkNoComments,
+  pureModulePaths,
+  definedForbiddenGlobals,
+  checkModulesLoad,
 } from './helpers/architecture.js';
 
 const architecture = {
@@ -214,4 +220,53 @@ test('architecture doc: a missing Components heading, diagram block, Pure line o
     () => parseArchitecture(documentWith({ block: '```\nx\n```', after: 'Pure: a\nRuntime: b' })),
     /Pure line not found/,
   );
+});
+
+test('load check: pure modules on disk are listed, planned ones and UI modules are not', () => {
+  const files = [
+    { path: 'js/model/model.js', source: '' },
+    { path: 'js/editor.js', source: '' },
+    { path: 'js/header.js', source: '' },
+    { path: 'lib/schema.js', source: '' },
+    { path: 'lib/ragimporter.js', source: '' },
+    { path: 'tests/x.test.js', source: '' },
+  ];
+  assert.deepEqual(pureModulePaths(files, architecture), ['js/editor.js', 'js/model/model.js', 'lib/schema.js']);
+});
+
+test('load check: a module that throws on import is reported with its path and error', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rag-load-'));
+  try {
+    mkdirSync(join(root, 'js'));
+    writeFileSync(join(root, 'js', 'ok.js'), 'export const value = 1;\n');
+    writeFileSync(join(root, 'js', 'bad.js'), "const el = document.createElement('div');\nexport default el;\n");
+    const failures = await checkModulesLoad(root, ['js/ok.js', 'js/bad.js']);
+    assert.equal(failures.length, 1);
+    assert.match(failures[0], /^js\/bad\.js: failed to load: ReferenceError: document is not defined$/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('load check: a module that reaches a global through an alias fails the load', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rag-load-'));
+  try {
+    mkdirSync(join(root, 'js'));
+    writeFileSync(join(root, 'js', 'alias.js'), "const g = globalThis;\nexport const w = g['win' + 'dow'].innerWidth;\n");
+    const failures = await checkModulesLoad(root, ['js/alias.js']);
+    assert.equal(failures.length, 1);
+    assert.match(failures[0], /^js\/alias\.js: failed to load: TypeError/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('load check: defined forbidden globals are detected', () => {
+  assert.deepEqual(definedForbiddenGlobals(), []);
+  globalThis.PIXI = {};
+  try {
+    assert.deepEqual(definedForbiddenGlobals(), ['PIXI']);
+  } finally {
+    delete globalThis.PIXI;
+  }
 });

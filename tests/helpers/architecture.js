@@ -1,4 +1,5 @@
-import { posix } from 'node:path';
+import { join, posix } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { importsOf, tokenize } from './scan.js';
 
 const FORBIDDEN_GLOBALS = new Set(['document', 'window', 'PIXI', 'Box2D']);
@@ -93,6 +94,47 @@ export function isUi(path, architecture) {
  */
 export function isPure(path, architecture) {
   return isCore(path, architecture) || architecture.pureLib.some((name) => path === `lib/${name}.js`);
+}
+
+/**
+ * Lists the pure modules present on disk: the `lib/` pure set and the `js/` core. Planned modules that do not
+ * exist yet are not listed.
+ * @param {import('./scan.js').SourceFile[]} files Source files, as read by `readSources`.
+ * @param {Architecture} architecture Parsed classification.
+ * @returns {string[]} Sorted repository-relative paths.
+ */
+export function pureModulePaths(files, architecture) {
+  return files
+    .map((file) => file.path)
+    .filter((path) => (path.startsWith('js/') || path.startsWith('lib/')) && isPure(path, architecture))
+    .sort();
+}
+
+/**
+ * Returns the forbidden browser and runtime globals currently defined on `globalThis`.
+ * @returns {string[]} Names among `document`, `window`, `PIXI` and `Box2D`.
+ */
+export function definedForbiddenGlobals() {
+  return [...FORBIDDEN_GLOBALS].filter((name) => name in globalThis);
+}
+
+/**
+ * Dynamically imports each module (a fresh evaluation of the module itself) and collects the failures.
+ * @param {string} root Absolute repository root.
+ * @param {string[]} paths Repository-relative module paths.
+ * @returns {Promise<string[]>} One `path: failed to load: <error>` entry per module that threw.
+ */
+export async function checkModulesLoad(root, paths) {
+  const failures = [];
+  for (const path of paths) {
+    const url = `${pathToFileURL(join(root, path)).href}?load-check`;
+    try {
+      await import(url);
+    } catch (error) {
+      failures.push(`${path}: failed to load: ${error?.name ?? 'Error'}: ${error?.message ?? error}`);
+    }
+  }
+  return failures;
 }
 
 function isPanelContent(path) {
