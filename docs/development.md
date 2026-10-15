@@ -37,6 +37,8 @@ Current coverage:
 - `tests/schema.test.js` checks `lib/schema.js` (field table against `docs/schema.md`, defaults, channels, clip keys).
 - `tests/model.test.js` checks `js/model/model.js` (uids, schema defaults, `applyOps` and `batch` change events and rollback, reset, id allocation, collection rejection in props).
 - `tests/liquidfun-api.test.js` loads `vendor/liquidfun.js` in Node and checks the API surface RagImporter uses and the heap rules of `DESIGN.md` §7.4 (20,000 create/destroy cycles, 10⁶ vector-setter calls).
+- `tests/liquidfun-contact-filter.test.js` loads `vendor/liquidfun.js` in Node and checks the contact filter behavior RagImporter relies on ([`DESIGN.md` §7.5](../DESIGN.md#75-contact-filter-and-host-integration)): the JS filter replaces the default rule, the reimplementation of that rule, per-shape self-collision, replacement and uninstall, one filter across worlds, the `groupIndex` fallback and filter cost.
+- **Native worlds in tests:** the heap is a fixed 16 MiB and is not reclaimed by garbage collection. Every test that creates a `b2World` must destroy it (and any filter it installed) before it ends. About 15 live worlds exhaust the heap and abort `Step` ([`DESIGN.md` §7.4](../DESIGN.md#74-native-memory)).
 
 Tests for validation, canonical serialization (round-trip), the animation evaluator and event timing are **(planned)**.
 
