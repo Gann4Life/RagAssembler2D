@@ -6,7 +6,7 @@
 - [x] #2 Pin PIXI.js v8 and liquidfun.js builds in vendor/
 - [x] #3 Add node --test harness with a first smoke test
 - [ ] #4 Spike: check custom contact filter support in liquidfun.js
-- [ ] #5 Spike: verify the liquidfun.js API surface used by RagImporter
+- [x] #5 Spike: verify the liquidfun.js API surface used by RagImporter
 - [x] #65 Spike: define editor core architecture and module map
 - [ ] #66 Architecture conformance tests for imports, pure modules and comments
 - [x] #75 Add read-only permission allowlist for routine commands
@@ -97,6 +97,6 @@
 ## No milestone
 - [ ] #70 Publish editor into host provider
 - [x] #80 Assign models to project agents by role
-- [ ] #95 Keep commit messages and descriptions concise
+- [x] #95 Keep commit messages and descriptions concise
 - [ ] #97 Document version tags and release branches in CLAUDE.md
-- [ ] #98 Extend read-only PowerShell permission allowlist
+- [x] #98 Extend read-only PowerShell permission allowlist
