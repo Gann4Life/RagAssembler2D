@@ -361,11 +361,12 @@ ToolPointerInput { type: 'down' | 'move' | 'up', screen: Vec2 (CSS px from the h
                    clicks: 1 | 2 (down/up; 1 for move) }
 ToolPointerEvent ToolPointerInput + { world: Vec2 (m, Y up), local: Vec2 (m, root-local) }
 ToolKeyEvent     { key, code, shift, ctrl (Ctrl or Cmd), alt, repeat }
-ToolView         { hitTest(screen) → number[], setCursor(css), invalidateOverlay() }
+ToolView         { hitTest(screen) → number[], boxTest(box: Aabb) → number[], setCursor(css), invalidateOverlay() }
 ToolContext      { model, history, selection, modes, settings, camera,
                    toLocal(world) → Vec2, toWorld(local) → Vec2          through the root transform
                    snapPoint(world) → Vec2, snapLength(m) → m, snapAngle(rad, shift) → rad   snap.js bound to settings
                    hitTest(screen) → number[]                            uids, topmost first (js/viewport/hit.js)
+                   boxTest(box: Aabb) → number[]                         uids inside a world box (js/viewport/hit.js, #13)
                    setCursor(css | null)                                 null restores the tool's cursor
                    invalidateOverlay() }
 ```
@@ -400,10 +401,51 @@ js/tools/box.js          boxTool() → Tool, boxDraft(anchor, pointer, { shift, 
   - `tests/create.test.js`: `createShapeBody` snapshot (defaults, ids, names from the id numbers, body `position`/`angle`, shape `center` `[0, 0]` and box `angle` 0, given fields over defaults), body appended to `bodies`, returned shape uid, `rootBody` set only when `null`, one history step with its label, undo (body gone, `rootBody` back to `null`) and redo (same ids and uids), each precondition throwing with no mutation and no id allocated.
   - `tests/shape-tools.test.js`, on `createEditor()` with an unbound or fake view: `circleDraft` and `boxDraft` tables (every modifier combination, ALT, CTRL and both giving the same box, signs of `d` and `sign(0)`, the §5.5 example, zero sizes → `null`); a click creates the default size at the snapped click point; a drag creates the dragged size, with grid snap on and off (radius rounded, never below the minor spacing); the latch (a drag back within 4 px stays a drag); a modifier change re-sent as a move changes the result; a refused drag records nothing and keeps the selection; one undo step per operation; the new shape selected and the tool still active; Esc, Undo and a mode change mid-drag create nothing; right presses ignored; under a moved and rotated root, body `position` = `toLocal(center)`, `angle` = −root angle and the shape axis-aligned in world; `cursor` `'crosshair'` and `hover` `false`; `drawOverlay` on a recording fake (default preview on press, drag preview, nothing after release or cancel).
 
+**Select and Select Box.** Behavior: [`DESIGN.md` §5.5](../DESIGN.md#55-tools) (Select and Select Box). Two core modules under `js/tools/`, one function added to `js/viewport/hit.js` and one to `lib/geometry.js`:
+
+```
+js/tools/select-box.js   selectBoxTool() → Tool                       id 'select-box', cursor 'crosshair', hover false
+                         marqueeTool({ id, cursor, hover, click }) → Tool   shared press / latch / box / release lifecycle
+                           click(press: ToolPointerEvent, release: ToolPointerEvent, ctx: ToolContext) → void
+                         boxAabb(a: Vec2, b: Vec2) → Aabb             world box spanned by two world points
+                         applyBox(selection, uids: number[], { shift, ctrl }) → void
+js/tools/select.js       selectTool() → Tool                          marqueeTool({ id: 'select', cursor: 'default', hover: true, click })
+                         clickTarget(hits: number[], isSelected: (uid) => boolean, alt: boolean) → number | null
+                         applyClick(selection, target: number | null, { shift, ctrl }) → void
+js/viewport/hit.js       boxTest(model, box: Aabb, { pose } = {}) → number[]    added; world meters
+lib/geometry.js          shapeGeometryValid(shape) → boolean                    added; the rule pointInShape already applies
+```
+
+- **`marqueeTool`** calls `defineTool` with the given `id`, `cursor`, `hover` and these handlers; its press state lives in the closure, so each factory call is independent.
+  - `activate(ctx)` keeps `ctx`; `deactivate()` drops the press.
+  - `pointerDown`, button 0: the press is `{ start: e, anchor: e.world, dragging: false, last: e }` (`anchor` unsnapped, world m). Button 2 is ignored.
+  - `pointerMove` during the press stores `last = e` and latches `dragging` once `hypot(e.screen − start.screen) ≥ DRAG_THRESHOLD`; it never unlatches. It invalidates the overlay while `dragging`. Moves without a press do nothing (hover is the viewport's, through `onHover`).
+  - `pointerUp`, button 0, of the press: applies the same latch to `e`, clears the press and invalidates the overlay. Dragging: `applyBox(ctx.selection, ctx.boxTest(boxAabb(anchor, e.world)), e)`. Not dragging: `click(start, e, ctx)`. Modifiers are always read from the release event `e`.
+  - `cancel()` drops an open press, invalidates the overlay and returns `true`; with no press it returns `false`. Nothing touched the selection before the release, so there is nothing to restore. `keyDown` consumes nothing.
+  - `drawOverlay(g)` only while `dragging`: the screen rectangle between `ctx.camera.worldToScreen(anchor)` and `ctx.camera.worldToScreen(last.world)`, drawn with `g.rect(minX, minY, width, height)`, `g.fill({ color: COLORS.highlight, alpha: 0.1 })` and `g.stroke({ width: LINE_WIDTH.outline, color: COLORS.highlight })` (`js/viewport/style.js`); the anchor is converted every draw, so it follows pans and zooms.
+  - The tools execute no command: the registry's gesture for the press stays empty and `endGesture()` records nothing.
+- **`selectBoxTool()`** is `marqueeTool({ id: 'select-box', cursor: 'crosshair', hover: false, click })` with `click = (press, release, ctx) => applyBox(ctx.selection, [], release)`.
+- **`selectTool()`**'s `click(press, release, ctx)`: `hits = ctx.hitTest(press.screen)`, `target = clickTarget(hits, (uid) => ctx.selection.has(uid), release.alt)`, then `applyClick(ctx.selection, target, release)`.
+- **`clickTarget`:** `null` for no hits; without `alt`, `hits[0]`; with `alt`, `hits[(i + 1) % hits.length]` where `i = hits.findIndex(isSelected)` (so `i = −1` gives `hits[0]`). Pure.
+- **`applyClick`:** with a `target`: `ctrl` → `selection.remove([target])`, else `shift` → `selection.toggle(target)`, else `selection.set([target])`. With `null`: `selection.clear()` when neither `shift` nor `ctrl`, else nothing.
+- **`applyBox`:** `ctrl` → `selection.remove(uids)`, else `shift` → `selection.add(uids)`, else `uids.length > 0 ? selection.set(uids) : selection.clear()`. `set`, `add` and `toggle` keep the timeline list and focus `objects`; `clear` empties both lists, like Esc ([Selection](#selection)).
+- **`boxAabb(a, b)`:** `{ minX: min(a.x, b.x), minY: min(a.y, b.y), maxX: max(…), maxY: max(…) }`. The camera never rotates, so a world-axis-aligned box is the screen rectangle drawn.
+- **`boxTest(model, box, { pose })`** under `placement(model, pose)`: first every shape, in body order then fixture order, for which `shapeGeometryValid(shape)` holds and `shapeBounds(shape, bodyTransform)` is finite and lies inside `box` (`minX ≥ box.minX`, `maxX ≤ box.maxX`, same for Y; edges included); a `shapeBounds` that throws skips the shape. Then every joint, in `joints` order, whose placed anchor is finite and inside `box`, edges included. The root is never returned. `shapeBounds` is the tight box of the shape (circle center ± radius, transformed box corners, polygon vertices), so "bounds inside an axis-aligned box" is exactly "shape inside it". No camera: the box is in world meters and has no hit tolerance.
+- **`shapeGeometryValid(shape)`:** `false` for an unknown type, non-finite numbers, a non-positive radius, width or height, or fewer than 3 polygon vertices; `pointInShape` uses it, so hit testing and box selection skip the same shapes. Concave and self-intersecting polygons stay valid here (as drawn, [`DESIGN.md` §5.4](../DESIGN.md#54-viewport)).
+- **View binding:** `ToolView` and `ToolContext` gain `boxTest(box) → number[]`; the context returns `[]` while no view is bound, like `hitTest`. `js/viewport.js` binds `boxTest: (box) => boxTest(model, box, { pose: scene.pose() })` next to `hitTest`, so boxes follow the displayed pose like clicks.
+- **Imports:** `js/tools/select-box.js` imports `js/tools/tool.js` and `js/viewport/style.js`; `js/tools/select.js` imports only `js/tools/select-box.js`; `js/viewport/hit.js` adds `shapeBounds` and `shapeGeometryValid` from `lib/geometry.js`. Neither tool imports the model, commands or queries: a click on a shape selects the shape, never its body, so no body resolution is needed.
+- **Composition:** `js/editor.js` imports `selectTool` and `selectBoxTool` and adds them to `TOOLS`. The registry then starts with Select active ([Start](#tools) below), `tool:select` and `tool:select-box` are registered and enabled in every mode (`select` capability), `V`/`B` and both toolbar buttons enable through the existing rules, and a mode change that disables Circle or Box activates Select. Escape needs nothing new: the `escape` action cancels a press through `tools.cancel()`, or clears the selection when nothing was in progress.
+- **Tests (#13):**
+  - `tests/geometry.test.js`: `shapeGeometryValid` table (each invalid case, valid circle, box, convex and concave polygon); `pointInShape` results unchanged.
+  - `tests/hit.test.js`: `boxTest` returns shapes entirely inside and not those partly outside; a rotated box shape counts by its tight bounds; edges included; joints by anchor, root never; invalid geometry and unplaced anchors skipped; a pose moves shapes and anchors (anchor following `bodyA`); result order (shapes by body and fixture order, then joints).
+  - `tests/tools.test.js`: `ctx.boxTest` returns `[]` unbound and after unbinding, and forwards to the bound view.
+  - `tests/select-tools.test.js`, on `createEditor()` with a bound view built from the real `hitTest`/`boxTest` and a sized camera: `clickTarget` table including the [`DESIGN.md` §5.5](../DESIGN.md#55-tools) ALT example and no hits; `applyClick` and `applyBox` tables on a real `Selection` (each modifier, CTRL winning over SHIFT, empty click and empty box with and without modifiers, timeline list kept by `set`/`add`); a click selects the topmost hit (joint over shape, root over shape) and a shape, never its body; a click on empty space clears; a drag latches at 4 px and stays a drag when it comes back; boxes in both tools, with SHIFT and CTRL read at the release; a Select Box click clears without modifiers and does nothing with them; the selection is unchanged until the release; Esc, a tool switch, a mode change and `tools.cancel()` mid-drag leave the selection as it was; a pan during the drag keeps the anchor's world point; both tools work in Animate and Simulate; nothing is recorded (`history.canUndo` stays `false`, no model `change`); `cursor` and `hover` of each tool; `drawOverlay` on a recording fake (nothing before the latch, the rectangle while dragging, nothing after release or cancel).
+  - `tests/editor.test.js`: the registered tools include `select` and `select-box`; `editor.tools.active.id === 'select'` at start; the mode-reason test is split by capability (Select tools stay enabled in Simulate, Circle and Box report "not available in Simulate mode"); entering Animate with Circle active activates Select.
+
 **`new ToolRegistry(core, tools)`**, `core` = `{ model, history, selection, modes, settings, camera }`, `tools` = `Tool[]` (an id twice throws).
 
 - **Queries:** `list()` (registered tools in `TOOL_SPECS` order), `get(id) → Tool | null`, `has(id)`, `active → Tool | null`, `canActivate(id)` (registered and `modes.can(capability)`).
-- **Start:** `select` is active when registered, else no tool (`active === null`; before #13 lands, and the toolbar then shows no pressed button). No `tool` event at construction.
+- **Start:** `select` is active when registered, else no tool (`active === null`, which only registries built without Select in tests reach; the toolbar then shows no pressed button). No `tool` event at construction. `createEditor` registers Select from #13 on, so the editor starts with Select active and `js/main.js`'s start refresh presses its button and puts the roving stop on it, with no toolbar change.
 - **`activate(id) → boolean`:** `false`, with no change, when `!canActivate(id)`. `true` with no change when `id` is already active. Otherwise `cancel()`, `deactivate()` the old tool, `activate(ctx)` the new one, apply its cursor, invalidate the overlay, emit `tool` `{ id, previous }` (`previous` is an id or `null`).
 - **`pointer(input: ToolPointerInput)`:** fills `world = camera.screenToWorld(screen)` and `local = toLocal(world)`; ignored with no active tool.
   - `down`, button 0: ignored while a press is open and not cancelled. A cancelled press ends here (below). Then ignored while `history.inGesture` (a gesture owned elsewhere); else opens the press, `history.beginGesture()`, `tool.pointerDown(e)`.
@@ -426,7 +468,7 @@ js/tools/box.js          boxTool() → Tool, boxDraft(anchor, pointer, { shift, 
 - After a pan or zoom step during a left press, and on a `keydown`/`keyup` of Shift, Control, Alt or Meta on the host while a press is open or the pointer is over the host, the last pointer position is re-sent as a `move` with the current modifiers. The Alt `keyup` is prevented so the browser menu bar does not take focus ([`DESIGN.md` §12](../DESIGN.md#12-open-items--to-verify)).
 - Hover: idle moves (no button, no navigation) call `onHover(screen)`, at most once per animation frame (`requestAnimationFrame`); leaving the host, any press, navigation and window `blur` call `onHover(null)`.
 
-**Selection display and hit testing** are not tools: hover, selection and invalid outlines come from `js/viewport/gizmos.js`; what a click selects is the Select tool's job (#13), using `ctx.hitTest`.
+**Selection display and hit testing** are not tools: hover, selection and invalid outlines come from `js/viewport/gizmos.js`; what a click or a box selects is the job of the Select and Select Box tools (Select and Select Box, above), using `ctx.hitTest` and `ctx.boxTest`.
 
 ### Actions and hotkeys
 
