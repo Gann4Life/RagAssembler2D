@@ -36,8 +36,12 @@ All notable changes to this project are documented here. The format follows [Kee
 - Circle tool (C): click for a default-size circle, or drag from the center to set the radius. The center snaps to the grid and the radius rounds to the grid spacing when snapping is on.
 - Box tool (R): click for a default-size box, or drag from a corner. SHIFT makes it square, and CTRL or ALT center it on the press point. Corners snap to the grid when snapping is on.
 - Both tools preview the shape while dragging, create one body with one shape per operation (one undo step) and select the new shape. The first body created becomes the root body.
+- Tools toolbar: a floating strip of icon buttons at the top-left of the viewport, one per tool and in groups, with tooltips that show the name, hotkey and why a button is disabled. Arrow keys, Home and End move between buttons, and the pressed button shows the active tool.
+- The toolbar switches to two columns when the viewport is too short for one, and framing (`F`, `Home`) keeps the content clear of it.
 
 ### Changed
+- Tools is now a floating toolbar over the viewport instead of a dock panel; it no longer appears in the Window menu, and a saved layout that still lists it resets to the default layout.
+- The Viewport panel minimum height is now 168 px (was 160 px).
 - Documentation: `docs/architecture.md` now defines the editor core architecture and module conformance rules, and the new `docs/schema.md` lists the property schema of every `.rag.json` object.
 - RagImporter is now specified to reach liquidfun.js through its `Box2D` namespace global (`Box2D.b2World`, …) instead of global `b2*` names, and to accept both libraries through `RagImporter.configure({ Box2D, PIXI })`.
 - `DESIGN.md` now specifies the header layout (four button groups, Window and Settings at the right end), its keyboard behavior and disabled state, and the accessibility role of the viewport.
