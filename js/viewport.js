@@ -1,7 +1,7 @@
 import { framingBounds } from './viewport/bounds.js';
 import { createGizmos } from './viewport/gizmos.js';
 import { createGrid } from './viewport/grid.js';
-import { hitTest } from './viewport/hit.js';
+import { boxTest, hitTest } from './viewport/hit.js';
 import { attachInput } from './viewport/input.js';
 import { createScene } from './viewport/scene.js';
 
@@ -103,6 +103,7 @@ export async function createViewport(
 
   const unbindTools = tools.bindView({
     hitTest: hitTestAt,
+    boxTest: (box) => boxTest(model, box, { pose: scene.pose() }),
     setCursor: (css) => host.style.setProperty(TOOL_CURSOR_PROPERTY, css),
     invalidateOverlay,
   });

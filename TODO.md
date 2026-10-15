@@ -23,9 +23,9 @@
 - [x] #10 Command stack with undo/redo and editor modes
 - [x] #11 Viewport navigation, grid, snapping and display modes
 - [x] #12 Viewport selection, hover, gizmos and overlays
-- [ ] #13 Select and Select Box tools
+- [x] #13 Select and Select Box tools
 - [x] #14 Circle and Box tools with SHIFT/ALT/CTRL modifiers
-- [ ] #15 Convex Polygon tool with up to 8 vertices
+- [ ] #15 Spike: assess feasibility of the Convex Polygon tool
 - [ ] #16 Hinge Joint tool with pin and drag-limits
 - [ ] #17 Manipulate tool: move and rotate root and body subtrees
 - [ ] #18 Group and Ungroup bodies
@@ -41,6 +41,7 @@
 - [ ] #28 Header Save/Load with sprite folder resolution
 - [ ] #29 Autosave draft and recovery on startup
 - [ ] #63 Duplicate selection with Ctrl+D
+- [x] #70 Deploy the editor to GitHub Pages on every merge to main
 - [ ] #71 Keep header controls reachable on narrow windows
 - [ ] #72 Show a visible error when vendored libraries are missing
 - [x] #73 Clarify header alignment and viewport ARIA role in the spec
@@ -93,6 +94,7 @@
 - [ ] #55 Procedural preview and preview stack playback in Simulate
 - [ ] #56 Spike: verify determinism between editor and host page
 - [ ] #100 Native-memory regression test for ragdoll spawn, update and destroy
+- [ ] #120 Fixed ground setting for physics preview
 
 ## Phase 5 – Demo
 - [ ] #57 Author the demo humanoid with sprites and clips in the editor
@@ -102,7 +104,6 @@
 - [ ] #61 Demo event log
 
 ## No milestone
-- [ ] #70 Publish editor into host provider
 - [x] #80 Assign models to project agents by role
 - [x] #95 Keep commit messages and descriptions concise
 - [ ] #97 Document version tags and release branches in CLAUDE.md

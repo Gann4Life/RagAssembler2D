@@ -6,6 +6,7 @@ import {
   invertTransform,
   pointInShape,
   shapeBounds,
+  shapeGeometryValid,
   shapeMass,
   transformPoint,
 } from '../lib/geometry.js';
@@ -131,6 +132,44 @@ test('pointInShape returns false for invalid geometry and never throws', () => {
   assert.equal(pointInShape(circle, { x: Number.NaN, y: 0, angle: 0 }, p), false);
   assert.equal(pointInShape(circle, IDENTITY, { x: Number.POSITIVE_INFINITY, y: 0 }), false);
   assert.equal(pointInShape(circle, IDENTITY, p, Number.NaN), true);
+});
+
+const INVALID_SHAPES = [
+  null,
+  undefined,
+  {},
+  'circle',
+  { type: 'capsule' },
+  { type: 'circle', center: [0, 0], radius: 0 },
+  { type: 'circle', center: [0, 0], radius: -1 },
+  { type: 'circle', center: [0, Number.NaN], radius: 1 },
+  { type: 'circle', center: [0, 0], radius: Number.POSITIVE_INFINITY },
+  { type: 'box', center: [0, 0], width: 0, height: 1, angle: 0 },
+  { type: 'box', center: [0, 0], width: 1, height: -1, angle: 0 },
+  { type: 'box', center: [0, 0], width: 1, height: 1 },
+  { type: 'box', center: [0, 0], width: 1, height: 1, angle: Number.NaN },
+  { type: 'polygon', vertices: [[-1, -1], [1, -1]] },
+  { type: 'polygon', vertices: [[-1, -1], [1, -1], [0, 'x']] },
+  { type: 'polygon', vertices: [] },
+  { type: 'polygon' },
+];
+
+const VALID_SHAPES = [
+  { type: 'circle', center: [0, 0], radius: 1 },
+  { type: 'box', center: [1, 0], width: 2, height: 1, angle: 0.3 },
+  { type: 'polygon', vertices: [[0, 0], [2, 0], [0, 2]] },
+  { type: 'polygon', vertices: [[0, 0], [4, 0], [4, 4], [2, 1], [0, 4]] },
+  { type: 'polygon', vertices: [[0, 0], [1, 1], [1, 0], [0, 1]] },
+];
+
+test('shapeGeometryValid rejects invalid geometry and accepts convex and concave shapes', () => {
+  for (const shape of INVALID_SHAPES) assert.equal(shapeGeometryValid(shape), false, JSON.stringify(shape));
+  for (const shape of VALID_SHAPES) assert.equal(shapeGeometryValid(shape), true, JSON.stringify(shape));
+});
+
+test('pointInShape rejects exactly the shapes shapeGeometryValid rejects', () => {
+  for (const shape of INVALID_SHAPES) assert.equal(pointInShape(shape, IDENTITY, { x: 0, y: 0 }, 100), false, JSON.stringify(shape));
+  for (const shape of VALID_SHAPES) assert.equal(pointInShape(shape, IDENTITY, { x: 0, y: 0 }, 100), true, JSON.stringify(shape));
 });
 
 test('shapeMass is area × density at the shape center or centroid', () => {
