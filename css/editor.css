@@ -96,6 +96,8 @@ body {
 
 #panel-viewport {
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  isolation: isolate;
   min-width: 0;
   min-height: 0;
 }
@@ -496,6 +498,7 @@ body.dock-resizing-column * {
 }
 
 #viewport-host {
+  grid-area: 1 / 1;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -520,4 +523,105 @@ body.dock-resizing-column * {
   display: block;
   position: absolute;
   inset: 0;
+}
+
+.tools-overlay {
+  grid-area: 1 / 1;
+  z-index: 1;
+  place-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+}
+
+.tools-overlay.two-columns {
+  flex-direction: row;
+  gap: 4px;
+}
+
+.tools-column {
+  display: contents;
+}
+
+.tools-overlay.two-columns .tools-column {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tools-overlay.two-columns .tools-separator-between {
+  display: none;
+}
+
+.tools-separator {
+  flex: none;
+  width: 32px;
+  height: 5px;
+  background: linear-gradient(var(--border), var(--border)) center / 100% 1px no-repeat;
+}
+
+.tools-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tools-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.tools-button:hover:not([aria-disabled="true"]) {
+  background: var(--surface-hover);
+}
+
+.tools-button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--focus) 35%, transparent);
+}
+
+.tools-button[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.tools-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 30;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+}
+
+.tooltip[hidden] {
+  display: none;
 }

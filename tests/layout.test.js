@@ -64,7 +64,7 @@ test('PANELS matches the DESIGN.md §5.2 table in Window menu order', () => {
   }
   assert.deepEqual(plain(PANELS.inspector), { title: 'Inspector', group: 'inspector', edge: 'right', size: 300, min: { width: 200, height: 96 } });
   assert.deepEqual(plain(PANELS.timeline), { title: 'Timeline', group: 'timeline', edge: 'bottom', size: 220, min: { width: 320, height: 120 } });
-  assert.deepEqual(plain(VIEWPORT_MIN), { width: 240, height: 160 });
+  assert.deepEqual(plain(VIEWPORT_MIN), { width: 240, height: 168 });
   assert.equal(LAYOUT_VERSION, 2);
   assert.equal(TAB_BAR_HEIGHT, 28);
   assert.ok(isDeepFrozen(PANELS));
@@ -273,6 +273,31 @@ test('restoreLayout ignores version 1 records without migrating them', () => {
   const { layout, warning } = restoreLayout(v1, WS);
   assert.equal(warning, 'Stored layout ignored: unsupported version 1');
   assert.deepEqual(plain(layout), plain(defaultLayout(WS)));
+});
+
+test('restoreLayout ignores a version 2 record that still names the removed tools panel', () => {
+  const stored = layoutOf(
+    split('row', [stack('s1', ['tools']), viewport(), stack('s2', ['inspector'])], [72, null, 300]),
+  );
+  let result;
+  assert.doesNotThrow(() => {
+    result = restoreLayout(stored, WS);
+  });
+  assert.match(result.warning, /unknown panel id "tools"/);
+  assert.deepEqual(plain(result.layout), plain(defaultLayout(WS)));
+});
+
+test('restoreLayout ignores a closed entry naming the removed tools panel', () => {
+  const stored = plain(defaultLayout(WS));
+  stored.closed.tools = { stackId: 's1', index: 0 };
+  const { layout, warning } = restoreLayout(stored, WS);
+  assert.match(warning, /unknown panel id "tools"/);
+  assert.deepEqual(plain(layout), plain(defaultLayout(WS)));
+});
+
+test('the default layout and Window menu panels never include tools', () => {
+  assert.equal(Object.hasOwn(PANELS, 'tools'), false);
+  assert.equal(stackWith(defaultLayout(WS), 'tools'), null);
 });
 
 test('restoreLayout adds panels missing from tree and closed by the reopen rule', () => {
@@ -619,7 +644,7 @@ test('dropAt sizes the edge preview from the workspace when the content is large
   ], [null, 96, 96, 96, 96])));
   const workspace = { width: 1280, height: 300 };
   const rects = computeRects(layout, workspace);
-  assert.equal(rects.height, 160 + 4 * 96 + 16);
+  assert.equal(rects.height, VIEWPORT_MIN.height + 4 * 96 + 16);
   const result = dropAt(layout, rects, { x: 600, y: 5 }, 'inspector', workspace);
   assert.deepEqual(result, {
     drop: { kind: 'edge', side: 'top' },

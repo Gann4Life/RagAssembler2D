@@ -106,7 +106,7 @@ export const PANELS = deepFreeze({
 });
 
 /** Minimum viewport size (px). */
-export const VIEWPORT_MIN = Object.freeze({ width: 240, height: 160 });
+export const VIEWPORT_MIN = Object.freeze({ width: 240, height: 168 });
 
 const PANEL_IDS = Object.freeze(Object.keys(PANELS));
 

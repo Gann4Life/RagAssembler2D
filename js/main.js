@@ -2,6 +2,9 @@ import { createEditor } from './editor.js';
 import { dispatchKey } from './hotkeys.js';
 import { createHeader, setActionEnabled, focusAdjacentAction } from './header.js';
 import { createViewport } from './viewport.js';
+import { createToolbar } from './viewport/toolbar.js';
+import { framingInsets } from './viewport/bounds.js';
+import { TOOL_SPECS } from './tools/tool.js';
 import { createDock } from './panels/dock.js';
 import { PANELS } from './panels/layout.js';
 import { openMenu } from './menu.js';
@@ -14,8 +17,6 @@ import { setProps } from './commands/props.js';
 const { PIXI, Box2D } = globalThis;
 if (!PIXI) throw new Error('PIXI.js is not loaded: expected the global PIXI from vendor/pixi.min.js');
 if (!Box2D) throw new Error('liquidfun.js is not loaded: expected the global Box2D from vendor/liquidfun.js');
-
-const VIEWPORT_INSET = 16;
 
 const storedSettings = loadSettings();
 if (storedSettings.error === 'parse') console.warn('Stored settings ignored: not valid JSON');
@@ -34,6 +35,10 @@ const dock = createDock(document.getElementById('workspace'), {
 });
 
 const viewportHost = document.getElementById('viewport-host');
+const toolbar = createToolbar(document.getElementById('panel-viewport'), {
+  host: viewportHost,
+  onActivate: (id) => actions.run('tool:' + id),
+});
 const windowButton = header.querySelector('[data-action="window"]');
 const settingsButton = header.querySelector('[data-action="settings"]');
 settingsButton.setAttribute('aria-haspopup', 'dialog');
@@ -97,6 +102,11 @@ function refreshHeader() {
   }
 }
 
+function refreshToolbar() {
+  toolbar.setActive(tools.active?.id ?? null);
+  for (const { id } of TOOL_SPECS) toolbar.setEnabled(id, actions.isEnabled('tool:' + id), actions.reason('tool:' + id));
+}
+
 function refreshDocumentViews() {
   refreshHeader();
   if (settingsOpen()) settingsPopover.refresh();
@@ -105,6 +115,9 @@ function refreshDocumentViews() {
 refreshHeader();
 history.on('history', refreshDocumentViews);
 modes.on('mode', refreshDocumentViews);
+modes.on('mode', refreshToolbar);
+tools.on('tool', refreshToolbar);
+refreshToolbar();
 selection.on('selection', refreshHeader);
 model.on('reset', refreshDocumentViews);
 
@@ -129,7 +142,7 @@ const viewport = await createViewport(PIXI, viewportHost, {
   selection,
   modes,
   tools,
-  insets: () => ({ top: VIEWPORT_INSET, right: VIEWPORT_INSET, bottom: VIEWPORT_INSET, left: VIEWPORT_INSET }),
+  insets: () => framingInsets(toolbar.width()),
   onSpaceTap: () => actions.run('toggle-play'),
 });
 

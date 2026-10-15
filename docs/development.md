@@ -15,6 +15,7 @@ ES modules require HTTP. Opening `index.html` from disk does not work. The demo 
 What the editor shows now (see [Editor boot](architecture.md#editor-boot)):
 - A header toolbar across the top: New, Load, Save | Undo, Redo | Play, Pause, Next frame, Stop, and Window, Settings at the right end. Every button is disabled (muted text, tooltip ends with "(not available yet)"), but stays focusable. Tab reaches the toolbar once; Left/Right/Home/End move between buttons. On narrow windows the header scrolls horizontally.
 - Below it, an empty dark PIXI viewport that fills the rest of the window and resizes with it. When focused with Tab it shows a blue focus ring.
+- A Tools toolbar floats at the top-left of the viewport: one icon button per tool, in groups, with a tooltip (name and hotkey) on hover or keyboard focus. Tools that are not built yet stay disabled. Up/Down/Left/Right/Home/End move between buttons. On a viewport shorter than 315 px it switches to two columns.
 - If `vendor/pixi.min.js` or `vendor/liquidfun.js` fails to load, the page stays blank and the console shows an error naming the missing library.
 - The console also shows `pre-main prep time: 0 ms` from liquidfun.js (see [liquidfun.js](#liquidfunjs)).
 
@@ -33,6 +34,7 @@ node --test tests/
 Current coverage:
 - `tests/smoke.test.js` checks that `lib/ragimporter.js` loads as an ES module and declares format version 1 as supported.
 - `tests/editor-header.test.js` checks the header's roving-focus key handling, group order, unique action ids, shortcuts and tooltip text. It imports `js/roving-focus.js` and `js/header.js`, which load in Node without a DOM; DOM behavior (`createHeader`, the viewport) is checked in the browser.
+- `tests/toolbar.test.js` checks the DOM-free part of the Tools overlay (`js/viewport/toolbar.js`): button groups against `TOOL_SPECS`, icon markup rules, tooltip texts, strip size and column rule, the `VIEWPORT_MIN` height, and `framingInsets` from `js/viewport/bounds.js`. `tests/layout.test.js` also checks that stored layouts naming the removed `tools` panel fall back to the default layout.
 - `tests/emitter.test.js` checks `lib/emitter.js` (ordering, unsubscribe, error handling, listener validation).
 - `tests/schema.test.js` checks `lib/schema.js` (field table against `docs/schema.md`, defaults, channels, clip keys).
 - `tests/model.test.js` checks `js/model/model.js` (uids, schema defaults, `applyOps` and `batch` change events and rollback, reset, id allocation, collection rejection in props).

@@ -49,7 +49,7 @@
 - [ ] #83 Drag a whole panel stack by its tab bar
 - [ ] #84 Maximize a panel by double-clicking its tab
 - [ ] #85 Cycle focus between panels with F6 and Shift+F6
-- [ ] #87 Tools overlay toolbar on top of the viewport
+- [x] #87 Tools overlay toolbar on top of the viewport
 - [ ] #88 Guard panel minimum widths against clipped tab titles
 - [ ] #89 Use the default cursor on tabs at rest and grabbing only while dragging
 - [ ] #90 Dim the drag ghost over invalid drop targets
