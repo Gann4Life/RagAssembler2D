@@ -194,10 +194,16 @@ export function attachInput(host, { camera, onSpaceTap = () => {}, tools = null,
       pan.x = event.clientX;
       pan.y = event.clientY;
       if (dx !== 0 || dy !== 0) camera.panBy(dx, dy);
-      if (press) resendMove(modifiersOf(event));
+      if (press) {
+        const panned = localPoint(host, event);
+        remember(event, panned);
+        press.moved = Math.max(press.moved, distance(press.screen, panned));
+        resendMove(modifiersOf(event));
+      }
       return;
     }
     if (pan) return;
+    if (press && event.pointerId !== press.pointerId) return;
     const screen = localPoint(host, event);
     remember(event, screen);
     for (const record of [press, rightPress]) if (record) record.moved = Math.max(record.moved, distance(record.screen, screen));
