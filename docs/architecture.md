@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: partly built. The editor shell (header toolbar, dock with placeholder panels, Window menu and an empty PIXI viewport), the document model with its emitter and property schema, a stub of `lib/ragimporter.js`, the test harness and the pinned `vendor/` libraries exist. Everything marked **(planned)** is the agreed design that issues implement; it is updated as code lands. Changes to this design go through the architect ([Conformance](#conformance)).
+> Status: partly built. The editor shell (header toolbar, dock with placeholder panels, Window menu and an empty PIXI viewport), the document model with its emitter and property schema, a stub of `lib/ragimporter.js`, the test harness with the architecture conformance tests and the pinned `vendor/` libraries exist. Everything marked **(planned)** is the agreed design that issues implement; it is updated as code lands. Changes to this design go through the architect ([Conformance](#conformance)).
 
 ## Components
 
@@ -46,7 +46,7 @@ RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `
 | `js/` | `lib/`, other `js/` modules per the layers below. Only `js/main.js` reads the `PIXI` and `Box2D` globals; other modules receive them as parameters. |
 | `lib/` | Other `lib/` modules only. Only runtime modules (`def`, `instance`, `render`, `collision`) use `Box2D`/`PIXI`, and only through the namespaces resolved by `lib/ragimporter.js`. |
 | `demo/` | `lib/ragimporter.js` only (the public API), vendor globals. |
-| `tests/` | `lib/`, `vendor/liquidfun.js` (loaded with `createRequire`, only by `tests/liquidfun-api.test.js`), and `js/` **core** modules (they load without a DOM). Exception: a `js/` UI module that loads without a DOM may be imported to test its DOM-free exports (`js/header.js`: `HEADER_GROUPS`, `actionTitle`; `js/viewport/toolbar.js` (planned): `TOOL_BUTTONS`), or with a fake browser global installed on `globalThis` for the test and restored after it (`js/storage.js` with a fake `localStorage`). DOM behavior is checked in the browser. |
+| `tests/` | `lib/`, `tests/helpers/`, `vendor/liquidfun.js` (loaded with `createRequire`, only by the liquidfun.js verification tests `tests/liquidfun-*.test.js`), and `js/` **core** modules (they load without a DOM). Exception: a `js/` UI module that loads without a DOM may be imported to test its DOM-free exports (`js/header.js`: `HEADER_GROUPS`, `actionTitle`; `js/viewport/toolbar.js` (planned): `TOOL_BUTTONS`), or with a fake browser global installed on `globalThis` for the test and restored after it (`js/storage.js` with a fake `localStorage`). DOM behavior is checked in the browser. |
 
 **Layers inside `js/`:**
 
@@ -88,6 +88,10 @@ Columns: responsibility, public exports, and allowed imports beyond `lib/`. Rows
 | `tests/liquidfun-api.test.js` | Verifies the pinned liquidfun.js API surface used by RagImporter in Node: revolute joint creation and reference angle, motor, limit, angle and speed methods after `castObject`, filter data, contact filter, mouse joint, teardown order, and heap behavior under repeated create/destroy and per-step calls ([`DESIGN.md` §7.4](../DESIGN.md#74-native-memory)). | none | — |
 | `tests/liquidfun-contact-filter.test.js` | Verifies contact filter behavior of the pinned build in Node: a JS filter replaces the default rule, the JS reimplementation of the default rule, fixture pointer identity, per-shape self-collision through a pointer registry, no `GetContactFilter`, replacement and uninstall semantics, one filter across worlds, the `groupIndex` fallback, and filter cost ([`DESIGN.md` §7.5](../DESIGN.md#75-contact-filter-and-host-integration)). | none | — |
 | `tests/emitter.test.js`, `tests/schema.test.js`, `tests/model.test.js` | Contract tests for the emitter, the schema tables and helpers against [schema.md](schema.md), and the document model. | none | — |
+| `tests/helpers/scan.js` | Test helper (`tests/helpers/` holds modules shared by tests; they are not `*.test.js`, so the aggregator does not load them). Reads every `.js` file under `js/`, `lib/`, `demo/` and `tests/` (never `vendor/`), tokenizes JavaScript so strings, templates, regexes and comments are single tokens, and lists import specifiers (static, re-export, dynamic `import()`, `require()`). | `readSources(root)`, `tokenize(source)`, `importsOf(tokens)`, typedefs `Token`, `SourceFile`, `ImportRef` | — |
+| `tests/helpers/architecture.js` | Test helper. Parses the layer classification from this document (the modules column of the Core row of the layers table, the `Pure:` line of the [Components](#components) diagram, and the `js/` modules named in the `tests/` row of the dependency table), and implements the [Conformance](#conformance) checks; each returns `path:line: message` entries. Editing those three places changes what the checks enforce. | `parseArchitecture`, `isCore`, `isUi`, `isPure`, `checkImports`, `checkPureGlobals`, `checkModelMutationCalls`, `checkNoComments`, typedef `Architecture` | `tests/helpers/scan.js` |
+| `tests/architecture.test.js` | Conformance tests ([Conformance](#conformance)): runs every check on the repository sources against the classification parsed from this document. | none | `tests/helpers/scan.js`, `tests/helpers/architecture.js` |
+| `tests/architecture-checks.test.js` | Tests of the conformance checks themselves on inline sources with a fixed classification: tokenizer edge cases, import forms, each dependency and layer rule, global references, model mutation calls and comment detection. | none | `tests/helpers/scan.js`, `tests/helpers/architecture.js` |
 
 ### lib/ (planned)
 
@@ -376,6 +380,12 @@ rag.sync()        body transforms → PIXI sprites
 
 A change conforms when its modules, exports and imports match this document.
 
-- **Automated (#66):** conformance tests check the dependency rules and layers above (static import scan), that core and pure modules load under Node without a DOM, that `applyOps`, `batch` and `reset` are only called from their owners, and that source files have no code comments.
+- **Automated (#66):** `tests/architecture.test.js` enforces these rules on every `.js` file under `js/`, `lib/`, `demo/` and `tests/`, with the layer classification parsed from this document by `tests/helpers/architecture.js` (the Core row of the layers table, the `Pure` line of the [Components](#components) diagram, the `js/` modules in the `tests/` dependency row):
+  - **Imports** follow the [Dependency rules](#dependency-rules) and layers (static scan of imports, re-exports, dynamic `import()` and `require()` with a literal specifier; non-relative specifiers such as URLs, bare packages and `node:*` are rejected in `js/`, `lib/` and `demo/`; `tests/` may use `node:*` only). Panel content modules (any `js/panels/*.js` other than the dock modules) may import nothing from `js/panels/`: not each other, and neither `js/panels/layout.js` nor `js/panels/dock.js`, even though `layout.js` is core.
+  - **Pure modules** (the `lib/` pure set and the `js/` core) reference none of the globals `document`, `window`, `PIXI`, `Box2D` or any `b2*` name. Property accesses and object keys do not count. Modules are scanned, not loaded.
+  - **Model mutation calls:** `applyOps` and `batch` are called only by `js/commands/history.js`, and `reset` only by `js/model/io.js`. A call is detected only when its receiver is an identifier ending in `model` (`model.reset(…)`, `this.model.batch(…)`, `editor.model?.applyOps(…)`); a call through an alias (`const m = editor.model; m.reset(…)`) or a destructured method is not detected and is left to review. `tests/` is exempt.
+  - **Comments:** only `/** … */` JSDoc blocks.
+
+  Not automated, checked in review: the `vendor/liquidfun.js` loading rule for `tests/`, exports matching the module map, and which modules receive `PIXI`/`Box2D` as parameters.
 - **Pull requests:** the PR template has a conformance item. A PR that adds, removes, renames or changes the responsibility or imports of a module updates the module map on the same branch, through the architect, and is reviewed by the architect before merge.
 - **Disagreement:** if code needs a module or import this document does not allow, stop and ask the architect; do not merge a deviation.
