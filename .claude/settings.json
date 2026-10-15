@@ -12,7 +12,27 @@
       "PowerShell(gh issue list *)",
       "PowerShell(Get-ChildItem *)",
       "PowerShell(gh pr view *)",
-      "PowerShell(Out-Null)"
+      "PowerShell(Out-Null)",
+      "PowerShell(git diff *)",
+      "PowerShell(git show *)",
+      "PowerShell(Out-String)",
+      "PowerShell(Get-ItemProperty *)",
+      "PowerShell(Format-Table)",
+      "PowerShell(Measure-Object)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-Item *)",
+      "PowerShell(git branch --show-current)",
+      "PowerShell(git branch -a)",
+      "PowerShell(git branch -vv)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-WinEvent *)",
+      "PowerShell(Get-Date *)",
+      "PowerShell(Format-List)",
+      "PowerShell(Join-Path *)",
+      "PowerShell(gh repo view *)",
+      "PowerShell(ConvertTo-Json *)",
+      "PowerShell(Get-FileHash *)",
+      "PowerShell(gh release view *)"
     ]
   }
 }
