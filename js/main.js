@@ -23,7 +23,7 @@ const restored = Settings.restore(storedSettings.value);
 for (const warning of restored.warnings) console.warn(warning);
 
 const editor = createEditor({ settings: restored.settings });
-const { actions, history, modes, selection, model, settings, camera } = editor;
+const { actions, history, modes, selection, model, settings, camera, tools } = editor;
 settings.on('settings', () => saveSettings(settings.toJSON()));
 
 const header = createHeader(document);
@@ -119,13 +119,16 @@ windowButton.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
-  dispatchKey(event, { actions, tools: null, viewportFocused: viewportHost.contains(document.activeElement) });
+  dispatchKey(event, { actions, tools, viewportFocused: viewportHost.contains(document.activeElement) });
 });
 
 const viewport = await createViewport(PIXI, viewportHost, {
   model,
   camera,
   settings,
+  selection,
+  modes,
+  tools,
   insets: () => ({ top: VIEWPORT_INSET, right: VIEWPORT_INSET, bottom: VIEWPORT_INSET, left: VIEWPORT_INSET }),
   onSpaceTap: () => actions.run('toggle-play'),
 });

@@ -9,6 +9,8 @@ import { ActionRegistry } from '../js/actions.js';
 import { setProps } from '../js/commands/props.js';
 import { Settings } from '../js/settings.js';
 import { Camera } from '../js/viewport/camera.js';
+import { ToolRegistry } from '../js/tools/registry.js';
+import { TOOL_SPECS } from '../js/tools/tool.js';
 import { defaultsOf } from '../lib/schema.js';
 
 function addClip(editor) {
@@ -139,6 +141,43 @@ test('escape cancels an open gesture, else clears the selection', () => {
   assert.equal(history.inGesture, false);
   assert.equal(model.prop(ROOT_UID, 'meta.name'), 'ragdoll');
   assert.deepEqual(selection.objects, [ROOT_UID]);
+  actions.run('escape');
+  assert.deepEqual(selection.objects, []);
+});
+
+test('createEditor builds a tool registry with no tools before the tool issues', () => {
+  const editor = createEditor();
+  assert.ok(editor.tools instanceof ToolRegistry);
+  assert.notEqual(createEditor().tools, editor.tools);
+  assert.deepEqual(editor.tools.list(), []);
+  assert.equal(editor.tools.active, null);
+});
+
+test('tool actions of unregistered tools report not available yet', () => {
+  const { actions, tools } = createEditor();
+  for (const { id } of TOOL_SPECS) {
+    const action = `tool:${id}`;
+    assert.equal(tools.has(id), false, id);
+    assert.equal(actions.has(action), false, action);
+    assert.equal(actions.isEnabled(action), false, action);
+    assert.equal(actions.reason(action), 'not available yet', action);
+    assert.equal(actions.run(action), false, action);
+  }
+});
+
+test('escape cancels through the tool registry, else clears the selection', () => {
+  const editor = createEditor();
+  const { history, selection, actions, tools, model } = editor;
+  selection.set([ROOT_UID]);
+  history.beginGesture();
+  history.execute(setProps([ROOT_UID], { 'meta.name': 'x' }));
+  assert.equal(tools.cancel(), true);
+  assert.equal(model.prop(ROOT_UID, 'meta.name'), 'ragdoll');
+  history.beginGesture();
+  actions.run('escape');
+  assert.equal(history.inGesture, false);
+  assert.deepEqual(selection.objects, [ROOT_UID]);
+  assert.equal(tools.cancel(), false);
   actions.run('escape');
   assert.deepEqual(selection.objects, []);
 });

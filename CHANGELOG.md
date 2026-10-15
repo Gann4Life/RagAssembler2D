@@ -29,6 +29,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - Framing: `F` frames the selection and `Home` frames the whole ragdoll in the viewport.
 - Viewport grid with axes: adaptive minor and major lines that stay readable at any zoom, and the shapes of the rest pose drawn in the viewport.
 - Settings popover (Settings button): grid visibility, grid size and subdivisions, snap to grid, display mode (Shapes, Sprites, Both) and the document's pixels per meter, which is one undo step and read-only outside Edit mode. Editor settings are saved in the browser and restored on the next visit.
+- Viewport feedback: the shape under the pointer gets a hover outline, selected bodies, shapes and joints get a thicker selection outline, and invalid targets are outlined in red, all following the displayed pose.
+- Viewport gizmos: a cross and ring at the root position, and a circle at each joint anchor with its limit arc, angle needle and `aimAxis` arrow.
+- Settings popover: an Overlays group with Names (body, shape and joint labels) and Centers of mass toggles, saved with the other editor settings. A Contacts toggle is also listed but draws nothing yet.
+- Tool hotkeys: every tool in the hotkey table has its key bound, and viewport pointer and key input is routed to the active tool. No tool is available yet, so these keys do nothing for now.
 
 ### Changed
 - Documentation: `docs/architecture.md` now defines the editor core architecture and module conformance rules, and the new `docs/schema.md` lists the property schema of every `.rag.json` object.

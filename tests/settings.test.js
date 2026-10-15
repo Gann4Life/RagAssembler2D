@@ -7,12 +7,44 @@ const DEFAULTS = {
   grid: { visible: true, size: 1, subdivisions: 10 },
   snap: { grid: false },
   display: { mode: 'both' },
+  overlay: { names: false, centers: false, contacts: false },
 };
 
 test('defaults follow DESIGN §5.3', () => {
   assert.equal(SETTINGS_VERSION, 1);
-  assert.deepEqual(Object.keys(SETTING_SPECS), ['grid.visible', 'grid.size', 'grid.subdivisions', 'snap.grid', 'display.mode']);
+  assert.deepEqual(Object.keys(SETTING_SPECS), [
+    'grid.visible',
+    'grid.size',
+    'grid.subdivisions',
+    'snap.grid',
+    'display.mode',
+    'overlay.names',
+    'overlay.centers',
+    'overlay.contacts',
+  ]);
   assert.deepEqual(new Settings().toJSON(), DEFAULTS);
+});
+
+test('overlay settings are booleans, off by default', () => {
+  const settings = new Settings();
+  for (const key of ['overlay.names', 'overlay.centers', 'overlay.contacts']) {
+    assert.equal(settings.get(key), false);
+    assert.throws(() => settings.set(key, 1), RangeError);
+    settings.set(key, true);
+    assert.equal(settings.get(key), true);
+  }
+});
+
+test('a version 1 record without overlays restores them to their defaults without warnings', () => {
+  const { settings, warnings } = Settings.restore({
+    version: 1,
+    grid: { visible: false, size: 1, subdivisions: 10 },
+    snap: { grid: true },
+    display: { mode: 'shapes' },
+  });
+  assert.deepEqual(warnings, []);
+  assert.equal(settings.get('grid.visible'), false);
+  assert.deepEqual(settings.toJSON().overlay, { names: false, centers: false, contacts: false });
 });
 
 test('get and set unknown keys throw', () => {
@@ -71,6 +103,8 @@ test('toJSON round trips through restore', () => {
   settings.set('grid.subdivisions', 4);
   settings.set('snap.grid', true);
   settings.set('display.mode', 'sprites');
+  settings.set('overlay.names', true);
+  settings.set('overlay.contacts', true);
   const record = JSON.parse(JSON.stringify(settings.toJSON()));
   const { settings: restored, warnings } = Settings.restore(record);
   assert.deepEqual(warnings, []);

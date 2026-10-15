@@ -107,6 +107,17 @@ test('a pose replaces body transforms and moves anchors with bodyA', () => {
   nearBox(framingBounds(model, [jointUid], pose), { minX: 0.5, minY: 6.5, maxX: 1.5, maxY: 7.5 });
 });
 
+test('a joint without an anchor contributes nothing', () => {
+  const { anchor, ...props } = defaultsOf('joint');
+  const model = document({
+    bodies: [body('b_1', [3, 0], 0, [shape('f_1', { type: 'circle', center: [0, 0], radius: 1 })])],
+    joints: [{ type: 'joint', props: { ...props, id: 'j_1', name: 'j_1', bodyA: 'b_1', bodyB: null } }],
+  });
+  assert.equal(model.prop(model.uidOf('j_1'), 'anchor'), undefined);
+  assert.equal(framingBounds(model, uidsOf(model, 'j_1')), null);
+  nearBox(framingBounds(model, null), { minX: 0, minY: -1, maxX: 4, maxY: 1 });
+});
+
 test('shapes without bounds are skipped', () => {
   const model = document({
     bodies: [body('b_1', [0, 0], 0, [shape('f_1', { type: 'polygon', vertices: [] })])],
