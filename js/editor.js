@@ -5,6 +5,7 @@ import { Modes } from './modes.js';
 import { ActionRegistry } from './actions.js';
 import { Settings } from './settings.js';
 import { Camera } from './viewport/camera.js';
+import { ToolRegistry } from './tools/registry.js';
 
 /**
  * Editor core, shared by every UI module.
@@ -16,13 +17,18 @@ import { Camera } from './viewport/camera.js';
  * @property {ActionRegistry} actions Action registry with the core actions registered.
  * @property {Settings} settings Editor settings; not undoable.
  * @property {Camera} camera Viewport camera; not undoable.
+ * @property {ToolRegistry} tools Viewport tool registry; not undoable.
  */
 
 const MODE_NAMES = Object.freeze({ edit: 'Edit', animate: 'Animate', simulate: 'Simulate' });
 
+const TOOLS = Object.freeze([]);
+
 /**
- * Builds the editor core without DOM: model, history, selection, modes, actions, settings and camera.
- * Registers the `undo`, `redo` and `escape` actions, and cancels the gesture in progress on every mode change.
+ * Builds the editor core without DOM: model, history, selection, modes, settings, camera, tool registry and
+ * actions. The tool registry is the first `mode` listener, so a mode change cancels the operation in progress
+ * before anything else hears it. Registers the `undo`, `redo` and `escape` actions and one `tool:<id>` action
+ * per registered tool.
  * @param {{ settings?: Settings }} [options] Restored editor settings; defaults when omitted.
  * @returns {Readonly<Editor>} The editor.
  * @throws {TypeError} When `settings` is given and is not a `Settings` instance.
@@ -33,11 +39,12 @@ export function createEditor({ settings = Settings.restore(undefined).settings }
   const history = new History(model);
   const selection = new Selection(model);
   const modes = new Modes(model);
+  const camera = new Camera();
+  const tools = new ToolRegistry(
+    { model, history, selection, modes, settings, camera },
+    TOOLS.map((createTool) => createTool()),
+  );
   const actions = new ActionRegistry();
-
-  modes.on('mode', () => {
-    history.cancelGesture();
-  });
 
   const modeReason = (capability) => (modes.can(capability) ? null : `not available in ${MODE_NAMES[modes.mode]} mode`);
 
@@ -55,9 +62,16 @@ export function createEditor({ settings = Settings.restore(undefined).settings }
   });
   actions.register('escape', {
     run: () => {
-      if (!history.cancelGesture()) selection.clear();
+      if (!tools.cancel()) selection.clear();
     },
   });
+  for (const tool of tools.list()) {
+    actions.register(`tool:${tool.id}`, {
+      run: () => tools.activate(tool.id),
+      isEnabled: () => tools.canActivate(tool.id),
+      reason: () => modeReason(tool.capability),
+    });
+  }
 
-  return Object.freeze({ model, history, selection, modes, actions, settings, camera: new Camera() });
+  return Object.freeze({ model, history, selection, modes, actions, settings, camera, tools });
 }
