@@ -21,6 +21,23 @@ test('rovingIndex ignores other keys and empty toolbars', () => {
   assert.equal(rovingIndex(0, 'ArrowRight', 0), -1);
 });
 
+test('rovingIndex defaults to horizontal and accepts it explicitly', () => {
+  assert.equal(rovingIndex(0, 'ArrowRight', 3, 'horizontal'), 1);
+  assert.equal(rovingIndex(0, 'ArrowDown', 3, 'horizontal'), -1);
+});
+
+test('rovingIndex vertical moves with Up and Down, wraps, and keeps Home and End', () => {
+  assert.equal(rovingIndex(0, 'ArrowDown', 3, 'vertical'), 1);
+  assert.equal(rovingIndex(2, 'ArrowDown', 3, 'vertical'), 0);
+  assert.equal(rovingIndex(0, 'ArrowUp', 3, 'vertical'), 2);
+  assert.equal(rovingIndex(2, 'ArrowUp', 3, 'vertical'), 1);
+  assert.equal(rovingIndex(1, 'Home', 3, 'vertical'), 0);
+  assert.equal(rovingIndex(1, 'End', 3, 'vertical'), 2);
+  assert.equal(rovingIndex(1, 'ArrowRight', 3, 'vertical'), -1);
+  assert.equal(rovingIndex(1, 'ArrowLeft', 3, 'vertical'), -1);
+  assert.equal(rovingIndex(0, 'ArrowDown', 0, 'vertical'), -1);
+});
+
 test('header lists the DESIGN.md §5.3 actions in grouped order', () => {
   assert.deepEqual(
     HEADER_GROUPS.map((group) => group.map((action) => action.label)),

@@ -313,21 +313,46 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 - Changing mode cancels the tool operation in progress (as Esc). If the active tool is disabled in the new mode, the Select tool becomes active.
 
 ### 5.2 Panels
-- All panels are resizable, modular and can snap to each other.
-- Handles sit at the middle of each edge that overlaps another panel.
-- When two or more panels share a slot, tabs let the user switch between them.
-- Panels can be closed and reopened from the **Window** menu. The layout is saved per browser, and *Reset layout* restores the default:
+The workspace below the header is tiled by panels: Viewport, Hierarchy, Assets, Problems, Inspector and Timeline. Panels never overlap. If the window is smaller than the sum of the minimum sizes, the workspace scrolls (see *Window resize* below). The Tools are not a panel: they float over the Viewport ([§5.5](#55-tools)).
+
+- **Viewport is fixed.** It cannot be closed, tabbed or dragged, and nothing can be dropped onto its center; other panels dock around its edges. If every other panel is closed, it fills the workspace.
+- **Stacks and tabs.** Panels that share a slot form a stack. Every stack shows a tab bar, even with one panel; the tab is the panel's title and its drag handle. The tab bar is a tab list with a roving tabindex (Left/Right wrap, Home/End, activation follows focus). An overflowing tab bar scrolls horizontally, also with the vertical mouse wheel, shows a 12 px fade on each clipped edge, and keeps the active tab visible, also after a resize.
+- **Docking.** Dragging a tab (more than 4 px) moves that panel. Dropping it on a tab bar inserts it as a tab at the insertion point the bar shows; on the center of a stack it becomes that stack's last tab (the preview shows the stack area plus the insertion point after its last tab); on an edge of a stack, or of the Viewport, it splits that area and takes half of it; on a 16 px strip at a workspace edge it docks across the full width or height with its default size, capped at 1/3 of the workspace. **Tab bars win over edge strips:** where a tab bar touches a workspace edge, a drop on the bar is a tab drop. So, while the Timeline is folded along the bottom edge, docking to that edge requires expanding it first. Sizes never go below the minimums. The resulting area is previewed while dragging. Esc, or a drop where nothing can be docked (the Viewport center, or the panel's own stack when it is its only tab), cancels.
+- **Resize handles.** Neighbouring panels are separated by a 4 px gutter. The whole shared edge is draggable; a grip, with at least 3:1 contrast against the gutter, marks its middle. A handle resizes the area on its side away from the **fill area** of its split: the area holding the Viewport, or the last area of a split without it. Its accessible name is that area's name plus the dimension, e.g. "Timeline height", "Hierarchy width"; an area holding the Viewport is named "Viewport", any other area after its first panel in layout order (its active tab). Sizes are clamped to the minimums below, and Esc during a drag restores the previous size. Handles are focusable separators: arrows move the handle ±10 px in their direction, Shift + arrows ±50 px, and Home/End give the area it resizes its minimum/maximum size.
+- **Keyboard order.** Tab follows the layout: areas in layout order (left to right, top to bottom within each split), each followed by the handle after it. Inside a stack: its tab list, its fold button if shown, then the panel. Inside the Viewport: the Tools overlay, then the viewport host. Focus on a tab, a handle or a fold button survives layout changes that keep that element.
+- **Folding the Timeline.** Only the Timeline can be folded; no other panel has a fold control. A folded Timeline shows only its 28 px tab bar and keeps its stored size for when it expands.
+  - The Timeline is **foldable** while it is the active tab of its stack and that stack is a fixed area (not the fill area) of a top-to-bottom split. Otherwise it shows no fold control and the folded state is ignored, but kept.
+  - A 24 × 24 px fold button sits at the right end of the tab bar, outside the scrolling tab area: ▾ while expanded, ▸ while folded, with `aria-expanded` and `aria-controls` pointing to the Timeline panel. Double-clicking an empty part of that tab bar also toggles it.
+  - Clicking a tab of a folded stack expands it; clicking the active tab of an expanded stack does nothing. Every other activation of a panel in the Timeline's stack (Window menu, keyboard, a tab dropped into it, future programmatic activation) and every move or reopen of the Timeline expand it.
+  - While folded, the handle that would resize the Timeline is not shown and cannot be focused; the 4 px gutter remains. If focus was inside the Timeline panel when it folds, it moves to the fold button.
+  - The folded state is part of the saved layout, is not undoable, and the Window menu checkbox only means "open", folded or not.
+- **Window resize.** Only the fill area grows or shrinks. Once it reaches its minimum, the other areas of that split shrink in proportion to their size above their own minimums; only when every area is at its minimum does the workspace scroll. These shrunk sizes are not stored: the stored sizes return when the window grows again. The exception is a handle resize: it stores the on-screen sizes of every fixed area of its split, except a folded Timeline, so the resized area starts from what the user sees.
+- **Window menu.** Panels are closed with the × on their tab (or a middle click), and reopened or closed from the **Window** menu ([§5.3](#53-header)). A reopened panel returns to its previous stack and position if that stack still exists; otherwise it joins a stack holding a panel of its default group; otherwise it docks to its default workspace edge with its default size.
+- **Persistence.** The layout is saved per browser after every change and restored on load. A stored layout that cannot be read is ignored with a console warning, and the default is used; panels missing from it are added by the reopen rule. If browser storage is unavailable, the layout lives only for the session.
+- **Reset layout** restores the default immediately (Timeline folded), with no confirmation, and forgets the stored layout. Layout changes, including Reset and folding, are not undoable.
+
+Default layout. The positions given as "Default location" in [§5.6–5.8](#56-hierarchy-assets-and-problems-panels) refer to it:
 
 ```
-┌──────────────────────── Header ─────────────────────────┐
-├───────┬───────────────────────────────┬─────────────────┤
-│ Tools │                               │ Hierarchy │ Assets │ Problems
-│       │           Viewport            ├─────────────────┤
-│       │                               │ Inspector       │
-├───────┴───────────────────────────────┴─────────────────┤
-│                         Timeline                        │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────── Header ──────────────────────────┐
+├──────────────────────────────────┬───────────────────────┤
+│ ┌──┐                             │ Hierarchy|Assets|Prob │
+│ │T │        Viewport             ├───────────────────────┤
+│ └──┘                             │ Inspector             │
+├──────────────────────────────────┴───────────────────────┤
+│ Timeline                                             [▸] │  folded
+└──────────────────────────────────────────────────────────┘
+T: Tools overlay (§5.5), not a panel.
 ```
+
+| Panel | Default group and edge | Default size | Minimum (w × h) |
+|---|---|---|---|
+| Viewport | fixed, center | the remaining area | 240 × 160 px |
+| Hierarchy, Assets, Problems | one stack, right top | 300 px wide; half the right column | 200 × 96 px |
+| Inspector | own stack, right bottom | 300 px wide; the rest of the right column | 200 × 96 px |
+| Timeline | own stack, bottom, full width | 220 px high when expanded; starts **folded** (28 px) | 320 × 120 px (28 px high while folded) |
+
+Minimum heights include the 28 px tab bar. "Half the right column" is measured with the Timeline folded. Panels that are not built yet show a centered "*Name* (not available yet)" placeholder.
 
 ### 5.3 Header
 Location: top, full width. One toolbar row with four button groups divided by separators:
@@ -340,12 +365,12 @@ Location: top, full width. One toolbar row with four button groups divided by se
 | Workspace | Window, Settings | Right end |
 
 - **Buttons** are text-labelled. Each tooltip shows the label, plus the hotkey from [§5.9](#59-hotkeys-defaults) if one exists. Buttons without a §5.9 hotkey show none.
-- **Keyboard:** the header is a single Tab stop (`role="toolbar"`, roving tabindex). Left/Right move between buttons and wrap around, and Home/End jump to the first/last button. While focus is in the header, these keys do not trigger global hotkeys.
+- **Keyboard:** the header is a single Tab stop (`role="toolbar"`, roving tabindex). Left/Right move between buttons and wrap around, and Home/End jump to the first/last button. These keys do not trigger global hotkeys ([§5.9](#59-hotkeys-defaults)).
 - **Unavailable actions** use `aria-disabled` and stay focusable, so keyboard users can still reach them. The tooltip adds "(not available yet)".
 - If the window is narrower than the row, the header scrolls horizontally. Buttons never wrap.
 
 - **New**: new empty ragdoll. Asks for confirmation if there are unsaved changes.
-- **Load**: imports a `.rag.json` from disk (file picker, or drag & drop onto the viewport).
+- **Load**: imports a `.rag.json` from disk (file picker, or drag & drop onto the Viewport panel, Tools overlay included).
   - Older format versions are migrated.
   - Invalid files are rejected with a list of errors.
   - Sprite images are resolved relative to the file. The browser cannot read sibling files on its own, so the editor asks for the asset folder (directory picker where supported, multi-file picker otherwise). Missing images are drawn as placeholders and listed in Problems.
@@ -354,11 +379,11 @@ Location: top, full width. One toolbar row with four button groups divided by se
 - **Play / Pause / Next frame / Stop**:
   - Next frame advances one fixed step (1/60 s).
   - Stop restores the pose and time that were active before Play.
-- **Window** menu: panel toggles, Reset layout.
+- **Window** menu: one checkbox per panel in the order Viewport, Hierarchy, Assets, Problems, Inspector, Timeline (Viewport is always checked and disabled), a separator, then *Reset layout* ([§5.2](#52-panels)). The Tools overlay is not listed ([§5.5](#55-tools)). Checking a panel reopens it and activates its tab (expanding the Timeline); unchecking closes it. The menu opens below the button, aligned to its right edge. Enter, Space or Down open it on the first item, Up on the last; Up/Down wrap and Home/End jump; Esc closes it and returns focus to the button; Tab closes it and moves on; Left/Right close it and move along the header. Choosing an item or clicking outside closes it. When a closed panel had focus, focus moves to the new active tab of its stack, or else to the viewport.
 - **Settings**: grid size, snapping, `pixelsPerMeter`, display options.
 
 ### 5.4 Viewport
-- **Navigation:** pan with middle mouse or Space + left drag. Mouse wheel zooms around the cursor. `F` frames the selection, `Home` frames everything.
+- **Navigation:** pan with middle mouse or Space + left drag. Mouse wheel zooms around the cursor. `F` frames the selection, `Home` frames everything; framing leaves a left inset equal to the Tools overlay width plus 16 px, so nothing framed sits under it.
 - **Grid:** 1 m major / 0.1 m minor lines, with the origin axes highlighted.
   - Grid snap is a toggle in Settings.
   - SHIFT while rotating snaps to 15°.
@@ -366,7 +391,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
 - **Gizmos:**
   - root: pivot cross + ring;
   - joints: circle at the anchor, an arc from `lower` to `upper` relative to bodyA, a needle for the current angle, the strength fill in Animate mode, and an `aimAxis` arrow when selected;
-  - sprite handles in sprite-edit mode ([§5.5](#55-tools-panel)).
+  - sprite handles in sprite-edit mode ([§5.5](#55-tools)).
 - **Feedback:** hover highlight, selection outline, invalid objects outlined red.
 - **Overlays (toggles):** names, centers of mass, contacts (Simulate mode).
 - **Preview environment** (editor only; never exported, except `preview.gravity`):
@@ -375,12 +400,44 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - gravity.
 - **Accessibility:** the viewport host is focusable (`tabindex="0"`) and labelled "Viewport". It uses `role="group"` until the viewport handles keys itself. From then on it uses `role="application"`, with `aria-roledescription="viewport"` and `aria-describedby` pointing to a summary of its keys. That way screen readers pass single-key hotkeys ([§5.9](#59-hotkeys-defaults)) to the editor instead of using them for browse-mode navigation. The role applies only to the viewport host, never to the page or a panel.
 
-### 5.5 Tools panel
-Location: left middle.
+### 5.5 Tools
+The tools live in a **floating toolbar overlay inside the Viewport panel**, not in a dock panel. It is always visible, has no toggle and is not listed in the Window menu.
 
-- **Select** (`V`, cursor icon): click to select world objects (root, shapes, joints). SHIFT + click adds to or removes from the selection. SHIFT + drag starts a selection box.
-- **Select Box** (`B`, dotted box icon): drag to multi-select. With multiple shapes selected, they can be grouped (Ctrl+G) into one body.
-- **Manipulate** (`M`, hand icon): move and rotate.
+**Layout.**
+- A sibling of the viewport host inside the Viewport panel, stacked over it in the same grid cell, top-left with an 8 px margin. The Viewport panel isolates its stacking context, so the overlay never covers other panels or popups.
+- A vertical strip: panel surface at 92 % opacity, 1 px border, 6 px radius, 4 px padding; 32 × 32 px buttons with 20 px icons and 2 px gaps; 40 × 299 px.
+- Buttons in four groups with separators: selection (Select, Select Box), manipulation (Manipulate, Pose), creation (Circle, Box, Polygon), joints (Hinge Joint).
+- When the viewport host is shorter than 315 px, the strip switches to two columns (76 × 149 px). This requires a Viewport minimum of 240 × 168 px; the issue that builds the overlay raises the §5.2 minimum to that value.
+- Loading by drag & drop listens on the whole Viewport panel, so a drop on the overlay also loads ([§5.3](#53-header)).
+
+**Icons.** Inline SVG drawn in the repository: `viewBox` 24, stroke `currentColor` at 1.5, round caps.
+
+| Tool | Glyph |
+|---|---|
+| Select | Arrow cursor. |
+| Select Box | Dashed rectangle plus a small cursor. |
+| Manipulate | Four-way move cross plus a 270° rotation arc. |
+| Pose | Bent limb of three dots plus a drag arrow. |
+| Circle | Circle, r = 8. |
+| Box | Solid 16 × 12 rectangle. |
+| Polygon | Convex pentagon with vertex dots. |
+| Hinge Joint | Two overlapping bars, a pin and a small arc. |
+
+**States.**
+- The active tool has `aria-pressed="true"`; exactly one button is pressed. Select is active on load. The active tool is not persisted.
+- Tools that are not built yet, or that the current mode disables ([§5.1](#51-editor-modes)), use `aria-disabled` and stay focusable. Until the tool registry exists, every button is disabled and none is pressed.
+- **Tooltip:** "*Label* (*Key*)", built like the header tooltips ([§5.3](#53-header)), plus " (not available yet)" or " (not available in *Mode* mode)" when disabled. It is a custom tooltip, shown after 400 ms of hover or immediately on keyboard focus, hidden from assistive technology (`aria-hidden`); buttons have an accessible name and no `title` attribute.
+
+**Keyboard.**
+- `role="toolbar"`, labelled "Tools", `aria-orientation="vertical"`, one Tab stop whose roving stop is the active tool. Up/Down and Left/Right move and wrap, Home/End jump, Enter/Space activate. These keys do not trigger global hotkeys ([§5.9](#59-hotkeys-defaults)).
+- Tab order: inside the Viewport, Tools come before the viewport host; the Viewport takes its place in the layout order ([§5.2](#52-panels)). In the default layout this is header → Tools → viewport host → the other panels.
+- A mouse click activates the tool and moves focus to the viewport host. Tool hotkeys work wherever focus is, except in text fields.
+
+**Tools.**
+
+- **Select** (`V`): click to select world objects (root, shapes, joints). SHIFT + click adds to or removes from the selection. SHIFT + drag starts a selection box.
+- **Select Box** (`B`): drag to multi-select. With multiple shapes selected, they can be grouped (Ctrl+G) into one body.
+- **Manipulate** (`M`): move and rotate.
   - **Root:** dragging moves the whole ragdoll.
   - **Body:** dragging moves the body **and its joint subtree** (child bodies and the connecting joints), so moving an upper arm carries the forearm and hand. ALT + drag moves only the selected body.
   - **Rotate handle:** rotates around the body's parent joint anchor if it has one, otherwise around its center. CTRL forces the center.
@@ -408,7 +465,7 @@ Location: left middle.
   - Limits can be fine-tuned in the inspector.
 
 ### 5.6 Hierarchy, Assets and Problems panels
-Location: right top, as tabs.
+Default location ([§5.2](#52-panels)): right top, as tabs of one stack.
 
 **Hierarchy**
 - **Tree:**
@@ -433,7 +490,7 @@ Location: right top, as tabs.
 **Problems**: live list of validation errors and warnings ([§6.4](#64-validation)). Clicking one selects the object.
 
 ### 5.7 Inspector / Properties panel
-Location: right bottom. The inspector always shows the public properties of the selection and lets the user edit them. With multiple objects of the same type selected, it edits shared fields, and mixed values are shown as `—`.
+Default location ([§5.2](#52-panels)): right bottom. The inspector always shows the public properties of the selection and lets the user edit them. With multiple objects of the same type selected, it edits shared fields, and mixed values are shown as `—`.
 
 - **Display units:** pixels and degrees in the UI, meters and radians in the file. Multipliers are shown as %.
 - **Animation:** in Animate mode, animatable properties show a **key button ◆**. It is filled when a key exists at the playhead; clicking inserts or updates the key, and right-click removes it. The field shows the evaluated value at the playhead.
@@ -518,7 +575,7 @@ Location: right bottom. The inspector always shows the public properties of the 
 | data | Text field. Parsed as JSON when valid, otherwise stored as a string. |
 
 ### 5.8 Animation timeline
-Location: bottom, full width. Modeled after Godot's animation panel.
+Default location ([§5.2](#52-panels)): bottom, full width. Modeled after Godot's animation panel.
 
 ```
 ┌ [clip ▾ walk] [+ New] [⧉ Duplicate] [🗑]  length [1.00]s  snap [1/30]  [⟲ loop]  [● autokey]  [◆ Key selected (K)] ┐
@@ -576,6 +633,7 @@ Location: bottom, full width. Modeled after Godot's animation panel.
 | Esc | Abort tool / clear selection | | |
 
 - Hotkeys are ignored while focus is in a text field. Space also goes to a focused button or control instead of Play/Pause.
+- While focus is in a toolbar, a tab list, a resize handle or an open menu, their navigation keys (arrows, Home, End, Space, Enter, Esc) do not trigger global hotkeys.
 - In the viewport, Space + left drag pans. A Space press without a drag toggles Play/Pause when Space is released.
 
 ### 5.10 Inverse kinematics
@@ -950,6 +1008,7 @@ demo/                      production preview (§10)
 - **Sprite file access in the browser:** directory pickers are not available in every browser. The multi-file fallback must be usable with 20+ images.
 - **Performance:** measure the cost of `update()` + `sync()` with many instances (target: 20 humanoids at 60 Hz without noticeable cost).
 - **`meta` on Save:** decide whether Save rewrites `meta.name` (from `ragdoll.name`) and `meta.editorVersion` (to the running editor), and how that fits the byte-identical round-trip of [§6.5](#65-round-trip-guarantee) across editor versions. Until then the serializer writes the loaded values unchanged.
+- **Mode switching with a folded Timeline:** Edit/Animate mode is chosen with the Timeline clip selector ([§5.1](#51-editor-modes)), which is hidden while the Timeline is folded, as it is by default. Decide whether the folded tab bar shows a summary (mode and open clip) or another control exposes the clip selector, before the Timeline panel is built.
 - **Determinism:** the same file plus the same inputs should give the same simulation on the same machine, so the editor preview can be compared against the host page.
 
 ## 13. Out of scope for v1 (backlog)

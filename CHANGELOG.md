@@ -16,6 +16,12 @@ All notable changes to this project are documented here. The format follows [Kee
 - Pinned third-party builds in `vendor/`: PIXI.js 8.21.0 and liquidfun.js v1.1.0, with their license files, checksums and provenance in `docs/development.md`.
 - Editor shell at `index.html`: a header toolbar with New, Load, Save, Undo, Redo, Play, Pause, Next frame, Stop, Window and Settings. The buttons are disabled for now but stay reachable from the keyboard (one Tab stop, arrow keys between buttons) and show their shortcuts in tooltips.
 - Editor viewport: an empty PIXI canvas below the header that fills the window and resizes with it, sharp on high-DPI screens.
+- Dockable panels: Hierarchy, Assets, Problems, Inspector and Timeline open as tabbed panels around the viewport (placeholders until their features land).
+- Drag a tab to reorder it, move it to another panel, split a panel or dock it at a window edge, with a live drop preview.
+- Resize panels with the gutters, by mouse or with the arrow keys.
+- Window menu to open or close each panel and to reset the layout, reachable from the keyboard.
+- The panel layout is saved in the browser and restored on the next visit; Reset layout returns to the default.
+- The Timeline starts folded to its tab bar, with a button (or a double click on the bar) to fold and expand it.
 
 ### Changed
 - Documentation: `docs/architecture.md` now defines the editor core architecture and module conformance rules, and the new `docs/schema.md` lists the property schema of every `.rag.json` object.

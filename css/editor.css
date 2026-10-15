@@ -83,16 +83,329 @@ body {
 }
 
 #workspace {
-  display: grid;
+  position: relative;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.dock-content {
+  position: relative;
 }
 
 #panel-viewport {
   display: grid;
   min-width: 0;
   min-height: 0;
+}
+
+.dock-viewport,
+.dock-stack,
+.dock-gutter,
+.dock-preview {
+  position: absolute;
+}
+
+.dock-stack {
+  display: grid;
+  grid-template-rows: 28px minmax(0, 1fr);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.dock-tabbar {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.dock-tablist {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  align-self: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.dock-tablist::-webkit-scrollbar {
+  display: none;
+}
+
+.dock-tablist.is-clipped-start {
+  mask-image: linear-gradient(to right, transparent, #000 12px);
+}
+
+.dock-tablist.is-clipped-end {
+  mask-image: linear-gradient(to left, transparent, #000 12px);
+}
+
+.dock-tablist.is-clipped-start.is-clipped-end {
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+}
+
+.dock-fold {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dock-fold:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.dock-fold:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.dock-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.dock-tab.is-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--focus);
+}
+
+.dock-tab-label {
+  height: 27px;
+  padding: 0 4px 0 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dock-tab-label:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.dock-tab-close {
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  visibility: hidden;
+  cursor: pointer;
+}
+
+.dock-tab:hover .dock-tab-close,
+.dock-tab.is-active .dock-tab-close {
+  visibility: visible;
+}
+
+.dock-tab-close:hover {
+  background: var(--surface-hover);
+}
+
+.dock-body {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.dock-panel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+}
+
+.dock-panel[hidden] {
+  display: none;
+}
+
+.dock-panel:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.dock-placeholder {
+  margin: 0;
+  padding: 8px;
+  color: var(--text-muted);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.dock-gutter {
+  z-index: 2;
+  background: var(--bg);
+  touch-action: none;
+}
+
+.dock-gutter::before {
+  content: "";
+  position: absolute;
+  inset: 0 -2px;
+}
+
+.dock-gutter-column::before {
+  inset: -2px 0;
+}
+
+.dock-gutter-row {
+  cursor: col-resize;
+}
+
+.dock-gutter-column {
+  cursor: row-resize;
+}
+
+.dock-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.dock-gutter-column .dock-grip {
+  width: 24px;
+  height: 4px;
+}
+
+.dock-gutter:hover,
+.dock-gutter.is-dragging {
+  background: var(--focus);
+}
+
+.dock-gutter:hover .dock-grip,
+.dock-gutter.is-dragging .dock-grip {
+  background: var(--text);
+}
+
+.dock-gutter:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
+.dock-preview {
+  z-index: 3;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--focus) 25%, transparent);
+  pointer-events: none;
+}
+
+.dock-caret {
+  background: var(--focus);
+}
+
+.dock-preview[hidden] {
+  display: none;
+}
+
+.dock-ghost {
+  position: fixed;
+  z-index: 10;
+  padding: 2px 8px;
+  border: 1px solid var(--focus);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text);
+  pointer-events: none;
+}
+
+body.dock-dragging,
+body.dock-dragging * {
+  cursor: grabbing !important;
+}
+
+body.dock-dragging.dock-no-drop,
+body.dock-dragging.dock-no-drop * {
+  cursor: no-drop !important;
+}
+
+body.dock-resizing-row,
+body.dock-resizing-row * {
+  cursor: col-resize !important;
+}
+
+body.dock-resizing-column,
+body.dock-resizing-column * {
+  cursor: row-resize !important;
+}
+
+.menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 180px;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+}
+
+.menu-item {
+  display: flex;
+  gap: 8px;
+  padding: 4px 12px 4px 8px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.menu-item:focus {
+  outline: none;
+  background: var(--surface-hover);
+}
+
+.menu-item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.menu-item[aria-disabled="true"] {
+  color: var(--text-muted);
+}
+
+.menu-check {
+  width: 1em;
+  text-align: center;
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
 }
 
 #viewport-host {
