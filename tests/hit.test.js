@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Model, ROOT_UID } from '../js/model/model.js';
 import { Camera } from '../js/viewport/camera.js';
-import { hitTest } from '../js/viewport/hit.js';
+import { boxTest, hitTest } from '../js/viewport/hit.js';
 import { COLORS, GIZMO_SIZE, HIT_RADIUS, LABEL_SIZE, LINE_WIDTH } from '../js/viewport/style.js';
 import { defaultsOf } from '../lib/schema.js';
 
@@ -135,4 +135,85 @@ test('hit testing follows the displayed pose', () => {
   assert.deepEqual(hitTest(model, camera, { x: 200, y: 100 }, { pose }), [f1]);
   assert.deepEqual(hitTest(model, camera, { x: 200, y: 150 }, { pose }), [j1]);
   assert.deepEqual(hitTest(model, camera, { x: 200, y: 150 }, { pose: null }), []);
+});
+
+function aabb(minX, minY, maxX, maxY) {
+  return { minX, minY, maxX, maxY };
+}
+
+test('boxTest takes shapes entirely inside, edges included, and not those partly outside', () => {
+  const model = document({
+    bodies: [body('b_1', [0, 0], 0, [circle('f_1', [0, 0], 1), circle('f_2', [3, 0], 1)])],
+  });
+  const [f1, f2] = uids(model, 'f_1', 'f_2');
+  assert.deepEqual(boxTest(model, aabb(-1, -1, 1, 1)), [f1]);
+  assert.deepEqual(boxTest(model, aabb(-0.999, -1, 1, 1)), []);
+  assert.deepEqual(boxTest(model, aabb(-1, -1, 4, 1)), [f1, f2]);
+  assert.deepEqual(boxTest(model, aabb(-1, -1, 3.9, 1)), [f1]);
+  assert.deepEqual(boxTest(model, aabb(10, 10, 20, 20)), []);
+});
+
+test('boxTest counts a rotated box shape by its tight bounds', () => {
+  const half = Math.SQRT1_2;
+  const model = document({
+    bodies: [body('b_1', [0, 0], Math.PI / 4, [shape('f_1', { type: 'box', center: [0, 0], width: 1, height: 1, angle: 0 })])],
+  });
+  const [f1] = uids(model, 'f_1');
+  assert.deepEqual(boxTest(model, aabb(-half - 1e-9, -half - 1e-9, half + 1e-9, half + 1e-9)), [f1]);
+  assert.deepEqual(boxTest(model, aabb(-0.6, -0.6, 0.6, 0.6)), []);
+});
+
+test('boxTest takes joints by anchor and never the root', () => {
+  const model = document({
+    position: [1, 0],
+    bodies: [body('b_1', [0, 0], 0)],
+    joints: [joint('j_1', 'b_1', null, [0, 1]), joint('j_2', 'b_1', null, [5, 5])],
+  });
+  const [j1] = uids(model, 'j_1');
+  assert.deepEqual(boxTest(model, aabb(1, 1, 2, 2)), [j1]);
+  assert.deepEqual(boxTest(model, aabb(0, -1, 2, 0.5)), []);
+  assert.deepEqual(boxTest(model, aabb(-100, -100, 0.999, 100)), []);
+});
+
+test('boxTest skips invalid geometry and unplaced anchors', () => {
+  const model = document({
+    bodies: [
+      body('b_1', [0, 0], 0, [
+        circle('f_1', [0, 0], 0),
+        shape('f_2', { type: 'polygon', vertices: [[0, 0], [1, 0]] }),
+        shape('f_3', { type: 'box', center: [0, 0], width: -1, height: 1, angle: 0 }),
+        shape('f_4', { type: 'polygon', vertices: [] }),
+        shape('f_5', { type: 'circle', center: [0, Number.NaN], radius: 1 }),
+        shape('f_6', { type: 'polygon', vertices: [[0, 0], [1, 1], [1, 0], [0, 1]] }),
+      ]),
+    ],
+    joints: [joint('j_1', 'b_1', null, null)],
+  });
+  const [f6] = uids(model, 'f_6');
+  assert.deepEqual(boxTest(model, aabb(-100, -100, 100, 100)), [f6]);
+});
+
+test('boxTest follows the displayed pose and anchors follow bodyA', () => {
+  const model = document({
+    bodies: [body('b_1', [0, 0], 0, [circle('f_1', [1, 0], 0.2)])],
+    joints: [joint('j_1', 'b_1', null, [0.5, 0])],
+  });
+  const [b1, j1, f1] = uids(model, 'b_1', 'j_1', 'f_1');
+  const rest = aabb(0.25, -0.25, 1.25, 0.25);
+  assert.deepEqual(boxTest(model, rest), [f1, j1]);
+  const pose = new Map([[b1, { x: 0, y: 0, angle: Math.PI / 2 }]]);
+  assert.deepEqual(boxTest(model, rest, { pose }), []);
+  assert.deepEqual(boxTest(model, aabb(-0.25, 0.25, 0.25, 1.25), { pose }), [f1, j1]);
+  assert.deepEqual(boxTest(model, aabb(-0.25, 0.25, 0.25, 1.25), { pose: null }), []);
+});
+
+test('boxTest returns shapes in body and fixture order, then joints in joints order', () => {
+  const model = document({
+    bodies: [
+      body('b_1', [0, 0], 0, [circle('f_1', [0, 0], 0.1), circle('f_2', [0.5, 0], 0.1)]),
+      body('b_2', [1, 0], 0, [circle('f_3', [0, 0], 0.1)]),
+    ],
+    joints: [joint('j_1', 'b_1', 'b_2', [0.2, 0]), joint('j_2', 'b_1', 'b_2', [0.1, 0])],
+  });
+  assert.deepEqual(boxTest(model, aabb(-1, -1, 2, 1)), uids(model, 'f_1', 'f_2', 'f_3', 'j_1', 'j_2'));
 });

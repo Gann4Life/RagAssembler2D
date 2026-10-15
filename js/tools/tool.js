@@ -45,6 +45,7 @@
  * Viewport services bound to the registry with `bindView`.
  * @typedef {object} ToolView
  * @property {(screen: { x: number, y: number }) => number[]} hitTest Uids under a screen point, topmost first.
+ * @property {(box: import('../../lib/geometry.js').Aabb) => number[]} boxTest Uids inside a world box, meters.
  * @property {(css: string) => void} setCursor Sets the viewport cursor.
  * @property {() => void} invalidateOverlay Requests a tool overlay redraw.
  */
@@ -64,6 +65,7 @@
  * @property {(length: number) => number} snapLength Grid snap of a length, meters.
  * @property {(angle: number, shift: boolean) => number} snapAngle Angle snap, radians.
  * @property {(screen: { x: number, y: number }) => number[]} hitTest Uids under a screen point, topmost first; `[]` without a view.
+ * @property {(box: import('../../lib/geometry.js').Aabb) => number[]} boxTest Uids inside a world box, meters; `[]` without a view.
  * @property {(css: string|null) => void} setCursor Overrides the cursor; `null` restores the tool's cursor.
  * @property {() => void} invalidateOverlay Requests a tool overlay redraw.
  */

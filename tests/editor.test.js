@@ -145,17 +145,19 @@ test('escape cancels an open gesture, else clears the selection', () => {
   assert.deepEqual(selection.objects, []);
 });
 
-const REGISTERED_TOOLS = ['circle', 'box'];
+const SELECTION_TOOLS = ['select', 'select-box'];
+const CREATION_TOOLS = ['circle', 'box'];
+const REGISTERED_TOOLS = [...SELECTION_TOOLS, ...CREATION_TOOLS];
 
-test('createEditor builds a tool registry with the built tools', () => {
+test('createEditor builds a tool registry with the built tools, Select active', () => {
   const editor = createEditor();
   assert.ok(editor.tools instanceof ToolRegistry);
   assert.notEqual(createEditor().tools, editor.tools);
   assert.deepEqual(editor.tools.list().map((tool) => tool.id).sort(), [...REGISTERED_TOOLS].sort());
-  assert.equal(editor.tools.active, null);
+  assert.equal(editor.tools.active?.id, 'select');
 });
 
-test('tool actions of registered tools activate them in Edit mode and give the mode reason in Simulate', () => {
+test('tool actions of registered tools activate them in Edit mode and follow the mode policy in Simulate', () => {
   const { actions, tools, modes } = createEditor();
   for (const id of REGISTERED_TOOLS) {
     const action = `tool:${id}`;
@@ -165,11 +167,24 @@ test('tool actions of registered tools activate them in Edit mode and give the m
     assert.equal(tools.active?.id, id, action);
   }
   modes.startSimulate();
-  for (const id of REGISTERED_TOOLS) {
+  for (const id of SELECTION_TOOLS) {
+    const action = `tool:${id}`;
+    assert.equal(actions.isEnabled(action), true, action);
+    assert.equal(actions.reason(action), null, action);
+  }
+  for (const id of CREATION_TOOLS) {
     const action = `tool:${id}`;
     assert.equal(actions.isEnabled(action), false, action);
     assert.equal(actions.reason(action), 'not available in Simulate mode', action);
   }
+});
+
+test('entering Animate with Circle active activates Select', () => {
+  const editor = createEditor();
+  const { actions, tools, modes } = editor;
+  actions.run('tool:circle');
+  modes.openClip(addClip(editor));
+  assert.equal(tools.active?.id, 'select');
 });
 
 test('tool actions of unregistered tools report not available yet', () => {

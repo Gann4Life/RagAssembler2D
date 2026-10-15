@@ -1,4 +1,4 @@
-import { pointInShape } from '../../lib/geometry.js';
+import { pointInShape, shapeBounds, shapeGeometryValid } from '../../lib/geometry.js';
 import { ROOT_UID } from '../model/model.js';
 import { placement } from './placement.js';
 import { HIT_RADIUS } from './style.js';
@@ -40,4 +40,49 @@ export function hitTest(model, camera, screen, { pose = null } = {}) {
     }
   }
   return hits;
+}
+
+function finiteBounds(bounds) {
+  return [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].every(Number.isFinite);
+}
+
+function boundsInside(bounds, box) {
+  return bounds.minX >= box.minX && bounds.maxX <= box.maxX && bounds.minY >= box.minY && bounds.maxY <= box.maxY;
+}
+
+function placedBounds(shape, transform) {
+  if (!shapeGeometryValid(shape)) return null;
+  try {
+    const bounds = shapeBounds(shape, transform);
+    return finiteBounds(bounds) ? bounds : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Everything inside a world box in the displayed pose: shapes lying entirely inside it (body order, then
+ * fixture order), then joints whose anchor lies inside it (`joints` order). Edges count as inside. The root,
+ * bodies and sprites are never returned; invalid shape geometry and non-finite anchors are skipped.
+ * @param {import('../model/model.js').Model} model Document model.
+ * @param {import('../../lib/geometry.js').Aabb} box World box, meters, Y up.
+ * @param {{ pose?: import('./bounds.js').Pose|null }} [options] Displayed pose, root-local; rest pose when omitted.
+ * @returns {number[]} Uids of type `shape`, then `joint`.
+ */
+export function boxTest(model, box, { pose = null } = {}) {
+  const placed = placement(model, pose);
+  const found = [];
+  for (const body of model.children(ROOT_UID, 'bodies')) {
+    const transform = placed.bodies.get(body);
+    for (const fixture of model.children(body, 'fixtures')) {
+      const bounds = placedBounds(model.get(fixture).props.shape, transform);
+      if (bounds && boundsInside(bounds, box)) found.push(fixture);
+    }
+  }
+  for (const joint of model.children(ROOT_UID, 'joints')) {
+    const anchor = placed.anchors.get(joint);
+    if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) continue;
+    if (anchor.x >= box.minX && anchor.x <= box.maxX && anchor.y >= box.minY && anchor.y <= box.maxY) found.push(joint);
+  }
+  return found;
 }

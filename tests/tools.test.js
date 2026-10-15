@@ -103,13 +103,17 @@ function drag(registry, steps = 2) {
 }
 
 function fakeView() {
-  const calls = { cursor: [], invalidations: 0, hits: [] };
+  const calls = { cursor: [], invalidations: 0, hits: [], boxes: [] };
   return {
     calls,
     view: {
       hitTest(screen) {
         calls.hits.push(screen);
         return [ROOT_UID];
+      },
+      boxTest(box) {
+        calls.boxes.push(box);
+        return [7, 8];
       },
       setCursor(css) {
         calls.cursor.push(css);
@@ -295,6 +299,22 @@ test('the context converts, snaps and reaches the view only while bound', () => 
   assert.deepEqual(ctx.hitTest({ x: 1, y: 1 }), []);
   ctx.invalidateOverlay();
   assert.equal(calls.invalidations, 1);
+});
+
+test('the context box test forwards to the bound view and is empty unbound', () => {
+  const services = core();
+  const { tool, context } = dragTool('select');
+  const registry = new ToolRegistry(services, [tool]);
+  const ctx = context();
+  const box = { minX: -1, minY: -2, maxX: 3, maxY: 4 };
+  assert.deepEqual(ctx.boxTest(box), []);
+  const { view, calls } = fakeView();
+  const unbind = registry.bindView(view);
+  assert.deepEqual(ctx.boxTest(box), [7, 8]);
+  assert.deepEqual(calls.boxes, [box]);
+  unbind();
+  assert.deepEqual(ctx.boxTest(box), []);
+  assert.equal(calls.boxes.length, 1);
 });
 
 test('activation applies the tool cursor and invalidates the overlay', () => {

@@ -238,6 +238,7 @@ export class ToolRegistry {
       snapLength: (length) => snapLength(length, settings),
       snapAngle: (angle, shift) => snapAngle(angle, shift),
       hitTest: (screen) => (this.#view ? this.#view.hitTest(screen) : []),
+      boxTest: (box) => (this.#view ? this.#view.boxTest(box) : []),
       setCursor: (css) => {
         this.#cursor = css ?? null;
         this.#applyCursor();
