@@ -303,10 +303,13 @@ body {
 }
 
 .dock-gutter:hover,
-.dock-gutter.is-dragging,
+.dock-gutter.is-dragging {
+  background: var(--focus);
+}
+
 .dock-gutter:hover .dock-grip,
 .dock-gutter.is-dragging .dock-grip {
-  background: var(--focus);
+  background: var(--text);
 }
 
 .dock-gutter:focus-visible {
