@@ -22,6 +22,7 @@ const DISPLAY_MODES = Object.freeze([
   Object.freeze({ value: 'both', label: 'Both' }),
 ]);
 const DISPLAY_DECIMALS = 4;
+const CONVERSION_PRECISION = 12;
 
 let popoverCount = 0;
 
@@ -33,6 +34,10 @@ function parseNumber(text) {
   const trimmed = text.trim();
   if (trimmed === '') return Number.NaN;
   return Number(trimmed);
+}
+
+function roundConversion(value) {
+  return Number.isFinite(value) ? Number(value.toPrecision(CONVERSION_PRECISION)) : value;
 }
 
 function inRange(spec, value) {
@@ -112,7 +117,7 @@ export function openSettings(button, { settings, document: documentData }) {
     {
       input: gridSize.input,
       current: () => formatNumber(toDisplay(settings.get('grid.size'), 'm', ppm())),
-      parse: (value) => fromDisplay(value, 'm', ppm()),
+      parse: (value) => roundConversion(fromDisplay(value, 'm', ppm())),
       valid: (value) => inRange(SETTING_SPECS['grid.size'], value),
       apply: (value) => settings.set('grid.size', value),
       editable: () => true,
