@@ -102,12 +102,11 @@ v1 supports **revolute (hinge) joints** only.
 
 ### 2.5 Collision rules
 - **Self-collision:** two shapes of the *same* ragdoll instance collide only if **both** have `selfCollide = true` (default `false`).
-- **Connected bodies:** two bodies connected by a joint never collide unless that joint has `collideConnected = true` (default `false`). This applies even when both shapes have `selfCollide`.
-- **Other objects:** shapes of different instances, or against the environment, collide according to the normal Box2D `filter` (`categoryBits`, `maskBits`), which the user sets per shape.
-- RagImporter (and the editor's Simulate mode) must reproduce these rules exactly:
-  - **Preferred:** a contact filter (`ShouldCollide`) that checks instance and `selfCollide` flags.
-  - **Fallback**, when the liquidfun.js binding cannot install a contact filter: every shape of an instance gets `groupIndex = −instanceId`, which disables *all* self-collision. A one-time warning is logged if any shape has `selfCollide = true`.
-  - The pinned build exposes a JS contact filter (`Box2D.JSContactFilter` + `b2World.SetContactFilter`), so the preferred path is available. How RagImporter installs it (one per world, alongside the host's own filtering) is still open ([§12](#12-open-items--to-verify)).
+- **Connected bodies:** two bodies connected by a joint never collide unless that joint has `collideConnected = true` (default `false`). This applies even when both shapes have `selfCollide`. Box2D enforces it with its own joint check, before any contact filter runs.
+- **Other objects:** shapes of different instances, or against the environment, collide according to the normal Box2D filter data, which applies even within one instance: `categoryBits` and `maskBits`, which the user sets per shape, and `groupIndex`, which the file does not store (always 0 at spawn) but a host may set through `rag.shape(name)`.
+- RagImporter (and the editor's Simulate mode) reproduces these rules in one of two modes, chosen per world:
+  - **Contact filter** (default): RagImporter installs one `Box2D.JSContactFilter` per world, shared by every instance in that world and by the host's bodies. Installing it replaces Box2D's default filtering, so its `ShouldCollide` evaluates, in order: (1) Box2D's default rule, reimplemented: equal non-zero `groupIndex` → collide if positive, else not; otherwise `(maskA & categoryB) ≠ 0 && (maskB & categoryA) ≠ 0`, all bit fields `& 0xffff`; (2) the self-collision rule above, for two shapes of the same instance; (3) the host's predicate, if set. A pair collides only if every step allows it. Installation, the shape registry and host integration are in [§7.5](#75-contact-filter-and-host-integration).
+  - **`groupIndex` fallback**, when the build has no `Box2D.JSContactFilter` or the host disables the filter (`RagImporter.configure({ contactFilter: false })`): every shape of an instance gets `groupIndex = −instanceId`, which disables *all* self-collision while instances still collide with each other and with the host. A warning is logged once per `RagDef` that has a shape with `selfCollide = true`.
 
 ---
 
@@ -860,7 +859,9 @@ app.ticker.add(() => {
 
 | Member | Description |
 |---|---|
-| `RagImporter.configure({ Box2D, PIXI })` | Optional; both keys optional. Sets the liquidfun.js `Box2D` namespace and/or the PIXI module to use instead of the globals. A key that is omitted keeps its previous setting. |
+| `RagImporter.configure({ Box2D, PIXI, contactFilter })` | Optional; every key optional. Sets the liquidfun.js `Box2D` namespace and/or the PIXI module to use instead of the globals. `contactFilter` (default `true`): `false` selects the `groupIndex` fallback ([§2.5](#25-collision-rules)) for worlds not yet in use. A key that is omitted keeps its previous setting. |
+| `RagImporter.setContactFilter(world, predicate)` | Sets or clears (`null`) the host's predicate `(fixtureA, fixtureB) → boolean` for that world's contact filter, installing the filter if needed ([§7.5](#75-contact-filter-and-host-integration)). Throws in fallback mode. |
+| `RagImporter.releaseWorld(world)` | Destroys the world's remaining instances, uninstalls and destroys its contact filter and forgets the world. Call it right before `Box2D.destroy(world)`. No-op for a world RagImporter never used. |
 | `RagImporter.parse(json) → RagDef` | Validates and builds an immutable definition. Throws `RagFormatError` with the error list. |
 | `RagImporter.validate(json) → { errors, warnings }` | Validation without throwing. |
 | `RagImporter.supportedVersions` | e.g. `[1]`. |
@@ -903,7 +904,7 @@ app.ticker.add(() => {
 | `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun (`Box2D.b2Body`, `Box2D.b2RevoluteJoint`, `Box2D.b2Fixture`) / PIXI objects, looked up by name. |
 | `bodies` / `joints` | Maps id → native object. |
 | `position`, `angle` | Follow `rootBody`. |
-| `destroy()` | Removes joints, then bodies, from the world ([§7.4](#74-native-memory)), destroys the view and clears listeners and overrides. Native objects obtained from the instance are invalid afterwards. |
+| `destroy()` | Removes its shapes from the contact filter registry, then joints, then bodies, from the world ([§7.4](#74-native-memory), [§7.5](#75-contact-filter-and-host-integration)), destroys the view and clears listeners and overrides. Native objects obtained from the instance are invalid afterwards. The host never destroys an instance's bodies or joints itself. |
 
 ### 7.2 Spawn and flipX
 - Every body's world transform is `spawnTransform × rootLocal`. Joints are created with `Box2D.b2RevoluteJointDef` and its `Initialize(bodyA, bodyB, anchorWorld)` while the bodies are at rest, so LiquidFun computes the reference angle that matches the rest pose (`referenceAngle = angleB − angleA`).
@@ -917,7 +918,7 @@ app.ticker.add(() => {
   - `angle` channel values are negated during evaluation;
   - `aimAxis` becomes `π − aimAxis`;
   - each sprite's horizontal scale and its offset x are negated.
-- Self-collision is set up at spawn time following [§2.5](#25-collision-rules).
+- Self-collision is set up at spawn time following [§2.5](#25-collision-rules) and [§7.5](#75-contact-filter-and-host-integration): each fixture is registered right after `CreateFixture`, before any `world.Step` can pair it.
 
 ### 7.3 Sprites and rendering
 - Each shape with a sprite gets one `PIXI.Sprite` (anchor 0.5) inside `rag.view`.
@@ -935,9 +936,21 @@ The pinned liquidfun.js build has a **fixed 16 MiB heap that cannot grow**. Ever
 4. **`update()` and `sync()` allocate nothing.** Vector arguments use one scratch `b2Vec2`, per instance or per module, written with `set_x` / `set_y`.
 5. **By-value vector getters share one static temporary** (`GetLinearVelocity`, `GetWorldPoint`, …): read its components into numbers before the next such call.
 6. **Teardown destroys joints before bodies** and drops the cached wrappers. `DestroyBody` removes attached joints natively, but their JS wrappers stay and point at freed memory.
-7. **The contact filter lives as long as the world.** It is created once per host world and destroyed only when the host tears the world down.
+7. **The contact filter lives as long as the world.** RagImporter creates it on the world's first `spawn` or `setContactFilter` and keeps it installed when the last instance is destroyed. Only `releaseWorld` uninstalls it (`world.SetContactFilter(null)`) and then destroys it; destroying a filter that is still installed is a use-after-free on the next `Step`.
+8. **Unused worlds are destroyed.** A `b2World` takes a large part of the heap; about 15 live worlds abort `Step`. Hosts, the editor's Simulate mode and tests call `releaseWorld(world)` and then `Box2D.destroy(world)` for every world they discard.
 
 Under these rules the heap does not grow: `tests/liquidfun-api.test.js` checks 20,000 create/destroy cycles of two bodies and a joint, and 10⁶ `SetTransform` + `ApplyLinearImpulse` calls with one reused `b2Vec2`. A leaked `b2Vec2` costs 16 bytes, so about 676,000 leaks, under 10 minutes of one leak per joint per step for a 20-joint ragdoll at 60 Hz, abort the module.
+
+### 7.5 Contact filter and host integration
+The binding has no `b2World.GetContactFilter`, and a world holds one filter: a second `SetContactFilter` replaces the first, and `SetContactFilter(null)` leaves the world with **no filtering at all** (Box2D's default rule is not restored). RagImporter therefore owns the filter of every world it spawns into, and the host plugs into it instead of installing its own. Verified in Node by `tests/liquidfun-contact-filter.test.js`.
+
+- **Per-world state.** RagImporter keeps, per `b2World` wrapper, one `JSContactFilter`, a registry and the host predicate. One filter serves every instance in the world.
+- **Registry.** Fixture `userData` only stores an integer, so shapes are identified by pointer: the registry maps `Box2D.getPointer(fixture)` (stable, and equal to the pointer `ShouldCollide` receives) to `{ instance, selfCollide }`. `spawn` adds an entry per fixture; `destroy` removes them **before** `DestroyBody`, because freed fixture memory is reused by later fixtures. Fixtures not in the registry (host bodies) skip the self-collision rule.
+- **`ShouldCollide(ptrA, ptrB)`** wraps both pointers with `Box2D.wrapPointer(ptr, Box2D.b2Fixture)` and applies the three steps of [§2.5](#25-collision-rules), stopping at the first that refuses. It allocates nothing. Box2D calls it only when a pair of fixtures starts overlapping, so it costs little per step (20 humanoids of 10 shapes: about 120 calls per step, +8 % step time).
+- **Host predicate.** `RagImporter.setContactFilter(world, (fixtureA, fixtureB) => boolean)` is called only for pairs that passed steps 1 and 2, including host–host pairs. It can only exclude pairs, never make the default rule collide pairs it rejects. It must not throw and must not change the world. Setting or clearing it affects only pairs that start overlapping afterwards; existing contacts are kept. Calling it before any `spawn` installs the filter, so a host can route all its filtering through RagImporter from the start.
+- **Host rules.** A host never calls `world.SetContactFilter` on a world RagImporter uses: before the first spawn RagImporter's filter replaces it, after it RagImporter's filter is silently dropped, together with self-collision and the default rule. A host that needs its own filter (for example to collide pairs the default rule excludes) uses `configure({ contactFilter: false })` and gets the `groupIndex` fallback.
+- **Fallback.** With no filter, RagImporter only writes `groupIndex = −instanceId` on the instance's fixtures. Instance ids are the smallest unused positive integer; `spawn` throws when 32,767 instances are alive in fallback mode (16-bit `groupIndex`). `setContactFilter` throws in this mode.
+- **Teardown.** `releaseWorld(world)` destroys the world's remaining instances, calls `world.SetContactFilter(null)`, `Box2D.destroy`s the filter and forgets the world ([§7.4](#74-native-memory) rules 7 and 8). The world is left with no filtering, so the host destroys it next. Spawning into the same world again starts a new filter.
 
 ---
 
@@ -950,7 +963,7 @@ Under these rules the heap does not grow: `tests/liquidfun-api.test.js` checks 2
 
    The host already loads liquidfun.js and PIXI.js.
 3. **Load once:** `fetch` → `RagImporter.parse` → `PIXI.Assets.load(def.spriteUrls(base))`. Keep the `RagDef`.
-4. **Spawn** one `RagInstance` per character with `def.spawn(world, { parent, … })`.
+4. **Spawn** one `RagInstance` per character with `def.spawn(world, { parent, … })`. For collision filtering beyond `categoryBits` / `maskBits` / `groupIndex`, pass a predicate to `RagImporter.setContactFilter(world, …)`; never call `world.SetContactFilter` ([§7.5](#75-contact-filter-and-host-integration)).
 5. **Drive it from game logic** with `play` / `queue` / `stop` by **clip key**, for example:
    - spawn → `alive` + `idle`;
    - movement → `walk` / `run` on layer 0;
@@ -960,7 +973,8 @@ Under these rules the heap does not grow: `tests/liquidfun-api.test.js` checks 2
 7. **React** to clip events (`footstep`, `fully_dead`, …) with `rag.on`.
 8. **Access physics and visuals directly** through `rag.body(name)`, `rag.joint(name)` and `rag.sprite(name)` for gameplay (impulses on hit, damage zones by body name, attachments, tinting).
 9. **Each frame:** `rag.update(dt)` → `world.Step(dt, …)` → `rag.sync()`.
-10. **Iterate:** re-exporting from the editor never breaks code **as long as clip keys and body/joint/shape names are kept**. A changed format version is reported by `parse` with a clear error.
+10. **Tear down:** `rag.destroy()` for a single character; for the whole world, `RagImporter.releaseWorld(world)` → `Box2D.destroy(world)`.
+11. **Iterate:** re-exporting from the editor never breaks code **as long as clip keys and body/joint/shape names are kept**. A changed format version is reported by `parse` with a clear error.
 
 ---
 
@@ -1019,7 +1033,8 @@ demo/                      production preview (§10)
 
 ## 12. Open items / to verify
 
-- **Contact filter integration:** the pinned build exposes `new Box2D.JSContactFilter()`, whose `ShouldCollide(fixtureAPtr, fixtureBPtr)` receives raw pointers (wrap with `Box2D.wrapPointer(ptr, Box2D.b2Fixture)`), installed with `world.SetContactFilter`; returning `false` disables the contact (verified). Still to decide: a world holds one filter, shared by every instance and possibly wanted by the host; a JS filter replaces Box2D's default category/mask/group test, which must then be reproduced (not yet verified); and who creates and destroys it per world ([§7.4](#74-native-memory)). `JSContactListener` also exists. Until decided, the §2.5 fallback stays specified.
+- **Contact filter edge cases:** verify in the pinned build that the joint `collideConnected` check runs before the JS filter (as in upstream Box2D), and what an exception thrown by `ShouldCollide` (for example by a host predicate) does to `world.Step` and the module ([§7.5](#75-contact-filter-and-host-integration)).
+- **Resolved – contact filter integration:** RagImporter installs one `JSContactFilter` per world that reimplements Box2D's default rule, adds the self-collision rule through a pointer-keyed registry and ANDs an optional host predicate; `releaseWorld` uninstalls and destroys it; the `groupIndex` fallback remains for builds without `JSContactFilter` and hosts that opt out ([§2.5](#25-collision-rules), [§7.5](#75-contact-filter-and-host-integration)). Verified in Node by `tests/liquidfun-contact-filter.test.js`.
 - **Resolved – liquidfun.js API surface:** the pinned build exposes `b2RevoluteJointDef.Initialize`, the `b2RevoluteJoint` motor, limit, angle and speed methods (after `Box2D.castObject`), fixture filter data, `b2MouseJointDef` / `b2MouseJoint.SetTarget`, `world.DestroyBody` / `DestroyJoint`, `getPointer`, `compare` and `Box2D.destroy` (§3, §7.2). Heap behavior and allocation rules are in §7.4. Verified in Node by `tests/liquidfun-api.test.js`. Side effect: in Node the build installs a `process.on('uncaughtException')` handler.
 - **Resolved – liquidfun.js build:** pinned to the doebi/liquidfun.js v1.1.0 Emscripten (asm.js) build. It exposes a single global `Box2D` namespace with WebIDL accessors (§7). Checksum and provenance in `docs/development.md`.
 - **Resolved – PIXI.js version:** pinned to 8.21.0. `Assets`, `sortableChildren`/`zIndex` and `eventMode` + `pointermove` were verified in the browser (`docs/development.md`).
