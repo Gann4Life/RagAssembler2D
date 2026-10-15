@@ -20,7 +20,7 @@
 - [x] #7 Editor shell with index.html, PIXI app and header
 - [x] #8 Dockable panel system with tabs, resize handles and saved layout
 - [x] #9 Editor data model for ragdolls, clips and sprite assets
-- [ ] #10 Command stack with undo/redo and editor modes
+- [x] #10 Command stack with undo/redo and editor modes
 - [ ] #11 Viewport navigation, grid, snapping and display modes
 - [ ] #12 Viewport selection, hover, gizmos and overlays
 - [ ] #13 Select and Select Box tools

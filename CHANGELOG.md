@@ -22,6 +22,9 @@ All notable changes to this project are documented here. The format follows [Kee
 - Window menu to open or close each panel and to reset the layout, reachable from the keyboard.
 - The panel layout is saved in the browser and restored on the next visit; Reset layout returns to the default.
 - The Timeline starts folded to its tab bar, with a button (or a double click on the bar) to fold and expand it.
+- Editor keyboard shortcuts of the hotkey table (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+S, Ctrl+O, Ctrl+G, Ctrl+D, Space, Del and others) are captured by the editor and no longer trigger the browser's own shortcuts; they are ignored while typing in a text field.
+- Undo and Redo buttons enable once there is history to step through (a 200-step command stack with Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y). No editing tool records commands yet, so they stay disabled for now.
+- Editor modes (Edit, Animate, Simulate) with a per-mode policy; a disabled header button's tooltip now says why, e.g. "Undo (Ctrl+Z) (not available in Simulate mode)".
 
 ### Changed
 - Documentation: `docs/architecture.md` now defines the editor core architecture and module conformance rules, and the new `docs/schema.md` lists the property schema of every `.rag.json` object.
