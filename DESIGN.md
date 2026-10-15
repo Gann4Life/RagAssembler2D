@@ -329,7 +329,7 @@ The workspace below the header is tiled by panels: Viewport, Hierarchy, Assets, 
   - The folded state is part of the saved layout, is not undoable, and the Window menu checkbox only means "open", folded or not.
 - **Window resize.** Only the fill area grows or shrinks. Once it reaches its minimum, the other areas of that split shrink in proportion to their size above their own minimums; only when every area is at its minimum does the workspace scroll. These shrunk sizes are not stored: the stored sizes return when the window grows again. The exception is a handle resize: it stores the on-screen sizes of every fixed area of its split, except a folded Timeline, so the resized area starts from what the user sees.
 - **Window menu.** Panels are closed with the × on their tab (or a middle click), and reopened or closed from the **Window** menu ([§5.3](#53-header)). A reopened panel returns to its previous stack and position if that stack still exists; otherwise it joins a stack holding a panel of its default group; otherwise it docks to its default workspace edge with its default size.
-- **Persistence.** The layout is saved per browser after every change and restored on load. A stored layout that cannot be read is ignored with a console warning, and the default is used; panels missing from it are added by the reopen rule. If browser storage is unavailable, the layout lives only for the session.
+- **Persistence.** The layout is saved per browser after every change and restored on load. A stored layout that cannot be read is ignored with a console warning, and the default is used; this includes layouts from before the Tools left the dock, which still name a Tools panel. Panels missing from it are added by the reopen rule. If browser storage is unavailable, the layout lives only for the session.
 - **Reset layout** restores the default immediately (Timeline folded), with no confirmation, and forgets the stored layout. Layout changes, including Reset and folding, are not undoable.
 
 Default layout. The positions given as "Default location" in [§5.6–5.8](#56-hierarchy-assets-and-problems-panels) refer to it:
@@ -348,7 +348,7 @@ T: Tools overlay (§5.5), not a panel.
 
 | Panel | Default group and edge | Default size | Minimum (w × h) |
 |---|---|---|---|
-| Viewport | fixed, center | the remaining area | 240 × 160 px |
+| Viewport | fixed, center | the remaining area | 240 × 168 px (fits the two-column Tools overlay, [§5.5](#55-tools)) |
 | Hierarchy, Assets, Problems | one stack, right top | 300 px wide; half the right column | 200 × 96 px |
 | Inspector | own stack, right bottom | 300 px wide; the rest of the right column | 200 × 96 px |
 | Timeline | own stack, bottom, full width | 220 px high when expanded; starts **folded** (28 px) | 320 × 120 px (28 px high while folded) |
@@ -447,13 +447,15 @@ Location: top, full width. One toolbar row with four button groups divided by se
 The tools live in a **floating toolbar overlay inside the Viewport panel**, not in a dock panel. It is always visible, has no toggle and is not listed in the Window menu.
 
 **Layout.**
-- A sibling of the viewport host inside the Viewport panel, stacked over it in the same grid cell, top-left with an 8 px margin. The Viewport panel isolates its stacking context, so the overlay never covers other panels or popups.
-- A vertical strip: panel surface at 92 % opacity, 1 px border, 6 px radius, 4 px padding; 32 × 32 px buttons with 20 px icons and 2 px gaps; 40 × 299 px.
+- A sibling of the viewport host inside the Viewport panel, before it in document order, stacked over it in the same grid cell, top-left with an 8 px margin. The Viewport panel isolates its stacking context, so the overlay never covers other panels or popups, and the overlay never changes the size of the host.
+- A vertical strip: panel surface at 92 % opacity, 6 px radius, and 4 px from its outer edge to the buttons (1 px border plus 3 px padding). Items are 32 × 32 px buttons with 20 px icons and separators 5 px tall (a 1 px line, as wide as a button, centered), with 2 px gaps between consecutive items. One column is 40 × 299 px.
 - Buttons in four groups with separators: selection (Select, Select Box), manipulation (Manipulate, Pose), creation (Circle, Box, Polygon), joints (Hinge Joint).
-- When the viewport host is shorter than 315 px, the strip switches to two columns (76 × 149 px). This requires a Viewport minimum of 240 × 168 px; the issue that builds the overlay raises the §5.2 minimum to that value.
-- Loading by drag & drop listens on the whole Viewport panel, so a drop on the overlay also loads ([§5.3](#53-header)).
+- **Two columns** when the strip and its two 8 px margins do not fit the viewport host's height, i.e. when the host is shorter than 299 + 16 = 315 px: the first column holds selection and manipulation, the second creation and joints, each with a separator between its two groups, 4 px apart; 76 × 149 px. The separator between manipulation and creation is not shown. Button order (document, focus and keyboard) does not change. The Viewport minimum height of 168 px ([§5.2](#52-panels)) fits this layout (149 + 16 = 165 px).
+- The overlay's current width (40 or 76 px) is the "Tools overlay width" that framing insets by ([§5.4](#54-viewport)).
+- Pointer presses, moves and the wheel over the overlay never reach the viewport: no tool input, no hover, no navigation; a wheel over it neither zooms nor scrolls the page.
+- Loading by drag & drop listens on the whole Viewport panel, so a drop on the overlay also loads ([§5.3](#53-header)); the overlay never stops drag events.
 
-**Icons.** Inline SVG drawn in the repository: `viewBox` 24, stroke `currentColor` at 1.5, round caps.
+**Icons.** Inline SVG drawn in the repository, no third-party assets and no external references: `viewBox` 24, no fill, stroke `currentColor` at 1.5, round caps and joins; small solid details (dots, the pin) may fill with `currentColor`. Icons are decorative (`aria-hidden`).
 
 | Tool | Glyph |
 |---|---|
@@ -462,19 +464,21 @@ The tools live in a **floating toolbar overlay inside the Viewport panel**, not 
 | Manipulate | Four-way move cross plus a 270° rotation arc. |
 | Pose | Bent limb of three dots plus a drag arrow. |
 | Circle | Circle, r = 8. |
-| Box | Solid 16 × 12 rectangle. |
+| Box | 16 × 12 rectangle, solid (not dashed) outline. |
 | Polygon | Convex pentagon with vertex dots. |
 | Hinge Joint | Two overlapping bars, a pin and a small arc. |
 
 **States.**
-- The active tool has `aria-pressed="true"`; exactly one button is pressed. Select is active on load. The active tool is not persisted.
-- Tools that are not built yet, or that the current mode disables ([§5.1](#51-editor-modes)), use `aria-disabled` and stay focusable. Until the tool registry exists, every button is disabled and none is pressed.
-- **Tooltip:** "*Label* (*Key*)", built like the header tooltips ([§5.3](#53-header)), plus " (not available yet)" or " (not available in *Mode* mode)" when disabled. It is a custom tooltip, shown after 400 ms of hover or immediately on keyboard focus, hidden from assistive technology (`aria-hidden`); buttons have an accessible name and no `title` attribute.
+- The active tool has `aria-pressed="true"`, every other button `"false"`; at most one button is pressed. Select is active on load once it is built (#13); while it is not, no tool is active on load and none is pressed. The active tool is not persisted.
+- Tools that are not built yet, or that the current mode disables ([§5.1](#51-editor-modes)), use `aria-disabled` and stay focusable. Enabled state and reason come from the `tool:<id>` actions, exactly like header buttons: a tool whose implementation is not registered is disabled with "(not available yet)" in every mode; a built tool that the mode policy refuses is disabled with "(not available in *Mode* mode)". Until the tool registry is built into the editor, every button is disabled and none is pressed.
+- Each button's accessible name is the tool label, and `aria-keyshortcuts` is its hotkey.
+- **Tooltip:** "*Label* (*Key*)", built like the header tooltips ([§5.3](#53-header)), plus " (not available yet)" or " (not available in *Mode* mode)" when disabled. It is a custom tooltip, shown after 400 ms of mouse hover or immediately when the button gets `:focus-visible` focus, and hidden on pointer leave, blur, a press and Esc. It sits 8 px to the right of its button, vertically centered, kept inside the window, above every panel. One tooltip shows at a time, and its text follows state changes while shown. It is hidden from assistive technology (`aria-hidden`); buttons have no `title` attribute.
 
 **Keyboard.**
-- `role="toolbar"`, labelled "Tools", `aria-orientation="vertical"`, one Tab stop whose roving stop is the active tool. Up/Down and Left/Right move and wrap, Home/End jump, Enter/Space activate. These keys do not trigger global hotkeys ([§5.9](#59-hotkeys-defaults)).
+- `role="toolbar"`, labelled "Tools", `aria-orientation="vertical"`, one Tab stop. Up/Down and Left/Right both move through the buttons in their order (in either layout) and wrap, Home/End jump to the first/last; disabled buttons are included. Enter/Space activate the focused button, which keeps focus. Esc hides the tooltip. These keys do not trigger global hotkeys ([§5.9](#59-hotkeys-defaults)).
+- The roving stop is the active tool (the first button when none is active). While focus is inside the toolbar it stays on the focused button; when focus leaves the toolbar, the stop returns to the active tool.
 - Tab order: inside the Viewport, Tools come before the viewport host; the Viewport takes its place in the layout order ([§5.2](#52-panels)). In the default layout this is header → Tools → viewport host → the other panels.
-- A mouse click activates the tool and moves focus to the viewport host. Tool hotkeys work wherever focus is, except in text fields.
+- A mouse click on an enabled button activates the tool and moves focus to the viewport host; on a disabled button it does nothing. Clicking the active tool again only moves focus. Tool hotkeys work wherever focus is, except in text fields.
 
 **Common rules.**
 - **Input.** Tools receive left and right presses on the viewport, and pointer moves over it with or without a button held. The middle button and Space + left drag navigate and never reach tools ([§5.4](#54-viewport)); after a pan or zoom during a drag, the tool sees the pointer at its new world position.
