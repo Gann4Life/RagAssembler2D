@@ -22,7 +22,7 @@
 - [x] #9 Editor data model for ragdolls, clips and sprite assets
 - [x] #10 Command stack with undo/redo and editor modes
 - [x] #11 Viewport navigation, grid, snapping and display modes
-- [ ] #12 Viewport selection, hover, gizmos and overlays
+- [x] #12 Viewport selection, hover, gizmos and overlays
 - [ ] #13 Select and Select Box tools
 - [ ] #14 Circle and Box tools with SHIFT/ALT/CTRL modifiers
 - [ ] #15 Convex Polygon tool with up to 8 vertices
