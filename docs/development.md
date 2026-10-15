@@ -38,7 +38,18 @@ Current coverage:
 - `tests/model.test.js` checks `js/model/model.js` (uids, schema defaults, `applyOps` and `batch` change events and rollback, reset, id allocation, collection rejection in props).
 - `tests/liquidfun-api.test.js` loads `vendor/liquidfun.js` in Node and checks the API surface RagImporter uses and the heap rules of `DESIGN.md` §7.4 (20,000 create/destroy cycles, 10⁶ vector-setter calls).
 - `tests/liquidfun-contact-filter.test.js` loads `vendor/liquidfun.js` in Node and checks the contact filter behavior RagImporter relies on ([`DESIGN.md` §7.5](../DESIGN.md#75-contact-filter-and-host-integration)): the JS filter replaces the default rule, the reimplementation of that rule, per-shape self-collision, replacement and uninstall, one filter across worlds, the `groupIndex` fallback and filter cost.
+- `tests/architecture.test.js` runs the conformance checks below on the real sources; `tests/architecture-checks.test.js` proves each check fails on an in-memory violation. Helpers live in `tests/helpers/` (`scan.js`: tokenizer and import scanner; `architecture.js`: checks).
 - **Native worlds in tests:** the heap is a fixed 16 MiB and is not reclaimed by garbage collection. Every test that creates a `b2World` must destroy it (and any filter it installed) before it ends. About 15 live worlds exhaust the heap and abort `Step` ([`DESIGN.md` §7.4](../DESIGN.md#74-native-memory)).
+
+### Architecture conformance checks
+
+The checks scan `js/`, `lib/`, `demo/` and `tests/` (never `vendor/`) with a small tokenizer that skips strings, templates, regex literals and comments. A violation is reported as `path:line: message`. Checks on modules that do not exist yet pass trivially and start applying when the files appear.
+
+- **Layers are read from `docs/architecture.md`:** the Core row of the layers table (a `/*` entry matches a folder), the `Pure:` line of the component diagram (`lib/<name>.js`), and the `js/` modules named in the `tests/` row of the dependency table (UI modules tests may import). Every other `js/` file is UI. Editing those parts of the document changes the checks; the test fails if they cannot be parsed. Only the panel-module rule (`js/panels/*.js` other than `layout.js` and `dock.js`) is fixed in code.
+- **Imports:** `lib/` imports only `lib/`; `demo/` imports only `demo/`, `vendor/` and `lib/ragimporter.js`; `js/` imports only `lib/` and `js/`; a core module imports only `lib/` and core modules; a panel module imports no other `js/panels/` module (the dock modules included); `tests/` import no `js/` UI module except the listed ones. Static, re-export, dynamic `import('…')` and `require('…')` with a string argument are scanned.
+- **Globals:** a pure module (the `lib/` pure set and the `js/` core) may not name `document`, `window`, `PIXI`, `Box2D` or a `b2*` identifier. Property accesses (`x.document`) and object keys are not references.
+- **Model mutation:** outside `tests/`, `.applyOps(` and `.batch(` may be called only in `js/commands/history.js`, and `.reset(` only in `js/model/io.js`. A call counts when its receiver is an identifier ending in `model` (`model.reset(…)`, `this.model.batch(…)`); other receivers such as `dock.reset()` are not model calls.
+- **Comments:** only `/** … */` blocks are allowed; any `//` or `/* */` comment fails.
 
 Tests for validation, canonical serialization (round-trip), the animation evaluator and event timing are **(planned)**.
 
