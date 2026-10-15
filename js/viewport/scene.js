@@ -4,8 +4,8 @@ import { ROOT_UID } from '../model/model.js';
 
 /**
  * @typedef {object} Scene
- * @property {object} view Root `PIXI.Container`: the world container (sprites, shapes and gizmos layers, placed
- *   by the camera) and the screen-space overlay layer.
+ * @property {object} view Root `PIXI.Container` holding the world container (sprites and shapes layers, placed
+ *   by the camera).
  * @property {(pose: import('./bounds.js').Pose|null) => void} setPose Overrides body transforms (root-local)
  *   without touching the model; `null` returns to the rest pose.
  * @property {() => import('./bounds.js').Pose|null} pose The current override.
@@ -86,12 +86,8 @@ export function createScene(PIXI, { model, camera, settings }) {
   spritesLayer.sortableChildren = true;
   const shapesLayer = new PIXI.Container();
   shapesLayer.label = 'shapes';
-  const gizmosLayer = new PIXI.Container();
-  gizmosLayer.label = 'gizmos';
-  const overlayLayer = new PIXI.Container();
-  overlayLayer.label = 'overlay';
-  world.addChild(spritesLayer, shapesLayer, gizmosLayer);
-  view.addChild(world, overlayLayer);
+  world.addChild(spritesLayer, shapesLayer);
+  view.addChild(world);
 
   const entries = new Map();
   const dirtyTransforms = new Set();

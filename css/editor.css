@@ -501,6 +501,7 @@ body.dock-resizing-column * {
   min-height: 0;
   overflow: hidden;
   touch-action: none;
+  cursor: var(--tool-cursor, default);
 }
 
 #viewport-host:focus-visible {
