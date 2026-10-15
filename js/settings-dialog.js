@@ -21,6 +21,11 @@ const DISPLAY_MODES = Object.freeze([
   Object.freeze({ value: 'sprites', label: 'Sprites' }),
   Object.freeze({ value: 'both', label: 'Both' }),
 ]);
+const OVERLAYS = Object.freeze([
+  Object.freeze({ key: 'overlay.names', label: 'Names' }),
+  Object.freeze({ key: 'overlay.centers', label: 'Centers of mass' }),
+  Object.freeze({ key: 'overlay.contacts', label: 'Contacts' }),
+]);
 const DISPLAY_DECIMALS = 4;
 const CONVERSION_PRECISION = 12;
 
@@ -48,7 +53,7 @@ function inRange(spec, value) {
 
 /**
  * Opens the Settings popover below a button, aligned to its right edge: a non-modal `role="dialog"` labelled
- * "Settings" with Grid, Snapping, Display and Document controls (`DESIGN.md` §5.3). Focus moves to its first
+ * "Settings" with Grid, Snapping, Display, Overlays and Document controls (`DESIGN.md` §5.3). Focus moves to its first
  * control and Tab wraps inside it. Esc closes it and returns focus to the button; a press outside closes it
  * without moving focus. Checkboxes and radios apply at once through `settings.set`; number fields apply on Enter
  * or blur, are marked `aria-invalid` while invalid, and revert on blur. Grid size is shown in px at the
@@ -102,12 +107,14 @@ export function openSettings(button, { settings, document: documentData }) {
   });
   const displayGroup = group('Display', radios.map((radio) => radio.row));
   displayGroup.setAttribute('role', 'radiogroup');
+  const overlays = OVERLAYS.map(({ key, label }) => ({ key, ...checkbox(key.replace('.', '-'), label) }));
   const pixelsPerMeter = numberField('pixels-per-meter', 'Pixels per meter', 'px/m', { min: '0' });
 
   dialog.append(
     group('Grid', [showGrid.row, gridSize.row, subdivisions.row]),
     group('Snapping', [snapGrid.row]),
     displayGroup,
+    group('Overlays', overlays.map((overlay) => overlay.row)),
     group('Document', [pixelsPerMeter.row]),
   );
 
@@ -173,6 +180,7 @@ export function openSettings(button, { settings, document: documentData }) {
     showGrid.input.checked = settings.get('grid.visible');
     snapGrid.input.checked = settings.get('snap.grid');
     for (const radio of radios) radio.input.checked = radio.input.value === settings.get('display.mode');
+    for (const overlay of overlays) overlay.input.checked = settings.get(overlay.key);
     const editable = documentData.editable();
     pixelsPerMeter.input.readOnly = !editable;
     pixelsPerMeter.input.title = editable ? '' : 'Pixels per meter is read-only outside Edit mode';
@@ -185,6 +193,9 @@ export function openSettings(button, { settings, document: documentData }) {
     radio.input.addEventListener('change', () => {
       if (radio.input.checked) settings.set('display.mode', radio.input.value);
     });
+  }
+  for (const overlay of overlays) {
+    overlay.input.addEventListener('change', () => settings.set(overlay.key, overlay.input.checked));
   }
   for (const field of numbers) {
     field.input.addEventListener('input', () => {
