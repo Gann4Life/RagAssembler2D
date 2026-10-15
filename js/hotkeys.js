@@ -1,3 +1,5 @@
+import { TOOL_SPECS } from './tools/tool.js';
+
 /**
  * Default key binding. `keys` is `[Ctrl+][Shift+][Alt+]<key>`, where `<key>` is an upper-case letter,
  * a digit, `.`, `Space`, `Del`, `Esc` or `Home`.
@@ -7,11 +9,13 @@
  */
 
 /**
- * Default bindings of `DESIGN.md` §5.9 in table order. Tool rows are added with the tools.
+ * Default bindings of `DESIGN.md` §5.9 in table order: first one `tool:<id>` row per `TOOL_SPECS` entry, for
+ * every tool whether registered or not, then the other actions.
  * @type {ReadonlyArray<Readonly<Hotkey>>}
  */
 export const HOTKEYS = Object.freeze(
   [
+    ...TOOL_SPECS.map((tool) => ({ keys: tool.hotkey, action: `tool:${tool.id}` })),
     { keys: 'S', action: 'sprite-edit' },
     { keys: 'Del', action: 'delete' },
     { keys: 'Ctrl+Z', action: 'undo' },
@@ -84,13 +88,15 @@ export function matchHotkey(event) {
 }
 
 /**
- * Routes a `keydown` event: ignored when already handled or typed into a text field; offered to the tools
- * while the viewport has focus; otherwise matched against {@link HOTKEYS}. A match calls `preventDefault`
- * and runs the action, except on key repeat for actions that are not repeatable. Space matches only when the
- * viewport has focus or the target is the page body. Reads only the event and its target.
+ * Routes a `keydown` event: ignored when already handled or typed into a text field; offered to the active
+ * tool while the viewport has focus (the registry never offers Escape, so it reaches the `escape` action);
+ * otherwise matched against {@link HOTKEYS}. A match calls `preventDefault` and runs the action, except on
+ * key repeat for actions that are not repeatable. Space matches only when the viewport has focus or the
+ * target is the page body. Reads only the event and its target.
  * @param {KeyboardEvent} event Keyboard event.
- * @param {{ actions: import('./actions.js').ActionRegistry, tools: { key(event: KeyboardEvent): boolean }|null,
- *   viewportFocused: boolean }} context Action registry, tool registry (or `null`) and viewport focus.
+ * @param {{ actions: import('./actions.js').ActionRegistry,
+ *   tools: Pick<import('./tools/registry.js').ToolRegistry, 'key'>|null, viewportFocused: boolean }} context
+ *   Action registry, tool registry (or `null`) and viewport focus.
  * @returns {boolean} Whether the key was consumed by a tool or a hotkey.
  */
 export function dispatchKey(event, { actions, tools = null, viewportFocused = false }) {

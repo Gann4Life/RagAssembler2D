@@ -4,6 +4,14 @@ import { readFileSync } from 'node:fs';
 import { HOTKEYS, matchHotkey, dispatchKey } from '../js/hotkeys.js';
 import { ActionRegistry } from '../js/actions.js';
 import { HEADER_GROUPS } from '../js/header.js';
+import { Model } from '../js/model/model.js';
+import { History } from '../js/commands/history.js';
+import { Selection } from '../js/model/selection.js';
+import { Modes } from '../js/modes.js';
+import { Settings } from '../js/settings.js';
+import { Camera } from '../js/viewport/camera.js';
+import { TOOL_SPECS, defineTool } from '../js/tools/tool.js';
+import { ToolRegistry } from '../js/tools/registry.js';
 
 const DESIGN = readFileSync(new URL('../DESIGN.md', import.meta.url), 'utf8');
 
@@ -17,7 +25,7 @@ function designHotkeyKeys() {
     rows.push(cells[0], cells[2]);
   }
   return rows
-    .filter((cell) => cell !== '' && !/^[A-Z]( \/ [A-Z])+$/.test(cell))
+    .filter((cell) => cell !== '')
     .flatMap((cell) => cell.split(' / '))
     .flatMap((cell) => cell.split(', '));
 }
@@ -56,7 +64,7 @@ function registry(ids, options = {}) {
   return { actions, runs };
 }
 
-test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, without the tool rows', () => {
+test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, tool rows first', () => {
   assert.deepEqual(
     HOTKEYS.map((row) => row.keys),
     designHotkeyKeys(),
@@ -64,6 +72,14 @@ test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, without the tool ro
   assert.deepEqual(
     HOTKEYS.map((row) => row.action),
     [
+      'tool:select',
+      'tool:select-box',
+      'tool:manipulate',
+      'tool:pose',
+      'tool:circle',
+      'tool:box',
+      'tool:polygon',
+      'tool:hinge',
       'sprite-edit',
       'delete',
       'undo',
@@ -87,6 +103,59 @@ test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, without the tool ro
   for (const { keys } of HOTKEYS) {
     assert.match(keys, /^(Ctrl\+)?(Shift\+)?(Alt\+)?([A-Z0-9.]|Space|Del|Esc|Home)$/);
   }
+});
+
+test('tool rows are built from TOOL_SPECS', () => {
+  assert.deepEqual(
+    HOTKEYS.slice(0, TOOL_SPECS.length),
+    TOOL_SPECS.map((tool) => ({ keys: tool.hotkey, action: `tool:${tool.id}` })),
+  );
+});
+
+test('tool hotkeys match single letters without modifiers', () => {
+  assert.equal(matchHotkey(keyEvent('v')), 'tool:select');
+  assert.equal(matchHotkey(keyEvent('R')), 'tool:box');
+  assert.equal(matchHotkey(keyEvent('h')), 'tool:hinge');
+  assert.equal(matchHotkey(keyEvent('v', { shiftKey: true })), null);
+  assert.equal(matchHotkey(keyEvent('n', { ctrlKey: true })), null);
+});
+
+test('with the tool registry, the focused viewport offers keys to the tool but never Escape', () => {
+  const model = new Model();
+  const history = new History(model);
+  const modes = new Modes(model);
+  const seen = [];
+  const tools = new ToolRegistry(
+    { model, history, selection: new Selection(model), modes, settings: new Settings(), camera: new Camera() },
+    [
+      defineTool({
+        id: 'select',
+        keyDown(e) {
+          seen.push(e.key);
+          return e.key === 'Enter';
+        },
+      }),
+    ],
+  );
+  const { actions, runs } = registry(['escape', 'tool:select', 'tool:box']);
+  const enter = keyEvent('Enter', { target: { tagName: 'DIV' } });
+  assert.equal(dispatchKey(enter, { actions, tools, viewportFocused: true }), true);
+  assert.equal(enter.prevented, false);
+  const escape = keyEvent('Escape', { target: { tagName: 'DIV' } });
+  assert.equal(dispatchKey(escape, { actions, tools, viewportFocused: true }), true);
+  assert.equal(escape.prevented, true);
+  assert.equal(dispatchKey(keyEvent('r', { target: { tagName: 'DIV' } }), { actions, tools, viewportFocused: true }), true);
+  assert.equal(dispatchKey(keyEvent('v'), { actions, tools, viewportFocused: false }), true);
+  assert.deepEqual(seen, ['Enter', 'r']);
+  assert.deepEqual(runs, ['escape', 'tool:box', 'tool:select']);
+});
+
+test('tool hotkeys of unregistered tools still suppress the default', () => {
+  const { actions, runs } = registry([]);
+  const event = keyEvent('c');
+  assert.equal(dispatchKey(event, { actions, tools: null, viewportFocused: false }), true);
+  assert.equal(event.prevented, true);
+  assert.deepEqual(runs, []);
 });
 
 test('the header shortcut hints equal the HOTKEYS rows', () => {
