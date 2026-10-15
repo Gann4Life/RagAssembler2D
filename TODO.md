@@ -86,6 +86,7 @@
 - [ ] #54 Editor Simulate mode running on RagImporter
 - [ ] #55 Procedural preview and preview stack playback in Simulate
 - [ ] #56 Spike: verify determinism between editor and host page
+- [ ] #100 Native-memory regression test for ragdoll spawn, update and destroy
 
 ## Phase 5 – Demo
 - [ ] #57 Author the demo humanoid with sprites and clips in the editor
