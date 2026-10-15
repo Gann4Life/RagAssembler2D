@@ -271,7 +271,7 @@ export function createDock(workspace, { viewportElement }) {
   }
 
   function focusViewport() {
-    (viewportElement.querySelector('[tabindex]') ?? viewportElement).focus();
+    (viewportElement.querySelector('#viewport-host') ?? viewportElement).focus();
   }
 
   function isOpen(id) {
