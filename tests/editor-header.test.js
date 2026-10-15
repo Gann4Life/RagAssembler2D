@@ -82,3 +82,11 @@ test('actionTitle shows the label plus the hotkey and marks unavailable actions'
   assert.equal(actionTitle(stop, true), 'Stop');
   assert.equal(actionTitle(stop, false), 'Stop (not available yet)');
 });
+
+test('actionTitle appends the given reason while disabled, and nothing for a null reason', () => {
+  const undo = HEADER_GROUPS.flat().find((action) => action.id === 'undo');
+  assert.equal(actionTitle(undo, false, 'not available in Simulate mode'), 'Undo (Ctrl+Z) (not available in Simulate mode)');
+  assert.equal(actionTitle(undo, false, null), 'Undo (Ctrl+Z)');
+  assert.equal(actionTitle(undo, true, 'ignored'), 'Undo (Ctrl+Z)');
+  assert.equal(actionTitle(undo, false, undefined), 'Undo (Ctrl+Z) (not available yet)');
+});

@@ -40,29 +40,32 @@ export const HEADER_GROUPS = Object.freeze([
   ]),
 ]);
 
-const UNAVAILABLE_SUFFIX = ' (not available yet)';
+const NOT_AVAILABLE_YET = 'not available yet';
 
 /**
- * Builds the tooltip text of a header action.
+ * Builds the tooltip text of a header action: the label, the hotkey if any, and while disabled the reason
+ * in parentheses.
  * @param {Readonly<HeaderAction>} action
  * @param {boolean} enabled
+ * @param {string|null} [reason] Why the action is disabled; `null` appends nothing.
  * @returns {string}
  */
-export function actionTitle(action, enabled) {
+export function actionTitle(action, enabled, reason = NOT_AVAILABLE_YET) {
   const base = action.shortcut ? `${action.label} (${action.shortcut})` : action.label;
-  return enabled ? base : base + UNAVAILABLE_SUFFIX;
+  return enabled || reason === null ? base : `${base} (${reason})`;
 }
 
 /**
- * Enables or disables a header button through `aria-disabled`, keeping it focusable.
+ * Enables or disables a header button through `aria-disabled`, keeping it focusable, and updates its tooltip.
  * @param {HTMLButtonElement} button A button created by {@link createHeader}.
  * @param {boolean} enabled
+ * @param {string|null} [reason] Why the action is disabled; `null` appends nothing.
  * @returns {void}
  */
-export function setActionEnabled(button, enabled) {
+export function setActionEnabled(button, enabled, reason = NOT_AVAILABLE_YET) {
   const action = findAction(button.dataset.action);
   button.setAttribute('aria-disabled', String(!enabled));
-  if (action) button.title = actionTitle(action, enabled);
+  if (action) button.title = actionTitle(action, enabled, reason);
 }
 
 /**
