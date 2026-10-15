@@ -47,7 +47,9 @@ Tools overlay ([`DESIGN.md` §5.5](../DESIGN.md#55-tools)):
 - It refreshes the toolbar once at start and on every `tool` and `mode` event: `toolbar.setActive(tools.active?.id ?? null)` and, for every `TOOL_SPECS` id, `toolbar.setEnabled(id, actions.isEnabled('tool:' + id), actions.reason('tool:' + id))`. A tool that is not registered has no action, so it reports `'not available yet'`.
 - Step 11 passes `insets: () => framingInsets(toolbar.width())`.
 
-**(planned)** Boot grows: `main.js` mounts the panels and passes them the editor object, registers the other actions that need the DOM (file pickers, confirmations), and offers draft recovery ([`DESIGN.md` §1](../DESIGN.md#1-conventions)).
+**(planned, #19)** Right after `createDock` (step 7), `js/main.js` calls `createHierarchy(dock.panelElement('hierarchy'), editor)`, which replaces the placeholder content of that element ([Hierarchy and deletion](#hierarchy-and-deletion)). The panel element exists while the panel is closed, so the Hierarchy is created once and keeps its state across close and reopen.
+
+**(planned)** Boot grows: `main.js` mounts the other panels and passes them the editor object, registers the other actions that need the DOM (file pickers, confirmations), and offers draft recovery ([`DESIGN.md` §1](../DESIGN.md#1-conventions)).
 
 ## Dependency rules
 
@@ -62,7 +64,7 @@ Tools overlay ([`DESIGN.md` §5.5](../DESIGN.md#55-tools)):
 
 | Layer | Modules | Rules |
 |---|---|---|
-| Core | `js/editor.js`, `js/model/*`, `js/commands/*`, `js/modes.js`, `js/hotkeys.js`, `js/actions.js`, `js/units.js`, `js/settings.js`, `js/roving-focus.js`, `js/tools/*`, `js/viewport/camera.js`, `js/viewport/bounds.js`, `js/viewport/grid-lines.js`, `js/viewport/snap.js`, `js/viewport/hit.js`, `js/viewport/placement.js`, `js/viewport/style.js`, `js/panels/layout.js` | No DOM, no PIXI import, no globals. Load and run under `node --test`. Import only `lib/` and other core modules. Tools draw only through the `PIXI.Graphics` they are handed. |
+| Core | `js/editor.js`, `js/model/*`, `js/commands/*`, `js/modes.js`, `js/hotkeys.js`, `js/actions.js`, `js/units.js`, `js/settings.js`, `js/roving-focus.js`, `js/tree-nav.js`, `js/tools/*`, `js/viewport/camera.js`, `js/viewport/bounds.js`, `js/viewport/grid-lines.js`, `js/viewport/snap.js`, `js/viewport/hit.js`, `js/viewport/placement.js`, `js/viewport/style.js`, `js/panels/layout.js` | No DOM, no PIXI import, no globals. Load and run under `node --test`. Import only `lib/` and other core modules. Tools draw only through the `PIXI.Graphics` they are handed. |
 | UI | `js/main.js`, `js/header.js`, `js/menu.js`, `js/viewport.js`, `js/viewport/*` (other than camera, bounds, grid-lines, snap, hit, placement, style), `js/panels/*` (other than layout), `js/settings-dialog.js`, `js/tooltip.js`, `js/storage.js`, `js/files.js`, `js/asset-store.js` | May import core and `lib/`. Receive the editor object and `PIXI` as parameters. Panel content modules (`hierarchy`, `assets`, `problems`, `inspector`, `timeline`) never import each other or the dock modules (`js/panels/dock.js`, `js/panels/layout.js`); `js/main.js` mounts them into the element the dock gives for their panel. Never mutate the model directly. |
 
 Pure modules (`lib/` pure set and the `js/` core) must not touch the DOM, PIXI or LiquidFun.
@@ -167,9 +169,12 @@ The runtime split (`def`, `instance`, `render`, `collision`) is confirmed by the
 | Module | Responsibility | Public exports | Imports (js/) | Issue |
 |---|---|---|---|---|
 | `js/editor.js` (later issues) | Each remaining tool issue adds its factory to `TOOLS`, which registers its `tool:<id>` action ([Editor composition](#editor-composition)). | unchanged names | the tool modules | #15, #17 |
-| `js/model/queries.js` (later issues) | Adds parent joints and the body subtree (#17, [Joint graph](#joint-graph)) and references to an id (joints, tracks, sprite users) to the built module, and extends `jointTree` as needed. | `parentJoints`, `bodySubtree`, `referencesTo`, `spriteUsers` | model | #17, #19 as needed |
-| `js/commands/create.js` (later issues) | Adds polygons to `createShapeBody` (#15), then `createClip` and `importSpriteAssets`. | `createClip`, `importSpriteAssets` | model, queries | #15, #19, #21 |
-| `js/commands/delete.js` | Deletion with cascade ([`DESIGN.md` §5.6](../DESIGN.md#56-hierarchy-assets-and-problems-panels)), plus the plan shown in the confirmation. | `deletionPlan`, `deleteObjects` | model, queries | #19 |
+| `js/model/queries.js` (later issues) | Adds parent joints and the body subtree (#17, built, [Joint graph](#joint-graph)) and references to an id (joints, tracks, sprite users) to the built module, and extends `jointTree` as needed. #19 adds `referencesTo` and exports the existing private `jointEdges` ([Hierarchy and deletion](#hierarchy-and-deletion)). | `parentJoints`, `bodySubtree` (#17), `referencesTo`, `jointEdges` (#19), `spriteUsers` | model | #17, #19 (`referencesTo`, `jointEdges`), #21 |
+| `js/commands/create.js` (later issues) | Adds polygons to `createShapeBody` (#15), unassigned joints to `createJoint` (#19, [Hierarchy and deletion](#hierarchy-and-deletion)), then `createClip` and `importSpriteAssets`. | `createClip`, `importSpriteAssets` | model, queries | #15, #19, #21 |
+| `js/commands/delete.js` | Deletion with cascade ([`DESIGN.md` §5.6](../DESIGN.md#56-hierarchy-assets-and-problems-panels)) and the plan that tells whether a confirmation is needed ([Hierarchy and deletion](#hierarchy-and-deletion)). | `deletionPlan(model, uids) → DeletionPlan`, `deleteObjects(uids, label?) → Command`, typedef `DeletionPlan` | `js/model/model.js` (`ROOT_UID`), `js/model/queries.js` | #19 |
+| `js/model/hierarchy.js` | Hierarchy tree model ([Hierarchy and deletion](#hierarchy-and-deletion)): items built from the model and the joint graph, the Unlinked group, loop and unassigned marks, fuzzy search, and the visible rows for an expansion state and a query. Pure, no events, no caching. | `hierarchyTree(model) → HierarchyItem`, `hierarchyRows(tree, { collapsed, query }) → HierarchyRow[]`, `ancestorKeys(tree, uid) → string[]`, `fuzzyMatch(query, text) → number[] \| null`, `UNLINKED_KEY`, typedefs `HierarchyItem`, `HierarchyRow` | `js/model/model.js` (`ROOT_UID`), `js/model/queries.js` (`jointEdges`) | #19 |
+| `js/tree-nav.js` | Pure key-to-move mapping for tree widgets (WAI-ARIA tree view), like `js/roving-focus.js` for flat widgets. | `treeKey(rows, index, key) → TreeMove \| null`, typedef `TreeMove` | — | #19 |
+| `js/editor.js` (#19) | Registers the `delete`, `add-shape` and `add-joint` actions ([Hierarchy and deletion](#hierarchy-and-deletion)). | unchanged names | adds `lib/schema.js` (`defaultsOf`), `js/commands/delete.js`, `js/commands/create.js` | #19 |
 | `js/commands/group.js` | Group / Ungroup. | `group`, `ungroup` | model, queries | #18 |
 | `js/commands/duplicate.js` | Duplicate selection. | `duplicate` | model, queries | #63 |
 | `js/commands/transform.js` | Rigid moves and rotations of body subtrees and joint anchors (#17, [Commands and undo](#commands-and-undo)); sprite offset/angle/scale (#24). Root `position`/`angle` and `aimAxis` are plain `setProps` edits. | `manipulationParts`, `transformParts`, `rotationAbout`, `placeParts`, typedef `Parts`; `editSprite` (#24) | `lib/geometry.js`, model, queries | #17, #24 |
@@ -184,7 +189,8 @@ The runtime split (`def`, `instance`, `render`, `collision`) is confirmed by the
 | `js/viewport/scene.js` (later issues) | #21 adds sprite entries once the asset store provides textures. | unchanged names | #21 |
 | `js/viewport.js` (later issues) | #17 also marks the tool overlay dirty on `selection`, `mode`, model `change` and model `reset` events, since tool handles follow the selection and the document. | unchanged names | #17 |
 | `js/viewport/gizmos.js` (later issues) | The strength fill (#36), contact dots in Simulate mode (#54, which also feeds the live pose), sprite handles (#24); the Problems wiring (#26) feeds `setInvalid`. | unchanged names | #24, #26, #36, #54 |
-| `js/panels/hierarchy.js`, `assets.js`, `problems.js`, `inspector.js`, `timeline.js` | One panel each ([`DESIGN.md` §5.6–5.8](../DESIGN.md#56-hierarchy-assets-and-problems-panels)). The inspector builds its rows from `fieldsOf` ([schema.md](schema.md)). | `create<Panel>` | #19–#23, #26, #32–#35 |
+| `js/panels/hierarchy.js` | Hierarchy panel DOM ([Hierarchy and deletion](#hierarchy-and-deletion)): toolbar (search field, Add menu, Delete button), flat `role="tree"` rows rendered from `hierarchyRows`, roving focus through `treeKey`, two-way selection sync, reveal, expansion state, focus repair after deletions. Runs actions for Add and Delete; never executes commands itself. Imports `js/model/hierarchy.js`, `js/tree-nav.js`, `js/menu.js`, `js/header.js` (`actionTitle`), `js/tooltip.js`; nothing from `js/panels/`. | `createHierarchy(element, editor) → Hierarchy` (`destroy()`) | #19 |
+| `js/panels/assets.js`, `problems.js`, `inspector.js`, `timeline.js` | One panel each ([`DESIGN.md` §5.6–5.8](../DESIGN.md#56-hierarchy-assets-and-problems-panels)). The inspector builds its rows from `fieldsOf` ([schema.md](schema.md)). | `create<Panel>` | #20–#23, #26, #32–#35 |
 | `js/storage.js` (draft functions) | Draft autosave and recovery in the built storage module, same failure rules. | `saveDraft`, `loadDraft`, `clearDraft` | #29 |
 | `js/files.js` | File and directory pickers, drag & drop (`dragover`/`drop` listeners on `#panel-viewport`, so drops on the Tools overlay load too, [`DESIGN.md` §5.3](../DESIGN.md#53-header)), writing `.rag.json` and images. | `pickRagFile`, `pickAssetFolder`, `saveRagFile` | #28 |
 | `js/asset-store.js` | Image bytes and PIXI textures by sprite asset id. Not part of the model; entries are kept while any history step can bring their asset back. | `AssetStore` | #21 |
@@ -289,6 +295,134 @@ placeParts(parts: Parts, label = 'Move') → Command
 - **`parentJoints(model) → Map<bodyUid, jointUid>`** (#17): the parent joint of every body that has one ([`DESIGN.md` §2.4](../DESIGN.md#24-joints), Parent joint and subtree). With `tree = jointTree(model)`: a body in `tree.depth` takes `tree.parent.get(body)` (`rootBody` has no entry; loop joints never appear); a body not in `tree.depth` (unlinked, or every body when `tree.root` is `null`) takes the first edge in `joints` order whose `bodyB` resolves to it (an edge, so `bodyA` resolves to another body; such an edge never touches a linked body). Bodies without a parent joint have no entry. Map iteration follows `bodies` order. Computed in one pass over the edges after one `jointTree` call.
 - **`bodySubtree(model, bodyUid, parents = parentJoints(model)) → Set<bodyUid>`** (#17): `bodyUid` first, then, in `bodies` order, every body whose chain of parent bodies reaches `bodyUid`. A body's parent body is the other body of its parent joint; a chain stops at a body without a parent joint or at a body already seen on that chain, so cycles among unlinked bodies terminate (in a directed cycle every member's subtree is the whole cycle). On linked bodies it equals the descendants in the `jointTree` spanning tree; loop joints are never followed. `parents` lets callers reuse one `parentJoints` result across several calls. Throws `Error` when `bodyUid` is not a body.
 - Imports: `js/model/model.js` (`ROOT_UID`).
+
+### Hierarchy and deletion
+
+**(planned, #19)** Behavior: [`DESIGN.md` §5.6](../DESIGN.md#56-hierarchy-assets-and-problems-panels) (Hierarchy), [§2.1](../DESIGN.md#21-root-the-ragdoll-itself) (`rootBody`), [§1](../DESIGN.md#1-conventions) (Undo), [§5.9](../DESIGN.md#59-hotkeys-defaults). Everything that decides *what* is shown, deleted or focused is core and tested under Node; the panel only renders and routes input.
+
+| Concern | Core (Node-tested) | UI |
+|---|---|---|
+| References, joint edges | `js/model/queries.js` (`referencesTo`, `jointEdges`) | — |
+| Deletion cascade and its undo step | `js/commands/delete.js` (`deletionPlan`, `deleteObjects`) | — |
+| Unassigned joint | `js/commands/create.js` (`createJoint` with `null` bodies) | — |
+| `delete`, `add-shape`, `add-joint` actions | `js/editor.js` | Del through `dispatchKey`; buttons in the panel |
+| Tree items, Unlinked group, marks, search, visible rows | `js/model/hierarchy.js` | `js/panels/hierarchy.js` |
+| Tree keyboard moves | `js/tree-nav.js` | `js/panels/hierarchy.js` |
+
+**Queries.** Two additions to `js/model/queries.js`; the [Joint graph](#joint-graph) rules hold.
+- **`jointEdges(model) → ReadonlyArray<{ uid, a, b }>`:** the existing private helper, exported unchanged: the joints, in `joints` order, whose `bodyA` and `bodyB` resolve to two different `body` nodes, with `a`/`b` their body uids.
+- **`referencesTo(model, uid) → { joints: number[], tracks: number[] }`:** the joints (in `joints` order) whose `bodyA` or `bodyB` resolves to `uid`, each listed once, and the tracks (clip order, then track order) whose `target` resolves to `uid`. A reference resolves through `model.uidOf` (the first holder of a duplicated id, as everywhere). Both lists are empty when nothing references `uid`. Throws `Error` for an unknown uid.
+
+**Deletion.** `js/commands/delete.js` (core). Imports `js/model/model.js` (`ROOT_UID`) and `js/model/queries.js` (`referencesTo`).
+
+```
+DeletionPlan {
+  bodies:   number[]   bodies removed with all their shapes, in `bodies` order
+  shapes:   number[]   shapes removed alone (their body keeps other shapes), body order, then fixture order
+  joints:   number[]   in `joints` order
+  tracks:   number[]   clip order, then track order
+  rootBody: { from: string, to: string | null } | null    the new `rootBody` when the current one is removed
+  confirm:  boolean    tracks.length > 0
+  empty:    boolean    nothing to remove
+}
+```
+
+- **`deletionPlan(model, uids) → DeletionPlan`** (frozen; reads the model only):
+  1. `Error` for an unknown uid. Duplicates are ignored, and so are uids that are not bodies, shapes or joints (the root, sprite assets, clips, tracks, keys, events).
+  2. `bodies`: the requested bodies, plus every body with at least one fixture whose fixtures are all requested shapes.
+  3. `shapes`: the requested shapes whose body is not in `bodies`.
+  4. `joints`: the requested joints plus `referencesTo(body).joints` of every body in `bodies`, deduplicated.
+  5. `tracks`: `referencesTo(x).tracks` of every joint in `joints`, every shape in `shapes` and every fixture of every body in `bodies`, deduplicated.
+  6. `rootBody`: when the root's `rootBody` resolves to a body in `bodies`, `{ from, to }` with `to` the id of the first body in `bodies` order that is not removed, or `null`; otherwise `null`.
+- **`deleteObjects(uids, label = 'Delete') → Command`:** `run(tx)` computes `deletionPlan(tx.model, uids)` itself (so the plan is never stale) and throws `Error` when it is `empty`, before mutating. Then one `tx.remove` per track, joint, shape in `shapes` and body (a body's fixtures go with it), in that order, then `tx.set(ROOT_UID, 'rootBody', to)` when `plan.rootBody` is not `null`. `run` returns the plan.
+  - **Exact undo and redo** come from history: every `remove` op records its subtree snapshot with uids and its index, undo applies the inverses in reverse order, and redo re-applies the recorded ops without calling `run` ([Commands and undo](#commands-and-undo)). Ids, uids, names, order, values and `rootBody` come back identical.
+  - The selection prunes the removed uids ([Selection](#selection)). No clip is removed, so the open clip and the mode never change (the gesture re-entrancy of [Commands and undo](#commands-and-undo) cannot occur; the action is disabled in gestures anyway).
+  - It reads no mode, selection or confirmation: the action does.
+
+**`createJoint` (#19 change).** `bodyA` and `bodyB` may both be `null`: an **unassigned joint**. The body, same-body and `jointBetween` checks are skipped and the props keep `bodyA: null`, `bodyB: null`. One `null` and one uid throws `Error`. Everything else is unchanged (id, name, `anchor`, `limits`, one `add` op, the joint uid returned).
+
+**Actions** registered by `js/editor.js` (core), with `modeReason` as for the other actions:
+
+| Action | `isEnabled` | `reason` | `run` |
+|---|---|---|---|
+| `delete` | `selection.focus === 'objects' && modes.can('edit.rest') && !history.inGesture && !deletionPlan(model, selection.objects).empty` | `selection.focus === 'objects' ? modeReason('edit.rest') : null` | `history.execute(deleteObjects(selection.objects))` |
+| `add-shape` | `modes.can('edit.rest') && !history.inGesture` | `modeReason('edit.rest')` | `uid = history.execute(createShapeBody({ position: { x: 0, y: 0 }, angle: 0, shape: { type: 'box', width, height } }, 'Add shape'))` with `width`/`height` from `defaultsOf('shape', 'box').shape`, then `selection.set([uid])` |
+| `add-joint` | same as `add-shape` | same | `uid = history.execute(createJoint({ bodyA: null, bodyB: null, anchor: { x: 0, y: 0 } }, 'Add joint'))`, then `selection.set([uid])` |
+
+- None is repeatable. Del reaches `delete` through the existing `HOTKEYS` row from any focus except text fields. During a gesture the three are disabled; in Edit mode their reason is then `null`, elsewhere it stays the mode reason ([Actions and hotkeys](#actions-and-hotkeys)).
+- The timeline issue that selects keys and events (#34) extends `delete` for `selection.focus === 'timeline'`; until then it is disabled there with no reason.
+- **Confirmation** ([`DESIGN.md` §5.6](../DESIGN.md#56-hierarchy-assets-and-problems-panels)): asked only when `plan.confirm`. No path built at #19 can create tracks, so #19 computes and tests `confirm` but ships no dialog. The follow-up issue that builds the confirmation dialog (a UI module, shared with New's unsaved-changes confirmation, #27) specifies how `delete` reaches it, and must merge before any issue that can bring tracks into the document (Load #27, tracks #33).
+
+**Tree model.** `js/model/hierarchy.js` (core). Imports `js/model/model.js` (`ROOT_UID`) and `js/model/queries.js` (`jointEdges`).
+
+```
+HierarchyItem {
+  key:       string                       String(uid) for objects, UNLINKED_KEY ('unlinked') for the group
+  kind:      'root' | 'body' | 'shape' | 'joint' | 'unlinked'
+  uid:       number | null                null for the group
+  name:      string                       the `name` prop, '' when absent or not a string; '' for the group
+  id:        string | null                the `id` prop; null for the group
+  label:     string                       name, or id when name is ''; 'Unlinked' for the group
+  shapeType: 'circle' | 'box' | 'polygon' | null    shapes only (`shape.type`), else null
+  loop:      boolean                      joint leaf that closes a cycle
+  unassigned: boolean                     joint that is not an edge
+  children:  ReadonlyArray<HierarchyItem>
+}
+HierarchyRow {
+  item, level (1 for the root), posInSet, setSize (1-based, among visible siblings),
+  parentIndex (index of the parent row, -1 for the root),
+  expandable (has visible children), expanded (expandable and key not in `collapsed`),
+  match: { field: 'label' | 'id', indices: number[] } | null   what matched the query (label tried first)
+  dimmed: boolean                         with a query, a row shown only as an ancestor of a match
+}
+```
+
+- **`hierarchyTree(model) → HierarchyItem`** (the root item; deep-frozen, fresh on every call):
+  - The root item's children are the component of `rootBody` (when it resolves to a body), then the group item when it has children.
+  - **Components:** a breadth-first search over `jointEdges(model)` from a start body, with the [Joint graph](#joint-graph) visiting rule (bodies in discovery order, their edges in `joints` order). An edge to an undiscovered body is a tree joint: its item is a child of the current body's item and holds the child body's item. After the search, every edge between two bodies of the component that is not a tree joint becomes a leaf under its `bodyA` item, with `loop: true`.
+  - A body item holds its shapes (fixture order), then its joint items (tree joints and loop leaves) in `joints` order.
+  - Start bodies: `rootBody`, then, for the group, every body not yet placed, in `bodies` order, each starting a new component.
+  - The group then lists the joints that are not edges, in `joints` order, as leaves with `unassigned: true`.
+  - For the `rootBody` component, the tree joints and loop leaves equal `jointTree(model).parent` and `.loops` (tested); unlinked components mark their cycles `loop` too ([decision](decisions.md)).
+- **`hierarchyRows(tree, { collapsed = new Set(), query = '' } = {}) → HierarchyRow[]`**, in preorder:
+  - Without a query (empty after trimming): every item whose ancestors are all expanded; `match` is `null`, `dimmed` `false`.
+  - With a query: an item is kept when `fuzzyMatch(query, label)` or `fuzzyMatch(query, id)` is not `null` (the group never matches), or when it has a kept descendant. Visible rows are the kept items whose kept ancestors are not in `collapsed`. `expandable` counts kept children only. Kept items that do not match are `dimmed`. No match gives `[]`.
+  - The caller passes its persistent collapsed set without a query and a separate search set, emptied whenever the query changes, with one ([`DESIGN.md` §5.6](../DESIGN.md#56-hierarchy-assets-and-problems-panels)).
+- **`fuzzyMatch(query, text) → number[] | null`:** spaces are removed from `query`; both sides are compared lower-cased, per character; the result is the indices in `text` of the greedy leftmost subsequence match, `[]` for an empty query, `null` when it does not match. Example: `fuzzyMatch('knl', 'knee_l')` → `[0, 1, 5]`.
+- **`ancestorKeys(tree, uid) → string[]`:** keys of the item's ancestors, root first, without the item; `[]` when no item has `uid`.
+
+**Tree keys.** `js/tree-nav.js` (core, no imports):
+
+```
+TreeMove { kind: 'focus' | 'expand' | 'collapse', index }
+treeKey(rows: ReadonlyArray<{ expandable, expanded, parentIndex }>, index, key) → TreeMove | null
+```
+
+- `null` for a key other than `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End`, or for empty `rows`. An `index` outside `rows` acts as 0.
+- `ArrowDown` → focus `min(index + 1, last)`; `ArrowUp` → focus `max(index − 1, 0)`; `Home` → focus 0; `End` → focus last. No wrap.
+- `ArrowRight`: expandable and collapsed → expand `index`; expandable and expanded → focus `index + 1`; else focus `index`.
+- `ArrowLeft`: expandable and expanded → collapse `index`; else `parentIndex ≥ 0` → focus `parentIndex`; else focus `index`.
+- Handled keys always return a move, even one that changes nothing, so the panel prevents their default (page scroll, the `Home` hotkey).
+
+**Panel.** `js/panels/hierarchy.js` (UI): `createHierarchy(element, editor) → { destroy() }`, mounted by `js/main.js` ([Editor boot](#editor-boot)). It never executes commands: Add and Delete go through `actions.run`, selection through `editor.selection`.
+- **DOM:** it replaces the element's content with `div.hierarchy-toolbar` (an `input[type=search]` with `aria-label="Search hierarchy"` and `aria-controls` the tree; an Add `button[aria-haspopup=menu]`; a Delete button), then `ul#hierarchy-tree[role=tree][aria-label=Hierarchy][aria-multiselectable=true]`, then a hidden `p` "No matches". Rows are flat `li[role=treeitem]` with `aria-level`, `aria-posinset`, `aria-setsize`, `aria-expanded` (expandable rows only) and `aria-selected` (object rows only; the group row has none), keyed and reused by `item.key`, so a row element that survives a re-render keeps focus. One row has `tabindex="0"` (the roving stop), the others `-1`. A row holds an expand arrow (`aria-hidden`; a click toggles expansion only), a decorative kind icon (inline SVG as in the Tools overlay), the label with matched characters in `<mark>`, the id in muted text when `match.field === 'id'`, and the marks "loop", "unassigned" and, on the group, a warning; the marks are part of the row's accessible name. Indentation follows `level`. Sprite thumbnails are added with the asset store (#21).
+- **State:** `collapsed` (persistent `Set<key>`), `searchCollapsed` (emptied on every query change), `query`, the roving key. Model `reset` empties both sets. Nothing is stored or undoable.
+- **Updates:** a model `change` or `reset` marks the tree dirty; the panel rebuilds `hierarchyTree` and re-renders at most once per animation frame (`requestAnimationFrame`). `selection` events re-render the `aria-selected` state; `history`, `mode`, `selection` and model events refresh the buttons from `actions.isEnabled` and `actions.reason`.
+- **Selection sync:** row clicks call `selection.set([uid])`, `toggle(uid)` (SHIFT) or `remove([uid])` (CTRL or Cmd; CTRL wins); a click on the group row only focuses it; a click on the tree's empty area calls `selection.clear()`. Keyboard focus moves from `treeKey` apply the same rule with `set` (no modifier), `add` (SHIFT) or nothing (CTRL), skipping the group row; Space (with or without CTRL) calls `toggle`. Handled keys call `preventDefault`, so `dispatchKey` skips them; Del, Esc, F and letters are not handled and reach the hotkeys.
+- **Reveal:** the panel flags its own selection calls. A `selection` event it did not cause reveals the uids newly in `objects`: their `ancestorKeys` leave both collapsed sets, and after the next render the last of them that has a row is scrolled into view (`scrollIntoView({ block: 'nearest' })`) and becomes the roving stop, without moving DOM focus. Rows hidden by the query are not revealed. Because a creation selects in the same turn as its model change, a pending reveal is applied after the pending rebuild.
+- **Focus repair:** before re-rendering, the panel records whether focus was in the tree and the roving row's index. When the roving key has no row afterwards, the roving stop goes to the row now at that index, or the last row, and gets DOM focus when the tree had it. A query change that hides the roving row moves the stop to the first row.
+- **Search:** the `input` event sets the query and empties `searchCollapsed`. Esc in a non-empty field clears it (handled by the field; `dispatchKey` ignores text fields anyway).
+- **Buttons:** the Add button is enabled from `add-shape` (`add-joint` has the same rule) and opens `openMenu(addButton, [{ id: 'add-shape', label: 'Add shape', kind: 'item' }, { id: 'add-joint', label: 'Add joint', kind: 'item' }], { onSelect: (item) => actions.run(item.id) })`. The Delete button runs `delete`. Both use `aria-disabled` and stay focusable; tooltips through `attachTooltip` with `actionTitle({ id, label, shortcut }, enabled, reason)` ("Delete (Del)", "Add (not available in Animate mode)").
+- `destroy()` removes listeners, tooltips, the frame callback and the content.
+
+**Tests (#19):**
+- `tests/delete.test.js`: `deletionPlan` table (the only shape of a body → the body; one of two shapes → the shape; every shape of a grouped body → the body; a body and its shape → the body once; a lone joint; joints cascading as `bodyA` and as `bodyB`; tracks of a removed joint, of a removed shape and of a shape inside a removed body, in several clips; root tracks never; `rootBody` moving to the first remaining body or to `null`; root, clip and sprite asset uids ignored; unknown uid `Error`; `empty`; `confirm` exactly when tracks are removed). `deleteObjects` on `createEditor()`: one step labelled "Delete", undo restoring the identical document (snapshots with ids, uids, order and `rootBody`) and redo removing it again with the same uids, the selection pruned, `Error` on an empty plan with nothing mutated.
+- `tests/queries.test.js`: `jointEdges` and `referencesTo` (both directions, a joint referencing one body twice listed once, tracks in clip and track order, empty lists, unknown uid).
+- `tests/create.test.js`: `createJoint` with both bodies `null` (props, id, name, undo, redo) and `Error` for one `null`.
+- `tests/hierarchy.test.js`: `hierarchyTree` (empty ragdoll; chain and branch order; single-shape and grouped bodies; loop leaf under `bodyA`; unlinked components and their start bodies; unassigned joints; no group when empty; `rootBody` `null` with bodies; labels falling back to ids; agreement with `jointTree` on the `rootBody` component); `hierarchyRows` (collapse, levels, `posInSet`/`setSize`, `parentIndex`, query with dimmed ancestors, id matches, the group never matching, no match, collapse during a query); the `fuzzyMatch` table; `ancestorKeys`.
+- `tests/tree-nav.test.js`: the `treeKey` table, including the no-op moves at the ends and on leaves.
+- `tests/editor.test.js`: `delete`, `add-shape` and `add-joint` enabled in Edit mode, refused with the mode reason in Animate and Simulate, disabled with reason `null` during a gesture, `delete` disabled for an empty selection, the root alone and timeline focus; Add creates, selects and is one undo step; Del through `dispatchKey` deletes the selection.
+- In the browser: rows appear for everything the tools and Add create; viewport and row selection follow each other both ways; Del from the viewport and from the tree, then Undo and Redo; search, keyboard navigation, expansion and focus repair; the Add and Delete tooltips.
 
 ### Selection
 
@@ -580,8 +714,8 @@ js/tools/manipulate.js
 
 ### Actions and hotkeys
 
-- **`ActionRegistry`** `js/actions.js`: `register(id, ActionSpec)` with `ActionSpec { run(), isEnabled?() → boolean (default true), reason?() → string | null (default null), repeatable?: boolean }`; registering an id twice, an empty id or a spec without `run` throws. `has(id)`; `isEnabled(id)` (`false` when not registered); `reason(id)` → `'not available yet'` when not registered, else the spec's `reason()` while disabled, else `null`; `isRepeatable(id)` (`false` when not registered or `repeatable` is not `true`), read by `dispatchKey`; `run(id) → boolean`, which runs only a registered, enabled action and says whether it ran. `repeatable` is set for `undo`, `redo` and `next-frame` ([`DESIGN.md` §5.9](../DESIGN.md#59-hotkeys-defaults)). Ids reuse the header ids (`new`, `load`, `save`, `undo`, `redo`, `play`, `pause`, `next-frame`, `stop`, `window`, `settings`) and add `toggle-play`, `delete`, `group`, `ungroup`, `duplicate`, `key-selected`, `frame-selection`, `frame-all`, `sprite-edit`, `escape`, `tool:<id>`, `panel:<id>` (toggle a panel) and `reset-layout`. DOM-free actions are registered by `js/editor.js`; actions that need the DOM (`window`, `panel:<id>`, `reset-layout`, later file pickers and confirmations) by `js/main.js` ([Editor boot](#editor-boot)). The header and hotkeys both call `run`; the header refreshes `aria-disabled` and its tooltip from `isEnabled` and `reason` on `history`, `mode` and `selection` events.
-- **No commands during a gesture:** every action that executes a command (`delete`, `group`, `ungroup`, `duplicate`, `key-selected`, …; not `undo`, `redo`, `escape`) reports `isEnabled() === false` with `reason` `null` while `history.inGesture`. Only the gesture owner (the tool registry, an inspector scrub) executes commands inside its gesture. This keeps a key pressed mid-drag out of the drag's undo step and rules out the cancellation re-entrancy described in [Commands and undo](#commands-and-undo). The header is not refreshed on gesture start, which is harmless: the pointer is captured by the drag, and `run` re-checks `isEnabled`.
+- **`ActionRegistry`** `js/actions.js`: `register(id, ActionSpec)` with `ActionSpec { run(), isEnabled?() → boolean (default true), reason?() → string | null (default null), repeatable?: boolean }`; registering an id twice, an empty id or a spec without `run` throws. `has(id)`; `isEnabled(id)` (`false` when not registered); `reason(id)` → `'not available yet'` when not registered, else the spec's `reason()` while disabled, else `null`; `isRepeatable(id)` (`false` when not registered or `repeatable` is not `true`), read by `dispatchKey`; `run(id) → boolean`, which runs only a registered, enabled action and says whether it ran. `repeatable` is set for `undo`, `redo` and `next-frame` ([`DESIGN.md` §5.9](../DESIGN.md#59-hotkeys-defaults)). Ids reuse the header ids (`new`, `load`, `save`, `undo`, `redo`, `play`, `pause`, `next-frame`, `stop`, `window`, `settings`) and add `toggle-play`, `delete`, `add-shape`, `add-joint`, `group`, `ungroup`, `duplicate`, `key-selected`, `frame-selection`, `frame-all`, `sprite-edit`, `escape`, `tool:<id>`, `panel:<id>` (toggle a panel) and `reset-layout`. DOM-free actions are registered by `js/editor.js`; actions that need the DOM (`window`, `panel:<id>`, `reset-layout`, later file pickers and confirmations) by `js/main.js` ([Editor boot](#editor-boot)). The header and hotkeys both call `run`; the header refreshes `aria-disabled` and its tooltip from `isEnabled` and `reason` on `history`, `mode` and `selection` events.
+- **No commands during a gesture:** every action that executes a command (`delete`, `add-shape`, `add-joint`, `group`, `ungroup`, `duplicate`, `key-selected`, …; not `undo`, `redo`, `escape`) reports `isEnabled() === false` with `reason` `null` while `history.inGesture`. Only the gesture owner (the tool registry, an inspector scrub) executes commands inside its gesture. This keeps a key pressed mid-drag out of the drag's undo step and rules out the cancellation re-entrancy described in [Commands and undo](#commands-and-undo). The header is not refreshed on gesture start, which is harmless: the pointer is captured by the drag, and `run` re-checks `isEnabled`.
 - **`HOTKEYS`** `js/hotkeys.js`: frozen `Hotkey { keys, action }` rows for §5.9 in table order (`{ keys: 'Ctrl+Shift+Z', action: 'redo' }`, `{ keys: 'Ctrl+Y', action: 'redo' }`, `{ keys: 'Space', action: 'toggle-play' }`, …); #12 puts first one `tool:<id>` row per `TOOL_SPECS` entry, built from its `hotkey` (`{ keys: 'V', action: 'tool:select' }`, …), for every tool whether registered or not. `keys` is `[Ctrl+][Shift+][Alt+]<key>`, where `<key>` is an upper-case letter, a digit, `.`, `Space`, `Del`, `Esc` or `Home`. The header's shortcut hints must equal this table (tested): for each header action with a hint, its rows joined with `' / '` in table order, `play` and `pause` reading the `toggle-play` rows.
 - **`matchHotkey(event) → ActionId | null`**: `Meta` counts as `Ctrl`; `event.key` is compared case-insensitively for letters (`Del` = `Delete`, `Esc` = `Escape`, `Space` = `' '`); Ctrl, Shift and Alt must match the row exactly, so `Ctrl+Z` never matches with Shift held.
 - **`dispatchKey(event, { tools, actions, viewportFocused }) → boolean`** (`tools` is `editor.tools`; `null` is accepted and skips step 2) order:

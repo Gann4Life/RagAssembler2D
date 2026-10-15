@@ -138,7 +138,7 @@ In default names (`body_<n>`, `<type>_<n>`, `joint_<n>`), `<n>` is the number of
 | `motor.maxSpeed` | number | `20` | ≥0 | rad/s | |
 | `aimAxis` | number | `0` | — | rad | |
 
-Joint creation by the Hinge tool (#16, `createJoint`) sets `id`, `name` (`joint_<n>`), `bodyA`, `bodyB` and `anchor`, and `limits` only for a drag (enabled, `−θ`/`θ`); a pin keeps the default disabled limits, and every other field takes the default above ([`DESIGN.md` §5.5](../DESIGN.md#55-tools)). The motor defaults are provisional until the motor stability spike (#52) tunes them. `null` bodies are allowed in the model and in drafts, and are validation errors in files. The animated channels (`angle`, `strength`, `gain`, `damping` ◆) are not fields: the inspector shows their evaluated values at the playhead.
+Joint creation by the Hinge tool (#16, `createJoint`) sets `id`, `name` (`joint_<n>`), `bodyA`, `bodyB` and `anchor`, and `limits` only for a drag (enabled, `−θ`/`θ`); a pin keeps the default disabled limits, and every other field takes the default above ([`DESIGN.md` §5.5](../DESIGN.md#55-tools)). Hierarchy *Add joint* (#19) sets only `id`, `name` and `anchor` `[0, 0]`, leaving `bodyA` and `bodyB` `null` ([`DESIGN.md` §5.6](../DESIGN.md#56-hierarchy-assets-and-problems-panels)). The motor defaults are provisional until the motor stability spike (#52) tunes them. `null` bodies are allowed in the model and in drafts, and are validation errors in files. The animated channels (`angle`, `strength`, `gain`, `damping` ◆) are not fields: the inspector shows their evaluated values at the playhead.
 
 ## clip (`clips[]`)
 
