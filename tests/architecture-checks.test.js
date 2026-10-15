@@ -117,6 +117,26 @@ test('imports: tests may import core and listed UI modules only', () => {
   assert.equal(checkImports(file('tests/a.test.js', "import { x } from './helpers/scan.js';"), architecture).length, 0);
 });
 
+test('imports: only liquidfun verification tests may load vendor/liquidfun.js', () => {
+  const load = "const Box2D = require('../vendor/liquidfun.js');";
+  assert.deepEqual(checkImports(file('tests/liquidfun-api.test.js', load), architecture), []);
+  assert.deepEqual(checkImports(file('tests/liquidfun-contact-filter.test.js', load), architecture), []);
+  const rejected = checkImports(file('tests/model.test.js', `\n${load}`), architecture);
+  assert.equal(rejected.length, 1);
+  assert.match(rejected[0], /^tests\/model\.test\.js:2: imports vendor\/liquidfun\.js: only tests\/liquidfun-/);
+  assert.equal(checkImports(file('tests/helpers/x.js', "import b from '../../vendor/liquidfun.js';"), architecture).length, 1);
+  assert.equal(checkImports(file('tests/liquidfun.test.js', load), architecture).length, 1);
+});
+
+test('imports: tests may not import demo/ or vendor/pixi.min.js', () => {
+  const demo = checkImports(file('tests/a.test.js', "import { x } from '../demo/main.js';"), architecture);
+  assert.equal(demo.length, 1);
+  assert.match(demo[0], /^tests\/a\.test\.js:1: imports demo\/main\.js: tests\/ may not import demo\//);
+  assert.equal(checkImports(file('tests/liquidfun-api.test.js', "require('../vendor/pixi.min.js');"), architecture).length, 1);
+  assert.equal(checkImports(file('tests/a.test.js', "import '../vendor/pixi.min.js';"), architecture).length, 1);
+  assert.equal(checkImports(file('tests/a.test.js', "import { x } from '../lib/ragimporter.js';"), architecture).length, 0);
+});
+
 test('imports: non-relative specifiers are rejected outside tests', () => {
   const url = checkImports(file('lib/x.js', "import a from 'https://example.com/a.js';"), architecture);
   assert.equal(url.length, 1);
