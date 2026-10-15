@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Model, ROOT_UID } from '../js/model/model.js';
 import { History } from '../js/commands/history.js';
-import { createShapeBody } from '../js/commands/create.js';
+import { createJoint, createShapeBody } from '../js/commands/create.js';
 import { defaultsOf } from '../lib/schema.js';
 
 function setup() {
@@ -124,4 +124,115 @@ test('preconditions throw before mutating or allocating ids', () => {
     assert.equal(model.nextId('f'), 'f_1');
     assert.equal(history.state.canUndo, false);
   }
+});
+
+function jointSetup() {
+  const { model, history } = setup();
+  const shapes = [0, 1, 2].map((x) =>
+    history.execute(createShapeBody({ position: { x, y: 0 }, angle: 0, shape: { type: 'circle', radius: 1 } })),
+  );
+  const [b1, b2, b3] = shapes.map((uid) => model.get(uid).parent);
+  return { model, history, b1, b2, b3, shapes };
+}
+
+function joints(model) {
+  return model.children(ROOT_UID, 'joints');
+}
+
+test('createJoint creates a pin joint from schema defaults with file ids', () => {
+  const { model, history, b1, b2 } = jointSetup();
+  const uid = history.execute(createJoint({ bodyA: b2, bodyB: b1, anchor: { x: 0.5, y: -0.25 } }));
+  assert.deepEqual(joints(model), [uid]);
+  assert.equal(model.get(uid).type, 'joint');
+  assert.deepEqual(plain(model.get(uid).props), {
+    ...defaultsOf('joint'),
+    id: 'j_1',
+    name: 'joint_1',
+    bodyA: 'b_2',
+    bodyB: 'b_1',
+    anchor: [0.5, -0.25],
+  });
+  assert.equal(model.uidOf('j_1'), uid);
+  assert.equal(model.prop(ROOT_UID, 'rootBody'), 'b_1');
+});
+
+test('createJoint stores given limits and appends after existing joints', () => {
+  const { model, history, b1, b2, b3 } = jointSetup();
+  model.nextId('j');
+  model.nextId('j');
+  const first = history.execute(createJoint({ bodyA: b1, bodyB: b2, anchor: { x: 0, y: 0 } }));
+  const second = history.execute(
+    createJoint({ bodyA: b2, bodyB: b3, anchor: { x: 1, y: 0 }, limits: { enabled: true, lower: -0.5, upper: 0.5 } }),
+  );
+  assert.deepEqual(joints(model), [first, second]);
+  assert.equal(model.prop(first, 'id'), 'j_3');
+  assert.equal(model.prop(second, 'name'), 'joint_4');
+  assert.deepEqual(plain(model.prop(first, 'limits')), defaultsOf('joint').limits);
+  assert.deepEqual(plain(model.prop(second, 'limits')), { enabled: true, lower: -0.5, upper: 0.5 });
+  const disabled = history.execute(
+    createJoint({ bodyA: b1, bodyB: b3, anchor: { x: 0, y: 0 }, limits: { enabled: false, lower: 0, upper: 0 } }),
+  );
+  assert.deepEqual(plain(model.prop(disabled, 'limits')), { enabled: false, lower: 0, upper: 0 });
+});
+
+test('createJoint is one history step; undo and redo keep the id and uid', () => {
+  const { model, history, b1, b2 } = jointSetup();
+  const before = plain(model.get(ROOT_UID).props);
+  const uid = history.execute(createJoint({ bodyA: b1, bodyB: b2, anchor: { x: 0.5, y: 0 } }));
+  assert.equal(history.state.undoLabel, 'Create joint');
+  const props = plain(model.get(uid).props);
+  assert.equal(history.undo(), true);
+  assert.deepEqual(joints(model), []);
+  assert.equal(model.get(uid), null);
+  assert.deepEqual(plain(model.get(ROOT_UID).props), before);
+  assert.equal(history.state.undoLabel, 'Create circle');
+  assert.equal(history.redo(), true);
+  assert.deepEqual(joints(model), [uid]);
+  assert.deepEqual(plain(model.get(uid).props), props);
+  assert.equal(model.uidOf('j_1'), uid);
+  history.execute(createJoint({ bodyA: b2, bodyB: model.children(ROOT_UID, 'bodies')[2], anchor: { x: 0, y: 0 } }, 'Custom'));
+  assert.equal(history.state.undoLabel, 'Custom');
+});
+
+test('createJoint preconditions throw before mutating or allocating ids', () => {
+  const probe = jointSetup();
+  const { b1, b2, shapes } = probe;
+  const anchor = { x: 0, y: 0 };
+  const bad = [
+    [{ bodyA: b1, bodyB: shapes[1], anchor }, Error],
+    [{ bodyA: ROOT_UID, bodyB: b2, anchor }, Error],
+    [{ bodyA: b1, bodyB: 999, anchor }, Error],
+    [{ bodyA: undefined, bodyB: b2, anchor }, Error],
+    [{ bodyA: b1, bodyB: b1, anchor }, Error],
+    [{ bodyA: b1, bodyB: b2, anchor: { x: NaN, y: 0 } }, RangeError],
+    [{ bodyA: b1, bodyB: b2, anchor: { x: 0, y: Infinity } }, RangeError],
+    [{ bodyA: b1, bodyB: b2, anchor: undefined }, RangeError],
+    [{ bodyA: b1, bodyB: b2, anchor, limits: { enabled: 'yes', lower: 0, upper: 0 } }, RangeError],
+    [{ bodyA: b1, bodyB: b2, anchor, limits: { enabled: true, lower: NaN, upper: 0 } }, RangeError],
+    [{ bodyA: b1, bodyB: b2, anchor, limits: { enabled: true, lower: 0, upper: Infinity } }, RangeError],
+    [{ bodyA: b1, bodyB: b2, anchor, limits: { enabled: true, lower: 0.1, upper: 0.5 } }, RangeError],
+    [{ bodyA: b1, bodyB: b2, anchor, limits: { enabled: true, lower: -0.5, upper: -0.1 } }, RangeError],
+    [{ bodyA: b1, bodyB: b2, anchor, limits: null }, RangeError],
+  ];
+  for (const [spec, error] of bad) {
+    const { model, history } = jointSetup();
+    const before = plain(model.get(ROOT_UID).props);
+    assert.throws(() => history.execute(createJoint(spec)), error, JSON.stringify(spec));
+    assert.deepEqual(joints(model), []);
+    assert.deepEqual(plain(model.get(ROOT_UID).props), before);
+    assert.equal(history.state.undoLabel, 'Create circle');
+    const uid = history.execute(createJoint({ bodyA: b1, bodyB: b2, anchor }));
+    assert.equal(model.prop(uid, 'id'), 'j_1');
+  }
+});
+
+test('createJoint refuses a pair already joined, in either order', () => {
+  const { model, history, b1, b2 } = jointSetup();
+  history.execute(createJoint({ bodyA: b1, bodyB: b2, anchor: { x: 0, y: 0 } }));
+  for (const [bodyA, bodyB] of [[b1, b2], [b2, b1]]) {
+    assert.throws(() => history.execute(createJoint({ bodyA, bodyB, anchor: { x: 0, y: 0 } })), Error);
+    assert.equal(joints(model).length, 1);
+    assert.equal(history.state.undoLabel, 'Create joint');
+  }
+  assert.equal(model.nextId('j'), 'j_2');
 });

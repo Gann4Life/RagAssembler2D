@@ -10,6 +10,7 @@ import { selectTool } from './tools/select.js';
 import { selectBoxTool } from './tools/select-box.js';
 import { circleTool } from './tools/circle.js';
 import { boxTool } from './tools/box.js';
+import { hingeTool } from './tools/hinge.js';
 
 /**
  * Editor core, shared by every UI module.
@@ -26,7 +27,7 @@ import { boxTool } from './tools/box.js';
 
 const MODE_NAMES = Object.freeze({ edit: 'Edit', animate: 'Animate', simulate: 'Simulate' });
 
-const TOOLS = Object.freeze([selectTool, selectBoxTool, circleTool, boxTool]);
+const TOOLS = Object.freeze([selectTool, selectBoxTool, circleTool, boxTool, hingeTool]);
 
 /**
  * Builds the editor core without DOM: model, history, selection, modes, settings, camera, tool registry and

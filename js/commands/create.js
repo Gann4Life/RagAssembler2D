@@ -1,5 +1,6 @@
 import { defaultsOf } from '../../lib/schema.js';
 import { ROOT_UID } from '../model/model.js';
+import { jointBetween } from '../model/queries.js';
 
 const SHAPE_TYPES = ['circle', 'box'];
 const SIZE_FIELDS = { circle: ['radius'], box: ['width', 'height'] };
@@ -65,6 +66,51 @@ export function createShapeBody({ position, angle, shape } = {}, label = `Create
       const rootBody = model.prop(ROOT_UID, 'rootBody');
       if (rootBody === null || rootBody === undefined) tx.set(ROOT_UID, 'rootBody', bodyId);
       return model.children(bodyUid, 'fixtures')[0];
+    },
+  });
+}
+
+function validateJoint(model, bodyA, bodyB, anchor, limits) {
+  const finite = (value) => typeof value === 'number' && Number.isFinite(value);
+  const isBody = (uid) => model.get(uid)?.type === 'body';
+  if (!isBody(bodyA) || !isBody(bodyB)) throw new Error('bodyA and bodyB must be body uids');
+  if (bodyA === bodyB) throw new Error('bodyA and bodyB must be different bodies');
+  if (jointBetween(model, bodyA, bodyB) !== null) throw new Error('A joint already connects these bodies');
+  if (!finite(anchor?.x) || !finite(anchor?.y)) throw new RangeError('anchor must be a pair of finite numbers');
+  if (limits === undefined) return;
+  if (typeof limits?.enabled !== 'boolean') throw new RangeError('limits.enabled must be a boolean');
+  if (!finite(limits.lower) || !finite(limits.upper)) throw new RangeError('limits must be finite numbers');
+  if (limits.lower > 0 || limits.upper < 0) throw new RangeError('limits must satisfy lower <= 0 <= upper');
+}
+
+/**
+ * Builds a command that appends one revolute joint between two bodies, already ordered by the caller.
+ * `run` returns the new joint uid. Every field not given takes its schema default; `rootBody` is untouched.
+ * @param {{ bodyA: number, bodyB: number, anchor: { x: number, y: number }, limits?: { enabled: boolean, lower: number, upper: number } }} spec
+ *   Body uids (parent, child), anchor (root-local meters, rest pose) and optional limits (radians).
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command.
+ * @throws {Error} When `run` finds a uid that is not a body, equal uids, or a joint already connecting the pair.
+ * @throws {RangeError} When `run` finds a non-finite `anchor`, or `limits` with a non-boolean `enabled`, a
+ *   non-finite bound, `lower > 0` or `upper < 0`; nothing is mutated and no id is allocated then.
+ */
+export function createJoint({ bodyA, bodyB, anchor, limits } = {}, label = 'Create joint') {
+  return Object.freeze({
+    label,
+    run(tx) {
+      const { model } = tx;
+      validateJoint(model, bodyA, bodyB, anchor, limits);
+      const jointId = model.nextId('j');
+      const props = {
+        ...defaultsOf('joint'),
+        id: jointId,
+        name: `joint_${numberOf(jointId)}`,
+        bodyA: model.prop(bodyA, 'id'),
+        bodyB: model.prop(bodyB, 'id'),
+        anchor: [anchor.x + 0, anchor.y + 0],
+      };
+      if (limits !== undefined) props.limits = { enabled: limits.enabled, lower: limits.lower + 0, upper: limits.upper + 0 };
+      return tx.add(ROOT_UID, 'joints', undefined, { type: 'joint', props });
     },
   });
 }

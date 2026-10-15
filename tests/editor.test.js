@@ -146,7 +146,7 @@ test('escape cancels an open gesture, else clears the selection', () => {
 });
 
 const SELECTION_TOOLS = ['select', 'select-box'];
-const CREATION_TOOLS = ['circle', 'box'];
+const CREATION_TOOLS = ['circle', 'box', 'hinge'];
 const REGISTERED_TOOLS = [...SELECTION_TOOLS, ...CREATION_TOOLS];
 
 test('createEditor builds a tool registry with the built tools, Select active', () => {
@@ -214,6 +214,18 @@ test('escape cancels through the tool registry, else clears the selection', () =
   assert.equal(tools.cancel(), false);
   actions.run('escape');
   assert.deepEqual(selection.objects, []);
+});
+
+test('tool:hinge is enabled in Edit mode and refused in Animate mode', () => {
+  const editor = createEditor();
+  const { actions, tools, modes } = editor;
+  assert.equal(actions.isEnabled('tool:hinge'), true);
+  assert.equal(actions.run('tool:hinge'), true);
+  assert.equal(tools.active?.id, 'hinge');
+  modes.openClip(addClip(editor));
+  assert.equal(actions.isEnabled('tool:hinge'), false);
+  assert.equal(actions.reason('tool:hinge'), 'not available in Animate mode');
+  assert.notEqual(tools.active?.id, 'hinge');
 });
 
 test('undo through the action during a gesture only cancels it', () => {

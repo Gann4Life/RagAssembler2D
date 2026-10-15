@@ -93,7 +93,7 @@ A shape may have **one sprite**. The sprite is visual only and never affects phy
 ### 2.4 Joints
 v1 supports **revolute (hinge) joints** only.
 
-- `bodyA` is the **parent**, closer to `rootBody` in the joint tree. `bodyB` is the **child**. The editor assigns this on creation, and the user can swap it in the inspector.
+- `bodyA` is the **parent**, closer to `rootBody` in the joint tree. `bodyB` is the **child**. The Hinge tool assigns them on creation ([§5.5](#55-tools)): of the two bodies, the one with fewer joints between it and `rootBody` becomes bodyA, counting joints in either direction (a joint connects its two bodies whichever is bodyA); a body not connected to `rootBody` counts as farthest; on a tie, the body earlier in `bodies` order becomes bodyA. Creating a joint never reorients existing ones, and the user can swap bodyA and bodyB in the inspector.
 - `anchor` is root-local, in rest pose.
 - The reference angle is **not stored**: it is derived from the rest pose (`bodyB.angle − bodyA.angle`). A joint angle of 0 therefore always means rest.
 - Limits are relative to rest and must satisfy `lower ≤ 0 ≤ upper`, so the rest pose is always valid.
@@ -411,7 +411,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - Lines are 1 CSS px wide at every zoom, aligned to device pixels.
 - **Snapping:**
   - **Grid snap** (*Snap to grid*, default off) rounds the points that tools place or drag to the nearest multiple of the minor spacing, in world coordinates, whether the grid is shown or not: creation points and polygon vertices, the Hinge anchor, and the position a Manipulate move reaches (root position, body position with its subtree following, joint anchor). Sizes follow from snapped points, and a circle's radius is rounded to the minor spacing, never below it. Sprite edit, Pose, inspector fields and Hierarchy additions do not snap.
-  - **Angle snap:** SHIFT while rotating (Manipulate rotate handle, `aimAxis` handle, sprite edit ring) rounds the resulting angle to a multiple of 15°: the body's root-local `angle` in Edit mode, the parent joint's `angle` channel in Animate mode, `aimAxis` and the sprite `angle` in their own frames.
+  - **Angle snap:** SHIFT while rotating (Manipulate rotate handle, `aimAxis` handle, sprite edit ring) or while dragging Hinge Joint limits rounds the resulting angle to a multiple of 15°: the body's root-local `angle` in Edit mode, the parent joint's `angle` channel in Animate mode, `aimAxis` and the sprite `angle` in their own frames, and the Hinge limit θ ([§5.5](#55-tools)).
 - **Display modes** (Settings, default Both), in every editor mode:
 
   | Mode | Sprites | Shapes |
@@ -533,10 +533,15 @@ The tools live in a **floating toolbar overlay inside the Viewport panel**, not 
   - Right click deletes the last vertex.
   - Esc aborts.
   - The shape must be convex with at most 8 vertices. Invalid edges are drawn red while drawing, and closing an invalid polygon is refused.
-- **Hinge Joint** (`H`): click where two shapes of different bodies overlap (the two topmost under the cursor). The body closer to `rootBody` becomes bodyA.
-  - Click and release creates a "pin" joint with no limits.
-  - Dragging away from the anchor enables symmetric limits ±θ, with θ = drag distance at 1 px = 1°, clamped to 0–180°. The arc gizmo is shown while dragging.
-  - Limits can be fine-tuned in the inspector.
+- **Hinge Joint** (`H`): press where shapes of two different bodies overlap to join those bodies with a revolute joint whose anchor is the press point.
+  - **Pair.** At the press, the shapes under the pointer (hit testing of [§5.4](#54-viewport); joints and the root are skipped) are walked topmost first, and the first two different bodies they belong to are joined. bodyA and bodyB are assigned by the rule of [§2.4](#24-joints). The bodies come from the pointer position, not from the snapped anchor.
+  - **Refused presses.** A press does nothing (no joint, no undo step, selection unchanged) when fewer than two bodies are under the pointer (empty space, a single shape, or only shapes of one body), or when a joint already connects those two bodies, in either order. While no press is in progress, the cursor is `not-allowed` wherever a press would be refused, and the crosshair elsewhere.
+  - **Anchor.** The press point, grid-snapped ([§5.4](#54-viewport)), stored root-local in the rest pose. With grid snap on it may fall outside both shapes; validation reports that as a warning ([§6.4](#64-validation)).
+  - **Click** (a press and release that never became a drag, with the same 4 px latch as Circle and Box): creates a **pin**, a joint with limits disabled.
+  - **Drag:** creates symmetric limits ±θ, enabled. θ in degrees is the screen distance from the anchor to the pointer at 1 px = 1°, rounded to a whole degree and clamped to 0–180°; SHIFT rounds it to a multiple of 15° ([§5.4](#54-viewport)). The distance is measured from where the anchor is on screen at that moment, so panning or zooming during the drag keeps θ consistent with the preview. A drag that ends with θ = 0 creates a pin. No other modifiers.
+  - **Preview** while pressed, in the hover color at 1 px: the joint gizmo of [§5.4](#54-viewport) at the anchor, i.e. its circle, its needle along the zero direction (toward bodyB's origin, so it shows which body becomes the child) and, while θ > 0, the limit arc from −θ to +θ.
+  - **Result:** one new joint with the schema defaults ([`docs/schema.md`](docs/schema.md)) for every other field (motor, `aimAxis` 0, `collideConnected` false), named `joint_<n>` after its id (`j_4` → `joint_4`), appended to `joints`. `rootBody` is not changed. The joint is selected and the tool stays active. A joint that closes a loop in the joint graph is allowed and becomes a loop joint ([§2.4](#24-joints)).
+  - The right button does nothing. Esc aborts. Asymmetric limits and every other joint field are set in the inspector.
 
 ### 5.6 Hierarchy, Assets and Problems panels
 Default location ([§5.2](#52-panels)): right top, as tabs of one stack.
