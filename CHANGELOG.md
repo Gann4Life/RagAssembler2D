@@ -32,7 +32,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - Viewport feedback: the shape under the pointer gets a hover outline, selected bodies, shapes and joints get a thicker selection outline, and invalid targets are outlined in red, all following the displayed pose.
 - Viewport gizmos: a cross and ring at the root position, and a circle at each joint anchor with its limit arc, angle needle and `aimAxis` arrow.
 - Settings popover: an Overlays group with Names (body, shape and joint labels) and Centers of mass toggles, saved with the other editor settings. A Contacts toggle is also listed but draws nothing yet.
-- Tool hotkeys: every tool in the hotkey table has its key bound, and viewport pointer and key input is routed to the active tool. No tool is available yet, so these keys do nothing for now.
+- Tool hotkeys: every tool in the hotkey table has its key bound, and viewport pointer and key input is routed to the active tool. Only the Circle and Box tools are available so far.
+- Circle tool (C): click for a default-size circle, or drag from the center to set the radius. The center snaps to the grid and the radius rounds to the grid spacing when snapping is on.
+- Box tool (R): click for a default-size box, or drag from a corner. SHIFT makes it square, and CTRL or ALT center it on the press point. Corners snap to the grid when snapping is on.
+- Both tools preview the shape while dragging, create one body with one shape per operation (one undo step) and select the new shape. The first body created becomes the root body.
 
 ### Changed
 - Documentation: `docs/architecture.md` now defines the editor core architecture and module conformance rules, and the new `docs/schema.md` lists the property schema of every `.rag.json` object.
