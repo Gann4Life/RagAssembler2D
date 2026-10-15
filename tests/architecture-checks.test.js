@@ -10,6 +10,7 @@ import {
   isUi,
   checkImports,
   checkPureGlobals,
+  checkMainOnlyGlobals,
   checkModelMutationCalls,
   checkNoComments,
   pureModulePaths,
@@ -171,6 +172,50 @@ test('globals: property names, keys, strings and comments are not references', (
 test('globals: UI and runtime modules are not checked', () => {
   assert.deepEqual(checkPureGlobals(file('js/menu.js', 'const a = document;'), architecture), []);
   assert.deepEqual(checkPureGlobals(file('lib/def.js', 'const a = new Box2D.b2World();'), architecture), []);
+});
+
+test('main-only globals: js/main.js may read PIXI and Box2D', () => {
+  assert.deepEqual(checkMainOnlyGlobals(file('js/main.js', 'const { PIXI, Box2D } = globalThis;\nawait createViewport(PIXI, host);\nuse(Box2D);')), []);
+});
+
+test('main-only globals: another js/ module is rejected with file and line', () => {
+  const source = 'const a = 1;\nconst app = new PIXI.Application();\nconst w = new Box2D.b2World();\n';
+  const violations = checkMainOnlyGlobals(file('js/panels/inspector.js', source));
+  assert.deepEqual(
+    violations.map((entry) => entry.split(': ')[0]),
+    ['js/panels/inspector.js:2', 'js/panels/inspector.js:3'],
+  );
+  assert.equal(checkMainOnlyGlobals(file('js/model/x.js', 'const a = PIXI;')).length, 1);
+});
+
+test('main-only globals: parameters and local bindings are not the global', () => {
+  const source = [
+    'export async function createViewport(PIXI, host) {',
+    '  const app = new PIXI.Application();',
+    '  return app;',
+    '}',
+    'const make = (Box2D) => new Box2D.b2World();',
+    'const other = async ({ PIXI: lib }, Box2D = null) => Box2D;',
+    'class A { build(PIXI) { return PIXI.Graphics; } }',
+    'function f() { const PIXI = inject(); return PIXI.Sprite; }',
+  ].join('\n');
+  assert.deepEqual(checkMainOnlyGlobals(file('js/viewport.js', source)), []);
+});
+
+test('main-only globals: a binding does not cover references outside its scope', () => {
+  const source = 'function f(PIXI) { return PIXI; }\nconst g = new PIXI.Application();\nif (PIXI) {}\n';
+  const violations = checkMainOnlyGlobals(file('js/viewport.js', source));
+  assert.deepEqual(
+    violations.map((entry) => entry.split(': ')[0]),
+    ['js/viewport.js:2', 'js/viewport.js:3'],
+  );
+});
+
+test('main-only globals: property names, keys, strings and files outside js/ are not references', () => {
+  const source = "const a = { PIXI: 1, Box2D: 2 };\nconst b = x.PIXI;\nconst c = 'Box2D';\n/** PIXI */\nconst d = o?.Box2D;\n";
+  assert.deepEqual(checkMainOnlyGlobals(file('js/menu.js', source)), []);
+  assert.deepEqual(checkMainOnlyGlobals(file('lib/def.js', 'const a = new Box2D.b2World();')), []);
+  assert.deepEqual(checkMainOnlyGlobals(file('tests/a.test.js', 'const a = PIXI;')), []);
 });
 
 test('mutation calls: applyOps, batch and reset on a model are restricted to their owners', () => {

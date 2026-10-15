@@ -7,6 +7,7 @@ import {
   parseArchitecture,
   checkImports,
   checkPureGlobals,
+  checkMainOnlyGlobals,
   checkModelMutationCalls,
   checkNoComments,
   pureModulePaths,
@@ -38,6 +39,10 @@ test('architecture: imports follow the dependency rules and layers', () => {
 
 test('architecture: pure modules do not reference DOM, PIXI or LiquidFun globals', () => {
   assertNoViolations(checkPureGlobals(files, architecture));
+});
+
+test('architecture: only js/main.js reads the PIXI and Box2D globals', () => {
+  assertNoViolations(checkMainOnlyGlobals(files));
 });
 
 test('architecture: applyOps, batch and reset are called only by their owners', () => {
