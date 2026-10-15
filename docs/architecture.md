@@ -39,6 +39,8 @@ RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `
 
 **(planned)** Boot becomes: `main.js` checks the globals → `createEditor()` (core, no DOM) → mounts the dock, header, panels and viewport, passing them the editor object → registers action handlers that need the DOM (file pickers) → offers draft recovery ([`DESIGN.md` §1](../DESIGN.md#1-conventions)).
 
+**(planned, #10)** `main.js` creates the editor first, then the header and dock as today. It registers the DOM actions on `editor.actions` (`window`, `panel:<id>`, `reset-layout`, replacing the direct wiring of the Window menu), routes every `header-action` to `actions.run(id)`, refreshes every header button from `isEnabled`/`reason` once after registration and on each `history`, `mode` and `selection` event, and adds one `keydown` listener on `document` that calls `dispatchKey(event, { actions, tools: null, viewportFocused })`. The Window button's Down/Up handling stays on the button.
+
 ## Dependency rules
 
 | From | May import |
@@ -116,21 +118,21 @@ The runtime split (`def`, `instance`, `render`, `collision`) is confirmed by the
 
 | Module | Responsibility | Public exports | Imports (js/) | Issue |
 |---|---|---|---|---|
-| `js/editor.js` | Composition root without DOM: builds model, history, selection, modes, tools, actions and settings, and wires mode changes to tool/gesture cancellation. | `createEditor() → Editor`, typedef `Editor` | core | #10 |
+| `js/editor.js` | Composition root without DOM ([Editor composition](#editor-composition)): builds model, history, selection, modes and actions, registers the core actions, and wires mode changes to gesture (later tool) cancellation. Tools join with #12, settings with #11. | `createEditor() → Editor`, typedef `Editor` (`model`, `history`, `selection`, `modes`, `actions`) | core | #10 |
 | `js/model/io.js` | File JSON ⇄ model: `loadJson` (migrate, validate, reset, drop unknown fields with warnings), `newDocument`, `toJson`, `uidAtPath`. | `loadJson`, `newDocument`, `toJson`, `uidAtPath` | model | #27 |
 | `js/model/queries.js` | Derived read-only views: joint tree from `rootBody`, loop joints, unlinked bodies, body subtree, references to an id (joints, tracks, sprite users). Created with the same rule as `lib/geometry.js`. | `jointTree`, `bodySubtree`, `referencesTo`, `spriteUsers` | model | first of #13, #19 |
-| `js/model/selection.js` | Selection: `objects` (root, bodies, shapes, joints, assets, clips) and `timeline` (keys, events) uid sets, plus `focus`. Prunes removed uids. Not undoable. | `Selection` | model | #10 |
-| `js/commands/history.js` | Command stack, transactions and gestures ([Commands and undo](#commands-and-undo)). | `History`, typedefs `Command`, `Transaction` | model | #10 |
-| `js/commands/props.js` | Property edits (single or multi-object). Renaming a clip also applies the key-follows-name rule ([schema.md](schema.md#clip-clips)); the model does not. | `setProps` | model | #10 |
+| `js/model/selection.js` | Selection ([Selection](#selection)): `objects` (root, bodies, shapes, joints, assets, clips) and `timeline` (keys, events) uid lists, plus `focus`. Prunes removed uids, clears on reset. Not undoable. | `Selection`, typedef `SelectionState` | model | #10 |
+| `js/commands/history.js` | Command stack, transactions, gestures, saved point ([Commands and undo](#commands-and-undo)). The only caller of `model.applyOps` and `model.batch`. | `History`, `HISTORY_LIMIT`, typedefs `Command`, `Transaction`, `HistoryState` | model | #10 |
+| `js/commands/props.js` | Property edits (single or multi-object). Renaming a clip also applies the key-follows-name rule ([schema.md](schema.md#clip-clips)); the model does not. | `setProps(uids, values, label?) → Command` | model | #10 |
 | `js/commands/create.js` | Shape bodies, joints, clips, sprite assets; assigns `rootBody` when it is `null`. | `createShapeBody`, `createJoint`, `createClip`, `importSpriteAssets` | model, queries | #14–#16, #19, #21 |
 | `js/commands/delete.js` | Deletion with cascade ([`DESIGN.md` §5.6](../DESIGN.md#56-hierarchy-assets-and-problems-panels)), plus the plan shown in the confirmation. | `deletionPlan`, `deleteObjects` | model, queries | #19 |
 | `js/commands/group.js` | Group / Ungroup. | `group`, `ungroup` | model, queries | #18 |
 | `js/commands/duplicate.js` | Duplicate selection. | `duplicate` | model, queries | #63 |
 | `js/commands/transform.js` | Move/rotate root, body subtrees, joint anchor and `aimAxis`, sprite offset/angle/scale. | `moveRoot`, `moveBodies`, `rotateBody`, `moveAnchor`, `setAimAxis`, `editSprite` | model, queries | #17, #24 |
 | `js/commands/animation.js` | Tracks, keys and events; keeps keys and events sorted by `t`. | `addTrack`, `removeTrack`, `setKey`, `removeKeys`, `moveKeys`, `addEvent`, `moveEvents` | model | #33–#35, #39 |
-| `js/modes.js` | Mode state and policy ([Modes](#modes)). | `Modes`, `MODE_POLICY` | model | #10 |
-| `js/hotkeys.js` | Default bindings ([`DESIGN.md` §5.9](../DESIGN.md#59-hotkeys-defaults)) and key matching. | `HOTKEYS`, `matchHotkey`, `dispatchKey` | — | #10 |
-| `js/actions.js` | Action registry shared by the header, hotkeys and menus. | `ActionRegistry`, typedef `ActionId` | — | #10 |
+| `js/modes.js` | Mode, open clip and playhead state, and the mode policy ([Modes](#modes)). | `Modes`, `MODE_POLICY`, typedefs `Mode`, `Capability` | model | #10 |
+| `js/hotkeys.js` | Default bindings ([`DESIGN.md` §5.9](../DESIGN.md#59-hotkeys-defaults)), key matching and the key dispatcher ([Actions and hotkeys](#actions-and-hotkeys)). Reads only properties of the event it is given. | `HOTKEYS`, `matchHotkey`, `dispatchKey`, typedef `Hotkey` | — | #10 |
+| `js/actions.js` | Action registry shared by the header, hotkeys and menus ([Actions and hotkeys](#actions-and-hotkeys)). | `ActionRegistry`, typedefs `ActionId`, `ActionSpec` | — | #10 |
 | `js/units.js` | UI conversions: m ⇄ px, rad ⇄ deg, mult ⇄ %. The only place UI units exist. | `toDisplay`, `fromDisplay`, `displayUnit` | — | #20 |
 | `js/tools/tool.js` | Tool contract ([Tools](#tools)). | `defineTool`, typedefs `Tool`, `ToolContext`, `ToolPointerEvent`, `ToolKeyEvent` | — | #12 |
 | `js/tools/registry.js` | Tool registry, activation under the mode policy, gesture handling, hotkey lookup. | `ToolRegistry` | tool, modes, history | #12 |
@@ -147,6 +149,7 @@ The runtime split (`def`, `instance`, `render`, `collision`) is confirmed by the
 | `js/viewport/gizmos.js` | Root, joint, selection and hover gizmos; strength fill in Animate. | `createGizmos` | #12, #36 |
 | `js/viewport/input.js` | DOM pointer/keyboard/wheel → navigation, then `ToolPointerEvent` → registry; click counting; context menu suppression. | `attachInput` | #11, #12 |
 | `js/viewport/toolbar.js` | Tools overlay ([`DESIGN.md` §5.5](../DESIGN.md#55-tools)): a vertical `role="toolbar"` inside the Viewport panel, sibling of the viewport host, with inline SVG icons, `aria-pressed`/`aria-disabled` states, roving tabindex in both orientations, two-column class from a `ResizeObserver` below 315 px of host height, and tooltips through `js/tooltip.js` with text from `actionTitle`, which gains an optional `reason` (default `'not available yet'`) for the "not available in *Mode* mode" suffix. Clicks call `onActivate(id)` and focus the viewport host; it never activates tools itself. Imports `js/roving-focus.js`, `js/header.js` (`actionTitle`), `js/tooltip.js`. Raises `VIEWPORT_MIN` to 240 × 168. | `TOOL_BUTTONS` (groups of `{ id, label, hotkey, icon }`, ids as in [Tools](#tools)), `createToolbar(viewportPanel, { onActivate }) → Toolbar` (`setActive(id \| null)`, `setEnabled(id, enabled, reason?)`, `width()`, `destroy()`) | Tools overlay issue (planner) |
+| `js/header.js` (#10 changes) | `actionTitle(action, enabled, reason?)` and `setActionEnabled(button, enabled, reason?)` take the tooltip reason ([`DESIGN.md` §5.3](../DESIGN.md#53-header)): `reason` defaults to `'not available yet'` and is appended as " (*reason*)"; `null` appends nothing. `js/main.js` refreshes every button from `actions.isEnabled(id)` and `actions.reason(id)`. Shared with the Tools overlay issue: whichever lands first adds the parameter. | unchanged names | #10 |
 | `js/tooltip.js` | Custom tooltip for icon buttons: shown after 400 ms of hover or at once on `:focus-visible`, hidden on leave, blur, Esc and press; `aria-hidden`; never sets `title`. | `attachTooltip(element, text: () => string) → () => void` | Tools overlay issue (planner) |
 | `js/panels/hierarchy.js`, `assets.js`, `problems.js`, `inspector.js`, `timeline.js` | One panel each ([`DESIGN.md` §5.6–5.8](../DESIGN.md#56-hierarchy-assets-and-problems-panels)). The inspector builds its rows from `fieldsOf` ([schema.md](schema.md)). | `create<Panel>` | #19–#23, #26, #32–#35 |
 | `js/storage.js` (draft functions) | Draft autosave and recovery in the built storage module, same failure rules. | `saveDraft`, `loadDraft`, `clearDraft` | #29 |
@@ -181,23 +184,53 @@ NodeSnapshot { uid?, type, props, children?: { [collection]: NodeSnapshot[] } }
 Strategy: **command objects recorded as primitive operations**, not model snapshots ([decision](decisions.md)). `js/commands/history.js` **(planned, #10)**.
 
 ```
-Command     { label: string, run(tx: Transaction): void }
-Transaction { model, set(uid, path, value), add(parentUid, collection, index, init) → uid,
-              remove(uid), move(uid, parentUid, collection, index) }
-Op          { op: 'set',    uid, path, value, previous }
-            | { op: 'add',    snapshot, parent, collection, index }
-            | { op: 'remove', snapshot, parent, collection, index }
-            | { op: 'move',   uid, from: Slot, to: Slot }      Slot = { parent, collection, index }
+Command      { label: string, run(tx: Transaction): * }
+Transaction  { model, set(uid, path, value), add(parentUid, collection, index, snapshot) → uid,
+               remove(uid), move(uid, parentUid, collection, index) }
+Op           { op: 'set',    uid, path, value, previous }
+             | { op: 'add',    snapshot, parent, collection, index }
+             | { op: 'remove', snapshot, parent, collection, index }
+             | { op: 'move',   uid, from: Slot, to: Slot }      Slot = { parent, collection, index }
+HistoryState { canUndo, canRedo, undoLabel: string|null, redoLabel: string|null, dirty, gesture: boolean }
 ```
 
-- **Commands are factories** in `js/commands/*.js` that return a `Command` (e.g. `setProps(uids, { 'limits.upper': 1.2 })`). They validate their preconditions and throw before mutating.
-- **`history.execute(command)`** runs `model.batch(() => command.run(tx))`. Each `tx` call is one `model.applyOps([op])`, applied immediately so `run` reads its own writes; `tx.add` returns the uid from the completed op. The batch returns the complete ops, which carry their inverse data (`previous`, the removed subtree snapshot with its uids), and the model emits one `change` for the whole command. If `run` throws, the batch reverts the applied ops, nothing is recorded and no event fires. An entry whose batch returned no changes is discarded.
-- **Undo, redo and cancel** are one `model.applyOps(ops, cause)` call each, with cause `undo`, `redo` or `cancel`.
-- **Entries** (`do` / `undo` / `merge`): `undo` applies the inverse ops in reverse order; `redo` re-applies the recorded ops (it never calls `run` again, so ids and uids are identical); `merge` appends the ops of the next command and coalesces `set` ops on the same `uid + path` (first `previous`, last `value`).
+**`new History(model, { limit = HISTORY_LIMIT } = {})`**, `HISTORY_LIMIT = 200`. Members: `execute(command)`, `undo() → boolean`, `redo() → boolean`, `beginGesture()`, `endGesture() → boolean`, `cancelGesture() → boolean`, `markSaved()`, `state → HistoryState` (getters `canUndo`, `canRedo`, `dirty`, `inGesture` mirror it), `on/off('history')`. History never checks the mode policy; the actions and tools that call it do.
+
+- **Commands are factories** in `js/commands/*.js` that return a `Command` (e.g. `setProps(uids, { 'limits.upper': 1.2 })`). They validate their preconditions and throw before mutating. `index` in `tx.add`/`tx.move` may be `undefined` (append).
+- **`history.execute(command) → *`** runs `model.batch(() => command.run(tx))` and returns what `run` returned (e.g. a created uid). Each `tx` call is one `model.applyOps([op])`, applied immediately so `run` reads its own writes; `tx.add` returns the uid from the completed op. History keeps the completed ops each `tx` call returns, which carry their inverse data (`previous`, the removed subtree snapshot with its uids), and the model emits one `change` for the whole command. If `run` throws, the batch reverts the applied ops, nothing is recorded, no event fires and the error is rethrown. An execution with no changes records nothing (outside a gesture, the entry is discarded).
+- **Inverse ops** are built by history from the recorded ops (the model's are private): `set` → `set` back to `previous`; `add` → `remove` of `snapshot.uid`; `remove` → `add` of `snapshot` at `parent`/`collection`/`index`; `move` → `move` to `from`.
+- **Undo** applies the inverses of the top entry's ops in reverse order with one `model.applyOps(inverses, 'undo')`; **redo** re-applies the entry's recorded ops with one `applyOps(ops, 'redo')` and never calls `run` again, so file ids and uids are identical. Both return `false` (and do nothing) when there is nothing to undo/redo.
 - **Compound operations are one command:** delete with cascade (joints, tracks, `rootBody` reassignment), group/ungroup, duplicate, create + assign `rootBody`, set key + create track. Whatever `run` does is one undo step.
-- **Continuous edits merge through gestures:** `beginGesture()`, `endGesture()`, `cancelGesture()`. Every command executed while a gesture is open merges into the gesture's single entry. The tool registry opens a gesture on a primary pointer press and closes it on release; inspector drag-scrubbing and sliders do the same. `cancelGesture()` (Esc, tool switch, mode change, or Undo during a gesture) reverts the gesture's ops and records nothing.
-- **Stack:** limit 200 entries (oldest dropped); a new entry clears redo. `markSaved()` and `dirty` track unsaved changes. `clear()` on New and Load.
-- **Not undoable:** selection, camera, layout, settings other than `pixelsPerMeter`, mode, playhead, tool. Load and New reset the model and clear history.
+- **Gestures** merge continuous edits. The tool registry opens one on a primary pointer press and closes it on release; inspector drag-scrubbing and sliders do the same.
+  - `beginGesture()` throws if a gesture is already open. Every command executed while it is open is its own batch (one `change`, cause `do`) and appends its ops to the gesture's pending entry, labelled after its first command with changes.
+  - **Coalescing:** a `set` op replaces an earlier `set` in the pending entry on the same `uid` and `path` (keeping the earlier `previous` and position, taking the new `value`) only when no op between them is a `set` on the same `uid` whose path is a prefix of that path or has it as a prefix (`sprite` vs `sprite.offset`), or an `add`/`remove` whose snapshot contains that `uid`. Otherwise it is appended. This keeps undo and redo exact when a gesture mixes whole-object and field sets.
+  - `endGesture()` records the pending entry and returns `true`, except when it is empty or consists only of `set` ops whose `previous` is JSON-equal to their `value` (a drag back to the start): then nothing is recorded and it returns `false`.
+  - `cancelGesture()` applies the inverses of the pending ops with one `applyOps(inverses, 'cancel')` (skipped when there are none), records nothing and returns `true`. Callers: Esc, tool switch, mode change, and `undo()` while a gesture is open, which only cancels it and undoes nothing else. `redo()` while a gesture is open does nothing. Without an open gesture, `endGesture()` and `cancelGesture()` are no-ops returning `false`, so they are always safe to call.
+- **Stack:** at most `limit` entries; recording an entry beyond it drops the oldest. Recording an entry clears the redo stack; cancelled and discarded gestures do not, because the model is back where it was.
+- **Saved point:** `markSaved()` marks the current state as saved. `dirty` is `false` exactly when the model is at the saved state, reached again through undo/redo, and no gesture with changes is open. Once the saved state can no longer be reached (its entry dropped by the limit, or a new entry recorded while it was on the redo stack), `dirty` stays `true` until the next `markSaved()`.
+- **Reset:** history listens to the model's `reset` event (there is no public `clear`): it drops an open gesture without reverting it, empties both stacks, and sets the saved point to the new document for causes `new` and `load`, or leaves it unreachable for `recover` (a recovered draft is unsaved).
+- **Re-entrancy:** `execute`, `undo`, `redo`, `beginGesture`, `endGesture` (with a gesture open), `cancelGesture` (with a gesture open) and `markSaved` throw while another history call is in progress, i.e. from inside `run` or from a model `change` listener.
+- **Listener errors:** when a model listener throws, the model has already applied the change ([Document model](#document-model)). History still updates its stacks as if the call returned (for `execute`, from the ops it kept, once `run` returned), emits `history`, and then rethrows.
+- **Event:** `history` with `HistoryState` after any call that changes it, only when it differs from the last one emitted. `canUndo` is true when the undo stack is not empty or an open gesture has changes; `canRedo` when the redo stack is not empty and no gesture is open; `gesture` while a gesture is open. `undoLabel`/`redoLabel` are the labels of the entries undo/redo would act on (the pending gesture's label while one with changes is open).
+- **Not undoable:** selection, camera, layout, settings other than `pixelsPerMeter`, mode, playhead, tool. New and Load reset the model, which clears history.
+
+**`setProps(uids, values, label = 'Edit properties') → Command`** (`js/commands/props.js`): `values` maps dotted paths to new values (`{ 'limits.upper': 1.2 }`), the same for every uid; each path is one `tx.set` per uid, in `uids` order. It throws before mutating when `uids` or `values` is empty, a uid is unknown, or a path's first segment is `id` (ids never change, [`DESIGN.md` §1](../DESIGN.md#1-conventions)). It does not check types, ranges or references (the inspector constrains input, validation reports the rest, #25). When `name` is set on a clip, key-follows-name ([schema.md](schema.md#clip-clips)) runs for each clip in `uids` order, with `otherKeys` read after the previous clips of the same command were updated, so renaming several clips at once still yields unique keys; an explicit `key` in `values` wins over the rule.
+
+### Selection
+
+`js/model/selection.js` **(planned, #10)**: `new Selection(model)`.
+
+- **Lists:** `objects` holds uids of types `root`, `spriteAsset`, `body`, `shape`, `joint`, `clip`; `timeline` holds `key` and `event` uids. Both are frozen arrays in selection order without duplicates. `focus` (`'objects'` by default) names the list the inspector shows.
+- **Operations:** `set(uids)` replaces, `add(uids)`, `remove(uids)`, `toggle(uid)`, `clear()` (both lists, focus kept), `has(uid)`. Each of `set`/`add`/`toggle` takes uids of one list only (mixing lists, unknown uids or other node types throw) and moves `focus` to that list; `remove` and `clear` never move it.
+- **Pruning:** on a model `change` it drops every uid with a `remove` change; on `reset` it clears both lists and sets `focus` to `'objects'`. Undo and redo never add to the selection.
+- **Event:** `selection` with `SelectionState` after a call or prune that changed a list or `focus`, once per call.
+
+### Editor composition
+
+`js/editor.js` **(planned, #10)**: `createEditor() → Editor` builds, in this order, `model = new Model()`, `history = new History(model)`, `selection = new Selection(model)`, `modes = new Modes(model)`, `actions = new ActionRegistry()`.
+
+- **Cancellation first:** before anything else subscribes to `modes`, it subscribes the listener that cancels the operation in progress on every `mode` event: `history.cancelGesture()` now, `tools.cancel()` first once #12 adds tools. Emitters run listeners in subscription order, so other `mode` listeners (Simulate start, #54) never see a half-done gesture.
+- **Core actions** registered here: `undo` and `redo` (`isEnabled`: `modes.can('history')` and `history.canUndo`/`canRedo`; `reason`: the mode reason when the policy refuses, else `null`) and `escape` (cancels an open gesture, else clears the selection; #12 replaces the first step with `tools.cancel()`). Actions whose feature is not built are not registered, so they report `'not available yet'`; `play`, `pause`, `next-frame`, `stop` and `toggle-play` arrive with #54, mode switching UI with the Timeline (#32).
 
 ### Change notifications
 
@@ -207,9 +240,9 @@ All emitters are `lib/emitter.js` instances owned privately; owners expose `on` 
 |---|---|---|---|
 | `model` | `change` | `{ changes: Change[], cause: 'do' \| 'undo' \| 'redo' \| 'cancel' }` | Once per committed transaction (`batch`), undo, redo, merge step or cancelled gesture, after the model is consistent. Not emitted when nothing changed. |
 | `model` | `reset` | `{ cause: 'new' \| 'load' \| 'recover' }` | After the whole document was replaced. Views rebuild. |
-| `history` | `history` | `{ canUndo, canRedo, undoLabel, redoLabel, dirty }` | After any stack change. |
-| `selection` | `selection` | `{ objects: number[], timeline: number[], focus: 'objects' \| 'timeline' }` | After any selection change. |
-| `modes` | `mode` | `{ mode: 'edit' \| 'animate' \| 'simulate', previous, clip: number \| null }` | Mode or open clip changed. |
+| `history` | `history` | `HistoryState` ([Commands and undo](#commands-and-undo)) | After a call that changed it. |
+| `selection` | `selection` | `SelectionState` `{ objects: number[], timeline: number[], focus: 'objects' \| 'timeline' }` | After any selection change. |
+| `modes` | `mode` | `{ mode: 'edit' \| 'animate' \| 'simulate', previous, clip: number \| null }` (`previous` is the previous mode) | Mode or open clip changed. |
 | `modes` | `playhead` | `{ time }` (s) | Playhead moved. |
 | `tools` | `tool` | `{ id, previous }` | Active tool changed. |
 | `settings` | `settings` | `{ key, value, previous }` | An editor setting changed. |
@@ -271,17 +304,27 @@ ToolContext      { model, history, selection, modes, settings, camera,
 
 ### Actions and hotkeys
 
-- **`ActionRegistry`** `js/actions.js` **(planned, #10)**: `register(id, { run, isEnabled })`, `run(id)`, `isEnabled(id)`. Ids reuse the header ids (`new`, `load`, `save`, `undo`, `redo`, `play`, `pause`, `next-frame`, `stop`, `window`, `settings`) and add `toggle-play`, `delete`, `group`, `ungroup`, `duplicate`, `key-selected`, `frame-selection`, `frame-all`, `sprite-edit`, `escape`, `tool:<id>`, `panel:<id>` (toggle a panel) and `reset-layout`. Until #10 lands, `js/main.js` connects the Window button, `js/menu.js` and the dock directly; #10 moves that wiring to these actions. The header and hotkeys both call `run`; the header refreshes `aria-disabled` from `isEnabled` on `history`, `mode` and `selection` events.
-- **`HOTKEYS`** `js/hotkeys.js`: `{ keys: 'Ctrl+Shift+Z', action: 'redo' }` rows for §5.9, plus `tool:<id>` rows built from each tool's `hotkey`. `Meta` counts as `Ctrl`. The header's shortcut hints must equal this table (tested).
-- **`dispatchKey(event, { tools, actions, viewportFocused })`** order:
-  1. ignore if `event.defaultPrevented` (the header already handled its arrow keys) or the target is a text field, `select` or `contenteditable`;
+- **`ActionRegistry`** `js/actions.js` **(planned, #10)**: `register(id, ActionSpec)` with `ActionSpec { run(), isEnabled?() → boolean (default true), reason?() → string | null (default null), repeatable?: boolean }`; registering an id twice throws. `has(id)`; `isEnabled(id)` (`false` when not registered); `reason(id)` → `'not available yet'` when not registered, else the spec's `reason()` while disabled, else `null`; `run(id) → boolean`, which runs only a registered, enabled action and says whether it ran. `repeatable` is set for `undo`, `redo` and `next-frame` ([`DESIGN.md` §5.9](../DESIGN.md#59-hotkeys-defaults)). Ids reuse the header ids (`new`, `load`, `save`, `undo`, `redo`, `play`, `pause`, `next-frame`, `stop`, `window`, `settings`) and add `toggle-play`, `delete`, `group`, `ungroup`, `duplicate`, `key-selected`, `frame-selection`, `frame-all`, `sprite-edit`, `escape`, `tool:<id>`, `panel:<id>` (toggle a panel) and `reset-layout`. Until #10 lands, `js/main.js` connects the Window button, `js/menu.js` and the dock directly; #10 moves that wiring to these actions. The header and hotkeys both call `run`; the header refreshes `aria-disabled` from `isEnabled` on `history`, `mode` and `selection` events.
+- **`HOTKEYS`** `js/hotkeys.js`: frozen `Hotkey { keys, action }` rows for §5.9 in table order (`{ keys: 'Ctrl+Shift+Z', action: 'redo' }`, `{ keys: 'Ctrl+Y', action: 'redo' }`, `{ keys: 'Space', action: 'toggle-play' }`, …), plus `tool:<id>` rows built from each tool's `hotkey` (#12). `keys` is `[Ctrl+][Shift+][Alt+]<key>`, where `<key>` is an upper-case letter, a digit, `.`, `Space`, `Del`, `Esc` or `Home`. The header's shortcut hints must equal this table (tested): for each header action with a hint, its rows joined with `' / '` in table order, `play` and `pause` reading the `toggle-play` rows.
+- **`matchHotkey(event) → ActionId | null`**: `Meta` counts as `Ctrl`; `event.key` is compared case-insensitively for letters (`Del` = `Delete`, `Esc` = `Escape`, `Space` = `' '`); Ctrl, Shift and Alt must match the row exactly, so `Ctrl+Z` never matches with Shift held.
+- **`dispatchKey(event, { tools, actions, viewportFocused }) → boolean`** (`tools` may be `null` until #12) order:
+  1. ignore if `event.defaultPrevented` (a focused widget handled the key) or the target is a text field (`input` other than checkbox, radio, range, button types), `textarea`, `select` or `isContentEditable`;
   2. if the viewport has focus, `tools.key(e)`; stop if consumed;
-  3. `matchHotkey(e)`; run the action if enabled and `preventDefault`. Space only matches when focus is the viewport or the page body, and the viewport turns Space into pan-or-toggle ([`DESIGN.md` §5.9](../DESIGN.md#59-hotkeys-defaults)).
-- `escape` runs `tools.cancel()`, and clears the selection when nothing was cancelled.
+  3. `matchHotkey(e)`; on a match, `preventDefault` (even when the action is disabled, so the browser's shortcut never fires), then, unless `event.repeat` and the action is not `repeatable`, `actions.run(id)`. Space only matches when `viewportFocused` or the target is the page `body`, and the viewport turns Space into pan-or-toggle ([`DESIGN.md` §5.9](../DESIGN.md#59-hotkeys-defaults)).
+  
+  It returns `true` when the key was consumed (by a tool or a match). It reads only properties of `event` and its target; it never touches `document`.
+- `escape` runs `tools.cancel()`, and clears the selection when nothing was cancelled (until #12: `history.cancelGesture()`, see [Editor composition](#editor-composition)).
 
 ### Modes
 
-`js/modes.js` **(planned, #10)** holds `mode`, the open clip uid, `playhead` and the mode before Simulate. `openClip(uid | null)` enters Animate or Edit; `startSimulate()` / `stopSimulate()` enter Simulate and restore the previous mode. `can(capability)` reads `MODE_POLICY`, whose rows map one-to-one to the policy table in [`DESIGN.md` §5.1](../DESIGN.md#51-editor-modes):
+`js/modes.js` **(planned, #10)**: `new Modes(model)` holds `mode` (`'edit'` at start), `clip` (open clip uid or `null`), `playhead` (s, `0` at start) and the state before Simulate. Behavior: [`DESIGN.md` §5.1](../DESIGN.md#51-editor-modes).
+
+- **`openClip(uid | null)`**: a clip uid enters Animate with that clip, `null` enters Edit (`clip = null`, `playhead = 0`). Opening a different clip sets `playhead = 0`; opening the open clip again is a no-op. Throws in Simulate (`clip.open` is refused) and for a uid that is not a clip.
+- **`setPlayhead(t)`**: clamps to `[0, length]` of the open clip. Allowed in Animate and Simulate (the playback driver, #54), throws in Edit. Snapping is the timeline's job.
+- **`startSimulate()`** from Edit or Animate stores `{ mode, clip, playhead }` and enters Simulate, keeping `clip`; **`stopSimulate()`** restores the stored state. Each throws when called in the wrong mode. In #10 nothing calls them yet (Play/Stop come with #54); they are tested directly.
+- **Model listeners:** a `remove` change of the open clip closes it: outside Simulate as `openClip(null)`; in Simulate it sets `clip = null` and stores Edit as the mode to restore, so Stop returns to Edit; a `set` of the open clip's `length` re-clamps the playhead; `reset` returns to Edit with `clip = null`, `playhead = 0` and drops the stored state, from any mode.
+- **Events:** `mode` when `mode` or `clip` changes, then `playhead` when the playhead changed in the same call; `playhead` alone for `setPlayhead` and re-clamps. Nothing is emitted when nothing changed.
+- **`can(capability) → boolean`** reads `MODE_POLICY`, a frozen `{ [Capability]: { edit, animate, simulate } }` of booleans; an unknown capability throws. Its rows map one-to-one to the policy table in [`DESIGN.md` §5.1](../DESIGN.md#51-editor-modes) (tested against it):
 
 | Capability | DESIGN §5.1 row |
 |---|---|

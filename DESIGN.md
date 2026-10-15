@@ -28,7 +28,7 @@ RagAssembler is a ragdoll editor for visually designing characters and creatures
 | Identity | Every body, shape, joint and sprite asset has a stable `id` (unique across the file, never reused, used for references) and a human `name` (used for lookup by code). `root` is a reserved id. The editor generates ids as a kind prefix plus a counter (`b_3`, `f_3`, `j_3`, `s_3`), above any id of that prefix seen in the session (as an id or as a reference), and never changes an existing id. "Never reused" holds within an editing session: an id that was deleted and is absent from the saved file may be generated again after a reload. |
 | Clip identity | Clips are referenced by `key`: lower-case, `[a-z0-9_]+`, unique. **The key is the contract with game code.** Renaming a clip's `name` never breaks code. Changing its `key` does, and the inspector warns about it. |
 | Rest pose | The pose built in the editor is the **rest pose**. All joint angles are measured relative to it, so every joint's angle is `0` at rest. |
-| Undo / Redo | Every data mutation (including keys, events and sprite edits) goes through a command stack (minimum 200 steps). One user operation is one step: a compound operation (delete with its cascade, group, ungroup, duplicate) and a continuous gesture (a drag from press to release, a slider or field scrub) each undo at once. Esc during a gesture reverts it without leaving a step. Selection, camera, panel layout, mode, playhead and editor settings (except `pixelsPerMeter`) are not undoable. |
+| Undo / Redo | Every data mutation (including keys, events and sprite edits) goes through a command stack (minimum 200 steps; the oldest are dropped). One user operation is one step: a compound operation (delete with its cascade, group, ungroup, duplicate) and a continuous gesture (a drag from press to release, a slider or field scrub) each undo at once. Esc or Undo during a gesture reverts it without leaving a step and undoes nothing else; Redo during a gesture does nothing. A gesture that ends where it started leaves no step. A new step clears Redo. New and Load clear both. Selection, camera, panel layout, mode, playhead and editor settings (except `pixelsPerMeter`) are not undoable, and Undo/Redo never change them, except that objects that no longer exist leave the selection and a clip that no longer exists is closed ([§5.1](#51-editor-modes)). |
 | Autosave | The editor stores a draft in browser storage every 30 s and on page unload, and offers to recover it on the next start. |
 
 ---
@@ -311,6 +311,7 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 
 - In Animate mode, inspector fields that are not animatable are shown read-only, and animatable ones show the evaluated value with their key button. Manipulate only rotates (no move handles).
 - Changing mode cancels the tool operation in progress (as Esc). If the active tool is disabled in the new mode, the Select tool becomes active.
+- **Playhead and open clip.** Opening a different clip puts the playhead at 0; the playhead always stays within `[0, length]` of the open clip, also when `length` changes. When the open clip stops existing (deleted, or its creation undone) the editor returns to Edit mode. New and Load return to Edit mode with the playhead at 0. Stop restores the mode, clip and playhead that were active before Play.
 
 ### 5.2 Panels
 The workspace below the header is tiled by panels: Viewport, Hierarchy, Assets, Problems, Inspector and Timeline. Panels never overlap. If the window is smaller than the sum of the minimum sizes, the workspace scrolls (see *Window resize* below). The Tools are not a panel: they float over the Viewport ([§5.5](#55-tools)).
@@ -366,7 +367,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
 
 - **Buttons** are text-labelled. Each tooltip shows the label, plus the hotkey from [§5.9](#59-hotkeys-defaults) if one exists. Buttons without a §5.9 hotkey show none.
 - **Keyboard:** the header is a single Tab stop (`role="toolbar"`, roving tabindex). Left/Right move between buttons and wrap around, and Home/End jump to the first/last button. These keys do not trigger global hotkeys ([§5.9](#59-hotkeys-defaults)).
-- **Unavailable actions** use `aria-disabled` and stay focusable, so keyboard users can still reach them. The tooltip adds "(not available yet)".
+- **Unavailable actions** use `aria-disabled` and stay focusable, so keyboard users can still reach them. The tooltip adds the reason: "(not available yet)" for an action that is not built, "(not available in *Mode* mode)" for one the mode policy disables ([§5.1](#51-editor-modes)), and nothing when only the current state disables it (e.g. Undo with nothing to undo).
 - If the window is narrower than the row, the header scrolls horizontally. Buttons never wrap.
 
 - **New**: new empty ragdoll. Asks for confirmation if there are unsaved changes.
@@ -375,7 +376,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - Invalid files are rejected with a list of errors.
   - Sprite images are resolved relative to the file. The browser cannot read sibling files on its own, so the editor asks for the asset folder (directory picker where supported, multi-file picker otherwise). Missing images are drawn as placeholders and listed in Problems.
 - **Save**: exports the `.rag.json`, and optionally the sprite images under their `src` paths (directory save where supported, otherwise a download of each). Blocked while there are validation **errors**. **Warnings** are allowed.
-- **Undo / Redo**.
+- **Undo / Redo**: step back or forward through the command stack ([§1](#1-conventions)). Enabled when there is a step to undo or redo, and not in Simulate mode.
 - **Play / Pause / Next frame / Stop**:
   - Next frame advances one fixed step (1/60 s).
   - Stop restores the pose and time that were active before Play.
@@ -633,6 +634,9 @@ Default location ([§5.2](#52-panels)): bottom, full width. Modeled after Godot'
 | Esc | Abort tool / clear selection | | |
 
 - Hotkeys are ignored while focus is in a text field. Space also goes to a focused button or control instead of Play/Pause.
+- On macOS, Cmd acts as Ctrl. Keys match the character the keyboard layout produces (letters case-insensitive), and modifiers must match exactly.
+- A matched hotkey always suppresses the browser's own shortcut (e.g. Ctrl+S never opens the browser's save dialog), even when its action is currently disabled.
+- Holding a key repeats only Undo, Redo and Next frame; other hotkeys act once per press.
 - While focus is in a toolbar, a tab list, a resize handle or an open menu, their navigation keys (arrows, Home, End, Space, Enter, Esc) do not trigger global hotkeys.
 - In the viewport, Space + left drag pans. A Space press without a drag toggles Play/Pause when Space is released.
 
