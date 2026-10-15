@@ -40,7 +40,7 @@ const WHEEL_LINE = 16;
 const TIMELINE = 'timeline';
 const PANEL_IDS = Object.freeze(Object.keys(PANELS));
 const WINDOW_ORDER = Object.freeze(['viewport', ...PANEL_IDS]);
-const WIDGET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', ' ', 'Escape']);
+const ACTIVATION_KEYS = new Set(['Enter', ' ']);
 
 /**
  * Renders the dock layout inside the workspace and turns pointer and keyboard input into layout operations.
@@ -99,9 +99,14 @@ export function createDock(workspace, { viewportElement }) {
   function initialLayout(size) {
     const stored = loadLayout();
     if ('value' in stored) {
-      const restored = restoreLayout(stored.value, size);
-      if (restored.warning) console.warn(restored.warning);
-      return restored.layout;
+      try {
+        const restored = restoreLayout(stored.value, size);
+        if (restored.warning) console.warn(restored.warning);
+        return restored.layout;
+      } catch (error) {
+        console.warn(`Stored layout ignored: ${error.message}`);
+        return defaultLayout(size);
+      }
     }
     if (stored.error === 'parse') console.warn('Stored layout ignored: not valid JSON');
     return defaultLayout(size);
@@ -289,9 +294,10 @@ export function createDock(workspace, { viewportElement }) {
   function toggleFold() {
     const fold = timelineFold(layout);
     if (!fold) return;
-    const focusInside = !fold.folded && panelElements.get(TIMELINE).contains(doc.activeElement);
+    const focused = doc.activeElement;
+    const focusInside = panelElements.get(TIMELINE).contains(focused);
     commit(setTimelineFolded(layout, !fold.folded));
-    if (focusInside) foldButton.focus();
+    if (!fold.folded && (focusInside || (focused && !focused.isConnected))) foldButton.focus();
   }
 
   function open(id) {
@@ -302,7 +308,10 @@ export function createDock(workspace, { viewportElement }) {
   function close(id) {
     if (!isOpen(id) || id === 'viewport') return;
     const owner = stackOf(layout.tree, id);
-    const hadFocus = doc.activeElement?.closest?.('[data-panel]')?.dataset.panel === id;
+    const focused = doc.activeElement;
+    const focusedPanel = focused?.closest?.('[data-panel]')?.dataset.panel;
+    const inStack = stackElements.get(owner.id)?.contains(focused) === true;
+    const hadFocus = focusedPanel === id || (inStack && focusedPanel === undefined);
     commit(closePanel(layout, id), { focusPanel: hadFocus ? null : focusedTabPanel() });
     if (!hadFocus) return;
     const remaining = collectStacks(layout.tree).find((node) => node.id === owner.id);
@@ -344,7 +353,12 @@ export function createDock(workspace, { viewportElement }) {
   }
 
   function onScroll(event) {
-    if (event.target.classList?.contains('dock-tablist')) updateFades(event.target);
+    if (!event.target.classList?.contains('dock-tablist')) return;
+    updateFades(event.target);
+    if (!tabDrag?.active) return;
+    const stackElement = event.target.closest('.dock-stack');
+    tabDrag.rects.tabs.set(stackElement.dataset.stack, measureStackTabs(stackElement));
+    if (tabDrag.pointer) moveTabDrag(tabDrag.pointer);
   }
 
   function onAuxClick(event) {
@@ -366,21 +380,19 @@ export function createDock(workspace, { viewportElement }) {
   }
 
   function onTabKey(event, tab) {
-    if (!WIDGET_KEYS.has(event.key)) return;
-    event.preventDefault();
     const tabs = [...tab.closest('.dock-tablist').querySelectorAll('.dock-tab-label')];
     const current = tabs.indexOf(tab);
     const next = rovingIndex(current, event.key, tabs.length);
     if (next >= 0) {
+      event.preventDefault();
       if (next !== current) activate(tabs[next].dataset.panel);
-    } else if (event.key === 'Enter' || event.key === ' ') {
+    } else if (ACTIVATION_KEYS.has(event.key)) {
+      event.preventDefault();
       activate(tab.dataset.panel);
     }
   }
 
   function onGutterKey(event, element) {
-    if (!WIDGET_KEYS.has(event.key)) return;
-    event.preventDefault();
     const { gutter, sign } = gutterData.get(element);
     const [back, forward] = gutter.dir === 'row' ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
     const step = event.shiftKey ? KEY_STEP_LARGE : KEY_STEP;
@@ -390,6 +402,7 @@ export function createDock(workspace, { viewportElement }) {
     else if (event.key === 'Home') value = gutter.min;
     else if (event.key === 'End') value = gutter.max;
     else return;
+    event.preventDefault();
     update(resizeSplit(layout, gutter.path, gutter.index, value, workspaceSize()));
     scheduleSave();
   }
@@ -419,7 +432,18 @@ export function createDock(workspace, { viewportElement }) {
       rects: null,
       result: null,
       ghost: null,
+      pointer: null,
     };
+    doc.addEventListener('pointerup', onDocumentPointerUp);
+    doc.addEventListener('pointercancel', onDocumentPointerCancel);
+  }
+
+  function onDocumentPointerUp(event) {
+    if (tabDrag && event.pointerId === tabDrag.pointerId) onPointerUp(event);
+  }
+
+  function onDocumentPointerCancel(event) {
+    if (tabDrag && event.pointerId === tabDrag.pointerId) endTabDrag();
   }
 
   function onPointerMove(event) {
@@ -428,6 +452,10 @@ export function createDock(workspace, { viewportElement }) {
       return;
     }
     if (!tabDrag || event.pointerId !== tabDrag.pointerId) return;
+    if ((event.buttons & 1) === 0) {
+      endTabDrag();
+      return;
+    }
     if (!tabDrag.active) {
       if (Math.hypot(event.clientX - tabDrag.startX, event.clientY - tabDrag.startY) <= DRAG_THRESHOLD) return;
       beginTabDrag();
@@ -484,6 +512,7 @@ export function createDock(workspace, { viewportElement }) {
   }
 
   function moveTabDrag(event) {
+    tabDrag.pointer = { clientX: event.clientX, clientY: event.clientY };
     tabDrag.ghost.style.left = `${event.clientX + GHOST_OFFSET}px`;
     tabDrag.ghost.style.top = `${event.clientY + GHOST_OFFSET}px`;
     const origin = content.getBoundingClientRect();
@@ -501,6 +530,8 @@ export function createDock(workspace, { viewportElement }) {
     if (!tabDrag) return;
     const drag = tabDrag;
     tabDrag = null;
+    doc.removeEventListener('pointerup', onDocumentPointerUp);
+    doc.removeEventListener('pointercancel', onDocumentPointerCancel);
     if (!drag.active) return;
     drag.ghost?.remove();
     preview.hidden = true;
@@ -511,15 +542,20 @@ export function createDock(workspace, { viewportElement }) {
   }
 
   function measureTabs() {
-    const origin = content.getBoundingClientRect();
     const tabs = new Map();
-    for (const [id, element] of stackElements) {
-      tabs.set(id, [...element.querySelectorAll('.dock-tab')].map((tab) => {
-        const box = tab.getBoundingClientRect();
-        return { x: box.left - origin.left, y: box.top - origin.top, width: box.width, height: box.height };
-      }));
-    }
+    for (const [id, element] of stackElements) tabs.set(id, measureStackTabs(element));
     return tabs;
+  }
+
+  function measureStackTabs(stackElement) {
+    const origin = content.getBoundingClientRect();
+    const list = tablistOf(stackElement).getBoundingClientRect();
+    return [...stackElement.querySelectorAll('.dock-tab')].map((tab) => {
+      const box = tab.getBoundingClientRect();
+      const left = clampBetween(box.left, list.left, list.right);
+      const right = clampBetween(box.right, list.left, list.right);
+      return { x: left - origin.left, y: box.top - origin.top, width: right - left, height: box.height };
+    });
   }
 
   function startGutterDrag(event, element) {
@@ -685,6 +721,10 @@ function wheelUnit(event, list) {
   if (event.deltaMode === 1) return WHEEL_LINE;
   if (event.deltaMode === 2) return list.clientWidth;
   return 1;
+}
+
+function clampBetween(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function gutterKey(path, index) {
