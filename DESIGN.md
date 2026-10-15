@@ -637,6 +637,7 @@ Default location ([§5.2](#52-panels)): bottom, full width. Modeled after Godot'
 - On macOS, Cmd acts as Ctrl. Keys match the character the keyboard layout produces (letters case-insensitive), and modifiers must match exactly.
 - A matched hotkey always suppresses the browser's own shortcut (e.g. Ctrl+S never opens the browser's save dialog), even when its action is currently disabled.
 - Holding a key repeats only Undo, Redo and Next frame; other hotkeys act once per press.
+- While a drag or scrub is in progress, hotkeys that edit the document (Delete, Group, Duplicate, Key selected, …) do nothing; Undo and Esc cancel the drag.
 - While focus is in a toolbar, a tab list, a resize handle or an open menu, their navigation keys (arrows, Home, End, Space, Enter, Esc) do not trigger global hotkeys.
 - In the viewport, Space + left drag pans. A Space press without a drag toggles Play/Pause when Space is released.
 
