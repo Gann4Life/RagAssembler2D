@@ -5,11 +5,12 @@ function firstSegment(path) {
   return String(path).split('.')[0];
 }
 
-function otherClipKeys(model, uid) {
-  return model
-    .children(ROOT_UID, 'clips')
-    .filter((clip) => clip !== uid)
-    .map((clip) => model.prop(clip, 'key'));
+function clipKeys(model) {
+  return new Map(model.children(ROOT_UID, 'clips').map((clip) => [clip, model.prop(clip, 'key')]));
+}
+
+function keysExcept(keys, uid) {
+  return [...keys].filter(([clip]) => clip !== uid).map(([, key]) => key);
 }
 
 /**
@@ -37,6 +38,7 @@ export function setProps(uids, values, label = 'Edit properties') {
       for (const uid of uids) {
         if (!model.get(uid)) throw new Error(`Unknown node uid ${uid}`);
       }
+      const keysBefore = clipKeys(model);
       const renamesClips = Object.hasOwn(values, 'name') && !Object.hasOwn(values, 'key');
       for (const uid of uids) {
         const node = model.get(uid);
@@ -45,8 +47,8 @@ export function setProps(uids, values, label = 'Edit properties') {
         const oldKey = followsName ? model.prop(uid, 'key') : undefined;
         for (const [path, value] of entries) tx.set(uid, path, value);
         if (!followsName) continue;
-        const otherKeys = otherClipKeys(model, uid);
-        if (oldKey === autoClipKey(oldName, otherKeys)) tx.set(uid, 'key', autoClipKey(values.name, otherKeys));
+        if (oldKey !== autoClipKey(oldName, keysExcept(keysBefore, uid))) continue;
+        tx.set(uid, 'key', autoClipKey(values.name, keysExcept(clipKeys(model), uid)));
       }
     },
   });

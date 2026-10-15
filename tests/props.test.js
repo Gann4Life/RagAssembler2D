@@ -108,6 +108,23 @@ test('an explicit key wins over key-follows-name', () => {
   assert.equal(model.prop(clip, 'key'), 'sprint');
 });
 
+for (const order of ['forward', 'reverse']) {
+  test(`auto keys keep following a multi-rename of same-named clips, ${order} order`, () => {
+    const { model, history } = setup();
+    const a = addClip(history, 'Walk', 'walk');
+    const b = addClip(history, 'Walk', 'walk_2');
+    const uids = order === 'forward' ? [a, b] : [b, a];
+    history.execute(setProps(uids, { name: 'Run' }));
+    const keys = [model.prop(a, 'key'), model.prop(b, 'key')];
+    assert.deepEqual([...keys].sort(), ['run', 'run_2']);
+    assert.equal(model.prop(uids[0], 'key'), 'run');
+    assert.equal(model.prop(uids[1], 'key'), 'run_2');
+    history.undo();
+    assert.equal(model.prop(a, 'key'), 'walk');
+    assert.equal(model.prop(b, 'key'), 'walk_2');
+  });
+}
+
 test('renaming several clips at once yields unique keys, in uid order', () => {
   const { model, history } = setup();
   const a = addClip(history, 'A', 'a');
