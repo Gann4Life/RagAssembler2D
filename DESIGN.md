@@ -499,12 +499,19 @@ The tools live in a **floating toolbar overlay inside the Viewport panel**, not 
 - **Pose** (`P`): simulates physics while the mouse is held, with **no gravity**. The grabbed body is pulled by a mouse joint, and the other joints hold their current pose at moderate strength.
   - In **Edit mode** the result is discarded on release (testing only). It never overrides the rest pose.
   - In **Animate mode** the result becomes the FK pose at the playhead. With **autokey** on, `angle` keys are created for every joint whose angle changed by more than 0.1°.
-- **Circle** (`C`): press to create at the click point, drag to resize, release to finish. The anchor is the center. Esc aborts.
-- **Box** (`R`): press to create, drag to define the rectangle, release to finish. The anchor can be any of the four corners, and the final size is never negative.
-  - SHIFT enforces a square.
-  - ALT enforces symmetry.
-  - CTRL puts the anchor at the center.
+- **Circle and Box, common rules:**
+  - The press point, grid-snapped ([§5.4](#54-viewport)), is the **anchor**. Once the pointer has moved 4 px from the press point on screen, the press is a drag until its release, even if the pointer comes back.
+  - A **click** (a press and release that never became a drag) creates the shape at its default size, centered at the anchor, whatever modifiers are held: a circle of radius 0.25 m, a 0.5 × 0.5 m box ([`docs/schema.md`](docs/schema.md)). This default shape is the preview until the press becomes a drag.
+  - A drag that ends with a radius, width or height of 0 creates nothing (refused).
+  - The new shape gets a new body placed as [§2.2](#22-bodies-and-shapes) says, so it keeps the on-screen orientation it was drawn with: the box is axis-aligned on screen even when the root is rotated. The body is named `body_<n>` and the shape `circle_<n>` or `box_<n>`, each `<n>` being the number of its own id (`b_3` → `body_3`, `f_5` → `circle_5`). The first body created while `rootBody` is `null` becomes `rootBody` ([§2.1](#21-root-the-ragdoll-itself)).
+- **Circle** (`C`): press to place the center at the anchor, drag to set the radius, release to create. The radius is the distance from the anchor to the pointer (not snapped as a point), rounded to the minor grid spacing and never below it when grid snap is on ([§5.4](#54-viewport)). No modifiers. Esc aborts.
+- **Box** (`R`): press to place the anchor, drag to define the rectangle against the grid-snapped pointer, release to create. By default the anchor is the corner opposite the pointer, so it can be any of the four corners, and the final size is never negative. Modifiers combine:
+  - SHIFT enforces a square: both sides take the longer one, growing away from the anchor.
+  - ALT enforces symmetry across the drag: along the drag's shorter axis (vertical when the horizontal and vertical distances are equal) the box is centered on the anchor, so the anchor is the middle of an edge. Pressing at a joint and dragging along a limb draws the limb centered on it, in any direction.
+  - CTRL puts the anchor at the center (both axes centered). With CTRL, ALT has no effect.
   - Esc aborts.
+
+  With `d` the vector from the anchor to the snapped pointer: each axis is either *centered* (CTRL: both; ALT: the axis with the smaller `|d|`, the vertical one on a tie; else neither) or *edge-anchored*. The size along an axis is `2·|d|` when centered, else `|d|`; SHIFT then sets both sizes to the larger one. A centered axis keeps the anchor as the box center; an edge-anchored one puts the center at `anchor + sign(d)·size / 2`, with `sign(0) = +1`. Example: anchor (0, 0), pointer (2, 1) gives center (1, 0.5) and size 2 × 1; with ALT, center (1, 0) and 2 × 2; with CTRL, center (0, 0) and 4 × 2; with SHIFT, center (1, 1) and 2 × 2.
 - **Polygon** (`N`):
   - Click adds a vertex linked to the previous one.
   - Double click closes the shape (last vertex to first).
