@@ -23,6 +23,17 @@ function backtickedCells(markdown, rowStart, cellIndex) {
   return [...cell.matchAll(/`([^`]+)`/g)].map((match) => match[1]);
 }
 
+function componentDiagramLines(markdown) {
+  const lines = markdown.split(/\r?\n/);
+  const heading = lines.findIndex((line) => /^##\s+Components\s*$/.test(line));
+  if (heading === -1) throw new Error('docs/architecture.md: Components heading not found');
+  const open = lines.findIndex((line, index) => index > heading && line.startsWith('```'));
+  if (open === -1) throw new Error('docs/architecture.md: component diagram block not found');
+  const close = lines.findIndex((line, index) => index > open && line.startsWith('```'));
+  if (close === -1) throw new Error('docs/architecture.md: component diagram block is not closed');
+  return lines.slice(open + 1, close);
+}
+
 /**
  * Extracts the layer classification from `docs/architecture.md`: the Core row of the layers table, the
  * `Pure:` line of the component diagram and the `js/` modules named in the `tests/` row of the dependency table.
@@ -34,10 +45,11 @@ export function parseArchitecture(markdown) {
   const corePatterns = backtickedCells(markdown, '| Core |', 2).filter((token) => /^js\/.*(\.js|\/\*)$/.test(token));
   const testableUi = backtickedCells(markdown, '| `tests/` |', 2).filter((token) => /^js\/.*\.js$/.test(token));
 
-  const lines = markdown.split(/\r?\n/);
+  const lines = componentDiagramLines(markdown);
   const pureStart = lines.findIndex((line) => line.includes('Pure:'));
   const runtimeStart = lines.findIndex((line) => line.includes('Runtime:'));
-  if (pureStart === -1 || runtimeStart <= pureStart) throw new Error('docs/architecture.md: Pure/Runtime lines not found');
+  if (pureStart === -1) throw new Error('docs/architecture.md: Pure line not found in the component diagram');
+  if (runtimeStart <= pureStart) throw new Error('docs/architecture.md: Runtime line not found after the Pure line in the component diagram');
   const pureLib = lines
     .slice(pureStart, runtimeStart)
     .join(' ')
