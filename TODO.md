@@ -8,7 +8,7 @@
 - [x] #4 Spike: check custom contact filter support in liquidfun.js
 - [x] #5 Spike: verify the liquidfun.js API surface used by RagImporter
 - [x] #65 Spike: define editor core architecture and module map
-- [ ] #66 Architecture conformance tests for imports, pure modules and comments
+- [x] #66 Architecture conformance tests for imports, pure modules and comments
 - [x] #75 Add read-only permission allowlist for routine commands
 
 ## Phase 1 – Editor: rigging
