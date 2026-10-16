@@ -95,7 +95,7 @@
 - [ ] #43 Evaluator test reproducing the hand-computed values of §4.6
 
 ## Phase 4 – RagImporter runtime
-- [ ] #44 RagImporter parse, spawn with rest pose and flipX, and destroy
+- [x] #44 RagImporter parse, spawn with rest pose and flipX, and destroy
 - [ ] #45 Motor controller and runtime multipliers
 - [ ] #46 Playback: play, queue, stop, fades, hold, weight and speed
 - [ ] #47 Clip events without misses or duplicates
