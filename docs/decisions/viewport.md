@@ -2,6 +2,10 @@
 
 Newest first. See the [index](../decisions.md).
 
+## 2026-10-16
+- **Both display mode fills shapes with ditor.color at 20 % opacity (Shapes mode stays at 40 %), keeping the 60 % orange outline.** Reason: outline-only shapes did not read as solid; 20 % keeps sprites visible beneath. Supersedes the 
+o fill Both entry of the display-mode table. (DESIGN §5.4)
+
 ## 2026-10-15
 - **Name labels:** an empty name shows the object's id; the root and joint labels sit above and to the right of their gizmo, and a body label is centered just below the body origin. Reason: a centered body label covered the center-of-mass mark whenever the center sits at the origin, and a nameless object would otherwise have no label at all. (DESIGN §5.4; docs/architecture.md, Module map)
 - **The Contacts overlay is a stored setting with a working checkbox that draws nothing until Simulate mode exists (#54).** Reason: DESIGN already limits contacts to Simulate mode, which is not built; disabling the checkbox would need a reason text and would be removed again by #54. (DESIGN §5.3, §5.4; docs/architecture.md, Module map)
