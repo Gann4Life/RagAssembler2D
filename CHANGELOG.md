@@ -57,3 +57,6 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Removed
 - The Manipulate tool and its M hotkey; Select does its moves and rotations.
+
+### Fixed
+- Shapes in Both display mode are filled at 20 % opacity again, so they read as solid while sprites stay visible beneath.

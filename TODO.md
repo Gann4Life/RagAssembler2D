@@ -67,6 +67,7 @@
 - [ ] #130 Polygon vertex handles in the Select tool
 - [x] #132 Split DESIGN.md and the large docs into per-section files
 - [x] #134 Dashed blue rotation ring and orange shape outlines
+- [x] #138 Shapes render without their translucent fill
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults

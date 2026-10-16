@@ -19,7 +19,7 @@ const COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 const SHAPE_STYLES = Object.freeze({
   shapes: Object.freeze({ fill: 0.4, stroke: 1 }),
   sprites: Object.freeze({ fill: 0, stroke: 0 }),
-  both: Object.freeze({ fill: 0, stroke: 0.6 }),
+  both: Object.freeze({ fill: 0.2, stroke: 0.6 }),
 });
 
 function vec(value) {
