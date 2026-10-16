@@ -1,4 +1,7 @@
-import { Model } from './model/model.js';
+import { defaultsOf } from '../lib/schema.js';
+import { Model, ROOT_UID } from './model/model.js';
+import { createJoint, createShapeBody } from './commands/create.js';
+import { deleteObjects, deletionPlan } from './commands/delete.js';
 import { Selection } from './model/selection.js';
 import { History } from './commands/history.js';
 import { Modes } from './modes.js';
@@ -33,8 +36,8 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, manipulateTool, circleTo
 /**
  * Builds the editor core without DOM: model, history, selection, modes, settings, camera, tool registry and
  * actions. The tool registry is the first `mode` listener, so a mode change cancels the operation in progress
- * before anything else hears it. Registers the `undo`, `redo` and `escape` actions and one `tool:<id>` action
- * per registered tool.
+ * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
+ * per registered tool, and the `delete`, `add-shape` and `add-joint` actions.
  * @param {{ settings?: Settings }} [options] Restored editor settings; defaults when omitted.
  * @returns {Readonly<Editor>} The editor.
  * @throws {TypeError} When `settings` is given and is not a `Settings` instance.
@@ -78,6 +81,39 @@ export function createEditor({ settings = Settings.restore(undefined).settings }
       reason: () => modeReason(tool.capability),
     });
   }
+
+  const canEditRest = () => modes.can('edit.rest') && !history.inGesture;
+  actions.register('delete', {
+    run: () => history.execute(deleteObjects(selection.objects)),
+    isEnabled: () =>
+      selection.focus === 'objects' && canEditRest() && !deletionPlan(model, selection.objects).empty,
+    reason: () => {
+      if (selection.focus !== 'objects') return null;
+      const byMode = modeReason('edit.rest');
+      if (byMode !== null) return byMode;
+      const rootOnly = selection.objects.length === 1 && selection.objects[0] === ROOT_UID;
+      return rootOnly && !history.inGesture ? 'the ragdoll root cannot be deleted' : null;
+    },
+  });
+  actions.register('add-shape', {
+    run: () => {
+      const { width, height } = defaultsOf('shape', 'box').shape;
+      const uid = history.execute(
+        createShapeBody({ position: { x: 0, y: 0 }, angle: 0, shape: { type: 'box', width, height } }, 'Add shape'),
+      );
+      selection.set([uid]);
+    },
+    isEnabled: canEditRest,
+    reason: () => modeReason('edit.rest'),
+  });
+  actions.register('add-joint', {
+    run: () => {
+      const uid = history.execute(createJoint({ bodyA: null, bodyB: null, anchor: { x: 0, y: 0 } }, 'Add joint'));
+      selection.set([uid]);
+    },
+    isEnabled: canEditRest,
+    reason: () => modeReason('edit.rest'),
+  });
 
   return Object.freeze({ model, history, selection, modes, actions, settings, camera, tools });
 }
