@@ -77,6 +77,8 @@ test('style constants follow DESIGN §5.4', () => {
     pivot: 4,
     resizeHandle: 8,
     resizeHandleActive: 10,
+    limitHandle: 5,
+    limitHandleActive: 6,
   });
   assert.deepEqual(HIT_RADIUS, { joint: 8, root: 12, shape: 4, handle: 8, gizmo: 6 });
   assert.equal(LABEL_SIZE, 11);

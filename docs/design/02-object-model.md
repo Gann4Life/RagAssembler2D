@@ -62,7 +62,7 @@ v1 supports **revolute (hinge) joints** only.
 - `bodyA` is the **parent**, closer to `rootBody` in the joint tree. `bodyB` is the **child**. The Hinge tool assigns them on creation ([§5.5](05-5-tools.md#55-tools)): of the two bodies, the one with fewer joints between it and `rootBody` becomes bodyA, counting joints in either direction (a joint connects its two bodies whichever is bodyA); a body not connected to `rootBody` counts as farthest; on a tie, the body earlier in `bodies` order becomes bodyA. Creating a joint never reorients existing ones, and the user can swap bodyA and bodyB in the inspector.
 - `anchor` is root-local, in rest pose.
 - The reference angle is **not stored**: it is derived from the rest pose (`bodyB.angle − bodyA.angle`). A joint angle of 0 therefore always means rest.
-- Limits are relative to rest and must satisfy `lower ≤ 0 ≤ upper`, so the rest pose is always valid.
+- Limits are relative to rest and must satisfy `lower ≤ 0 ≤ upper`, so the rest pose is always valid. The editor draws and edits them from the joint's zero direction, the root's +X at rest ([§5.4](05-4-viewport.md#54-viewport)); it is a display reference only and is not stored.
 - `aimAxis` (radians, local to bodyB, default 0 = bodyB's +X) is the direction that counts as "forward" for that limb, e.g. where the head's face or the arm points. It is used by procedural aiming ([§4.8](04-animation-model.md#48-procedural-joint-control)).
 - If the joint graph has cycles, joints outside the spanning tree from `rootBody` are flagged as **loop joints**. They are simulated normally but ignored by FK preview.
 - **Parent joint and subtree.** A body's **parent joint** links it toward `rootBody`:

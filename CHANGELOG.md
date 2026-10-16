@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-16
+
+### Added
+- With one hinge joint selected in Select (Edit mode), lower and upper limit handles on the gizmo ring edit its limits; SHIFT snaps to 15°, ALT mirrors the other limit, dragging enables the limits, and each drag is one undo step.
+- Dragging the ring of a selected hinge joint rotates its whole limit range.
+- A fixed rest reference line marks the zero direction; disabled limits are drawn at half opacity.
+
+### Changed
+- The Hinge tool creates one-sided limits from the drag direction (counter-clockwise 0 to φ, clockwise φ to 0, ALT symmetric); a click without a drag creates a pin.
+
 ## [0.8.0] - 2026-10-16
 
 ### Added

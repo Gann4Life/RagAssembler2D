@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Model, ROOT_UID } from '../js/model/model.js';
-import { jointZeroAngle, placement } from '../js/viewport/placement.js';
+import { placement } from '../js/viewport/placement.js';
 import { defaultsOf } from '../lib/schema.js';
 
 const EPSILON = 1e-9;
@@ -39,11 +39,20 @@ function document({ position = [0, 0], angle = 0, bodies = [], joints = [] } = {
   return model;
 }
 
-test('jointZeroAngle points from the anchor to bodyB, or along bodyB +X when they coincide', () => {
-  near(jointZeroAngle({ x: 0, y: 0 }, { x: 0, y: 2, angle: 0.3 }), Math.PI / 2);
-  near(jointZeroAngle({ x: 1, y: 1 }, { x: 0, y: 1, angle: 0.3 }), Math.PI);
-  near(jointZeroAngle({ x: 1, y: 1 }, { x: 1, y: 1, angle: 0.3 }), 0.3);
-  assert.ok(Object.is(jointZeroAngle({ x: 0, y: 0 }, { x: 0, y: 0, angle: -0 }), 0));
+test('the rest zero direction is the root +X, wherever bodyB lies and however the bodies turn', () => {
+  const model = document({
+    bodies: [body('b_1', [0, 0], 0.4), body('b_2', [0, 2], 0.3), body('b_3', [1, 1], -0.7)],
+    joints: [joint('j_1', 'b_1', 'b_2', [0, 1]), joint('j_2', 'b_2', 'b_3', [1, 1])],
+  });
+  const placed = placement(model);
+  assert.ok(Object.is(placed.zero.get(model.uidOf('j_1')), 0));
+  assert.ok(Object.is(placed.zero.get(model.uidOf('j_2')), 0));
+  const turned = document({
+    angle: -0.6,
+    bodies: [body('b_1', [0, 0], 0), body('b_2', [0, -2], 0)],
+    joints: [joint('j_1', 'b_1', 'b_2', [0, -1])],
+  });
+  near(placement(turned).zero.get(turned.uidOf('j_1')), -0.6);
 });
 
 test('rest placement composes the root transform with body transforms', () => {
@@ -61,7 +70,7 @@ test('rest placement composes the root transform with body transforms', () => {
   near(placed.bodies.get(b1).angle, Math.PI / 2 + 0.2);
   nearPoint(placed.bodies.get(b2), { x: 8, y: 0 });
   nearPoint(placed.anchors.get(j1), { x: 9, y: 1 });
-  near(placed.zero.get(j1), Math.atan2(1, -1) + Math.PI / 2);
+  near(placed.zero.get(j1), Math.PI / 2);
   assert.ok(Object.is(placed.angles.get(j1), 0));
 });
 

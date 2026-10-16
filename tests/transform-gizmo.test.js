@@ -178,6 +178,23 @@ test('drawGizmo calls points after the arrows and before the square', () => {
   assert.ok(marker < methods.indexOf('rect'));
 });
 
+test('drawGizmo calls under first, before the slice and the ring', () => {
+  const g = fakeGraphics();
+  drawGizmo(g, gizmoLayout(PIVOT, { ring: true }), {
+    hover: null,
+    active: null,
+    mode: 'center',
+    sweep: { start: 0, angle: Math.PI / 4 },
+    under: (graphics) => {
+      assert.equal(graphics, g);
+      assert.equal(g.calls.length, 0);
+      graphics.circle(0, 0, 1);
+    },
+  });
+  assert.deepEqual(g.calls[0], ['circle', 0, 0, 1]);
+  assert.equal(g.calls[1][0], 'poly');
+});
+
 test('rotationSlice: counter-clockwise sweep turns counter-clockwise on screen', () => {
   const slice = rotationSlice({ x: 100, y: 100 }, 72, 0, Math.PI / 2);
   assert.equal(slice.full, false);
