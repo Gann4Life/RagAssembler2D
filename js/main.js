@@ -53,7 +53,7 @@ const dock = createDock(document.getElementById('workspace'), {
   viewportElement: document.getElementById('panel-viewport'),
 });
 createHierarchy(dock.panelElement('hierarchy'), editor);
-attachFileDrop(document.getElementById('panel-viewport'), (read) => editor.loadFrom(read));
+attachFileDrop(document.getElementById('panel-viewport'), (read) => editor.loadFrom(read), () => actions.isEnabled('load'));
 blockFileNavigation(document);
 
 const viewportHost = document.getElementById('viewport-host');

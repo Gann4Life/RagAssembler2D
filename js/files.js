@@ -1,12 +1,14 @@
 /** File picker filter for `.rag.json` files. */
 export const RAG_FILE_ACCEPT = '.rag.json,.json';
 
+const REVOKE_DELAY_MS = 1000;
+
 function carriesFiles(event) {
   return Array.from(event.dataTransfer?.types ?? []).includes('Files');
 }
 
 /**
- * Shows the browser file picker for one file. Call it directly from a click or key handler: the picker needs the
+ * Shows the browser file picker for one file. The input is attached hidden to the body while the picker is open and removed when it settles. Call it directly from a click or key handler: the picker needs the
  * user activation.
  * @param {Document} doc The document that creates the input.
  * @param {string} accept Value of the input's `accept` attribute.
@@ -18,7 +20,10 @@ export function pickTextFile(doc, accept) {
     const input = doc.createElement('input');
     input.type = 'file';
     input.accept = accept;
+    input.hidden = true;
+    const dispose = () => input.remove();
     input.addEventListener('change', () => {
+      dispose();
       const file = input.files?.[0];
       if (file === undefined) {
         resolve(null);
@@ -26,13 +31,17 @@ export function pickTextFile(doc, accept) {
       }
       file.text().then(resolve, reject);
     });
-    input.addEventListener('cancel', () => resolve(null));
+    input.addEventListener('cancel', () => {
+      dispose();
+      resolve(null);
+    });
+    doc.body.append(input);
     input.click();
   });
 }
 
 /**
- * Starts the download of a text file through a temporary link and an object URL revoked on the next task.
+ * Starts the download of a text file through a temporary link and an object URL revoked after one second.
  * @param {Document} doc The document that creates the link.
  * @param {string} fileName Name offered to the browser.
  * @param {string} text File content.
@@ -46,27 +55,28 @@ export function downloadText(doc, fileName, text) {
   doc.body.append(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
 }
 
 /**
  * Makes `element` accept file drops: a drop carrying files calls `onRead` with a reader of the first file only.
- * Never stops propagation.
+ * Never stops propagation. While `enabled()` is false, file drags show the `none` cursor and drops are swallowed.
  * @param {EventTarget} element Drop target.
  * @param {(read: () => Promise<string>) => *} onRead Receives the reader of the dropped file's text.
+ * @param {() => boolean} [enabled] Whether loading is allowed now; always when omitted.
  * @returns {() => void} Detaches the listeners.
  */
-export function attachFileDrop(element, onRead) {
+export function attachFileDrop(element, onRead, enabled = () => true) {
   const onDragOver = (event) => {
     if (!carriesFiles(event)) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
+    event.dataTransfer.dropEffect = enabled() ? 'copy' : 'none';
   };
   const onDrop = (event) => {
     if (!carriesFiles(event)) return;
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
-    if (file !== undefined) onRead(() => file.text());
+    if (file !== undefined && enabled()) onRead(() => file.text());
   };
   element.addEventListener('dragover', onDragOver);
   element.addEventListener('drop', onDrop);

@@ -230,15 +230,24 @@ test('save with validation errors writes nothing, stays dirty and notifies save-
   assert.ok(log.notices[0].items.length > 0);
 });
 
-test('a throwing saveText leaves the document dirty and propagates', () => {
+test('a throwing saveText leaves the document dirty and notifies a save-error', () => {
+  const notices = [];
   const editor = createEditor({
+    notify: (notice) => {
+      notices.push(notice);
+      return Promise.resolve();
+    },
     files: { openText() {}, saveText: () => { throw new Error('disk'); } },
   });
   editor.history.execute(
     createShapeBody({ position: { x: 0, y: 0 }, angle: 0, shape: { type: 'box', width: 1, height: 1 } }),
   );
-  assert.throws(() => editor.actions.run('save'), /disk/);
+  editor.actions.run('save');
   assert.equal(editor.history.dirty, true);
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].kind, 'save-error');
+  assert.equal(notices[0].message, 'The file could not be written. The ragdoll still has unsaved changes.');
+  assert.deepEqual([...notices[0].items], []);
 });
 
 test('load then save is byte-identical for a canonical file of the same editor version', async () => {
@@ -272,4 +281,38 @@ test('new, load and save are enabled in Animate, disabled in Simulate and during
     assert.equal(editor.actions.reason(id), null);
   }
   editor.history.cancelGesture();
+});
+
+test('overlapping loads: the second is ignored once the first has its text, and the confirmation stays open', async () => {
+  let answer;
+  let confirms = 0;
+  const editor = createEditor({
+    confirm: () => {
+      confirms += 1;
+      return new Promise((resolve) => (answer = resolve));
+    },
+  });
+  editor.history.execute(
+    createShapeBody({ position: { x: 0, y: 0 }, angle: 0, shape: { type: 'box', width: 1, height: 1 } }),
+  );
+  const first = editor.loadFrom(() => Promise.resolve(validText()));
+  const second = editor.loadFrom(() => Promise.resolve(validText()));
+  await settle();
+  assert.equal(await second, false);
+  assert.equal(confirms, 1);
+  assert.equal(editor.actions.isEnabled('new'), false);
+  answer(true);
+  assert.equal(await first, true);
+  assert.equal(editor.actions.isEnabled('new'), true);
+  assert.equal(await editor.loadFrom(() => Promise.resolve(validText())), true);
+});
+
+test('canFile is false while a clean load is between its read and its end', async () => {
+  const { editor } = setup();
+  let release;
+  const reading = editor.loadFrom(() => new Promise((resolve) => (release = resolve)));
+  assert.equal(editor.actions.isEnabled('load'), true);
+  release(validText());
+  assert.equal(await reading, true);
+  assert.equal(editor.actions.isEnabled('load'), true);
 });

@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { RAG_FILE_ACCEPT, attachFileDrop, blockFileNavigation, downloadText, pickTextFile } from '../js/files.js';
 
@@ -37,13 +37,18 @@ test('RAG_FILE_ACCEPT filters to .rag.json and .json', () => {
 
 function fakeInputDocument() {
   const created = [];
+  created.appended = [];
   const doc = {
+    body: { append: (node) => created.appended.push(node) },
     createElement(tag) {
       const node = new FakeTarget();
       node.tag = tag;
       node.clicks = 0;
       node.click = () => {
         node.clicks += 1;
+      };
+      node.remove = () => {
+        node.removed = true;
       };
       created.push(node);
       return node;
@@ -61,9 +66,13 @@ test('pickTextFile clicks a file input synchronously and resolves the first file
   assert.equal(input.accept, '.rag.json,.json');
   assert.equal(input.multiple, undefined);
   assert.equal(input.clicks, 1);
+  assert.equal(input.hidden, true);
+  assert.deepEqual(created.appended, [input]);
+  assert.equal(input.removed, undefined);
   input.files = [fileOf('first'), fileOf('second')];
   input.fire('change');
   assert.equal(await promise, 'first');
+  assert.equal(input.removed, true);
 });
 
 test('pickTextFile resolves null on cancel or an empty selection and rejects when reading fails', async () => {
@@ -71,6 +80,7 @@ test('pickTextFile resolves null on cancel or an empty selection and rejects whe
   const first = pickTextFile(cancelled.doc, 'x');
   cancelled.created[0].fire('cancel');
   assert.equal(await first, null);
+  assert.equal(cancelled.created[0].removed, true);
 
   const empty = fakeInputDocument();
   const second = pickTextFile(empty.doc, 'x');
@@ -90,6 +100,7 @@ test('downloadText downloads a JSON blob through a temporary link and revokes th
   const appended = [];
   const doc = { createElement: () => link, body: { append: (node) => appended.push(node) } };
   const urls = { created: [], revoked: [] };
+  mock.timers.enable({ apis: ['setTimeout'] });
   const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
   URL.createObjectURL = (blob) => {
     urls.created.push(blob);
@@ -106,9 +117,12 @@ test('downloadText downloads a JSON blob through a temporary link and revokes th
     assert.equal(urls.created[0].type, 'application/json');
     assert.equal(await urls.created[0].text(), '{"x":1}\n');
     assert.deepEqual(urls.revoked, []);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    mock.timers.tick(999);
+    assert.deepEqual(urls.revoked, []);
+    mock.timers.tick(1);
     assert.deepEqual(urls.revoked, ['blob:fake']);
   } finally {
+    mock.timers.reset();
     URL.createObjectURL = original.create;
     URL.revokeObjectURL = original.revoke;
   }
@@ -125,6 +139,23 @@ test('attachFileDrop accepts file drags, reads only the first dropped file and n
   assert.equal(drop.defaultPrevented, true);
   assert.equal(reads.length, 1);
   assert.equal(await reads[0](), 'one');
+});
+
+test('attachFileDrop shows the none cursor and swallows drops while disabled', () => {
+  const element = new FakeTarget();
+  const reads = [];
+  let allowed = false;
+  attachFileDrop(element, (read) => reads.push(read), () => allowed);
+  const over = element.fire('dragover', dragOf(['Files']));
+  assert.equal(over.defaultPrevented, true);
+  assert.equal(over.dataTransfer.dropEffect, 'none');
+  const drop = element.fire('drop', dragOf(['Files'], [fileOf('x')]));
+  assert.equal(drop.defaultPrevented, true);
+  assert.deepEqual(reads, []);
+  allowed = true;
+  assert.equal(element.fire('dragover', dragOf(['Files'])).dataTransfer.dropEffect, 'copy');
+  element.fire('drop', dragOf(['Files'], [fileOf('x')]));
+  assert.equal(reads.length, 1);
 });
 
 test('attachFileDrop ignores drags without files and drops without a file, and detaches', () => {

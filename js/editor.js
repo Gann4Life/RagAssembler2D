@@ -170,6 +170,10 @@ function saveErrorNotice(errors) {
   );
 }
 
+function saveWriteErrorNotice() {
+  return notice('save-error', 'Cannot save', 'The file could not be written. The ragdoll still has unsaved changes.', []);
+}
+
 const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, boxTool, hingeTool]);
 
 /**
@@ -297,7 +301,8 @@ export function createEditor({
       return rootOnly && !history.inGesture && !confirming ? 'the ragdoll root cannot be deleted' : null;
     },
   });
-  const canFile = () => modes.can('file') && !history.inGesture && !confirming;
+  let loading = false;
+  const canFile = () => modes.can('file') && !history.inGesture && !confirming && !loading;
   const tell = (message) => {
     try {
       Promise.resolve(notify(message)).catch(() => {});
@@ -329,14 +334,22 @@ export function createEditor({
       return false;
     }
     if (text === null || !canFile()) return false;
-    if (history.dirty && !((await ask(loadRequest())) && canFile())) return false;
-    const result = loadJson(model, text);
-    if (!result.ok) {
-      tell(loadErrorNotice(result.errors));
-      return false;
+    loading = true;
+    try {
+      if (history.dirty && !(await ask(loadRequest()))) return false;
+      loading = false;
+      if (!canFile()) return false;
+      loading = true;
+      const result = loadJson(model, text);
+      if (!result.ok) {
+        tell(loadErrorNotice(result.errors));
+        return false;
+      }
+      if (result.notes.length > 0 || result.warnings.length > 0) tell(loadNotesNotice(result.notes, result.warnings));
+      return true;
+    } finally {
+      loading = false;
     }
-    if (result.notes.length > 0 || result.warnings.length > 0) tell(loadNotesNotice(result.notes, result.warnings));
-    return true;
   };
   if (files !== null) {
     actions.register('load', {
@@ -351,7 +364,12 @@ export function createEditor({
           tell(saveErrorNotice(result.errors));
           return;
         }
-        files.saveText(result.fileName, result.text);
+        try {
+          files.saveText(result.fileName, result.text);
+        } catch {
+          tell(saveWriteErrorNotice());
+          return;
+        }
         history.markSaved();
       },
       isEnabled: canFile,
