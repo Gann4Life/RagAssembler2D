@@ -265,6 +265,113 @@ test('spawn and destroy cycles with destroyed defs and shapes do not grow the he
   Box2D.destroy(probeAfter);
 });
 
+function polygonFromHeap(points) {
+  const shape = new Box2D.b2PolygonShape();
+  const ptr = Box2D._malloc(8 * points.length);
+  points.forEach(([x, y], i) => {
+    Box2D.HEAPF32[(ptr >> 2) + i * 2] = x;
+    Box2D.HEAPF32[(ptr >> 2) + i * 2 + 1] = y;
+  });
+  shape.Set(Box2D.wrapPointer(ptr, Box2D.b2Vec2), points.length);
+  Box2D._free(ptr);
+  return shape;
+}
+
+test('b2PolygonShape.Set reads vertices from a _malloc buffer written through HEAPF32', () => {
+  assert.equal(typeof Box2D._malloc, 'function');
+  assert.equal(typeof Box2D._free, 'function');
+  assert.ok(Box2D.HEAPF32 instanceof Float32Array);
+  const points = [[0, 0], [1, 0], [1.5, 1], [0, 1]];
+  const shape = polygonFromHeap(points);
+  assert.equal(shape.GetVertexCount(), 4);
+  const read = [];
+  for (let i = 0; i < 4; i++) {
+    const vertex = shape.GetVertex(i);
+    read.push([vertex.get_x(), vertex.get_y()]);
+  }
+  for (const [x, y] of points) {
+    assert.ok(read.some(([rx, ry]) => Math.abs(rx - x) < 1e-6 && Math.abs(ry - y) < 1e-6), `${x},${y}`);
+  }
+  Box2D.destroy(shape);
+});
+
+test('repeated _malloc polygon builds do not grow the heap', () => {
+  const probeBefore = new Box2D.b2Vec2(0, 0);
+  const before = Box2D.getPointer(probeBefore);
+  Box2D.destroy(probeBefore);
+  for (let i = 0; i < 20000; i++) Box2D.destroy(polygonFromHeap([[0, 0], [1, 0], [0.5, 1]]));
+  const probeAfter = new Box2D.b2Vec2(0, 0);
+  assert.equal(Box2D.getPointer(probeAfter), before);
+  Box2D.destroy(probeAfter);
+});
+
+test('spawn setters, counts, IsLocked and damping setters exist and behave', () => {
+  const world = createWorld();
+  assert.equal(world.IsLocked(), 0);
+  const center = new Box2D.b2Vec2(0.5, 0.25);
+
+  const box = new Box2D.b2PolygonShape();
+  box.SetAsBox(0.5, 0.25, center, Math.PI / 2);
+  assert.equal(box.GetVertexCount(), 4);
+  const xs = [];
+  const ys = [];
+  for (let i = 0; i < 4; i++) {
+    xs.push(box.GetVertex(i).get_x());
+    ys.push(box.GetVertex(i).get_y());
+  }
+  assert.ok(Math.abs(Math.max(...xs) - 0.75) < 1e-6);
+  assert.ok(Math.abs(Math.max(...ys) - 0.75) < 1e-6);
+
+  const circle = new Box2D.b2CircleShape();
+  circle.set_m_radius(0.3);
+  circle.set_m_p(center);
+  assert.ok(Math.abs(circle.get_m_radius() - 0.3) < 1e-6);
+  assert.equal(circle.get_m_p().get_x(), 0.5);
+
+  const bodyDef = new Box2D.b2BodyDef();
+  bodyDef.set_type(Box2D.b2_dynamicBody);
+  const bodyA = world.CreateBody(bodyDef);
+  const bodyB = world.CreateBody(bodyDef);
+  Box2D.destroy(bodyDef);
+
+  const fixtureDef = new Box2D.b2FixtureDef();
+  fixtureDef.set_shape(circle);
+  fixtureDef.set_density(2);
+  fixtureDef.set_friction(0.4);
+  fixtureDef.set_restitution(0.1);
+  fixtureDef.set_isSensor(true);
+  const fixture = bodyA.CreateFixture(fixtureDef);
+  Box2D.destroy(fixtureDef);
+  Box2D.destroy(circle);
+  Box2D.destroy(box);
+  assert.equal(fixture.GetDensity(), 2);
+  assert.equal(fixture.IsSensor(), 1);
+
+  const jointDef = new Box2D.b2RevoluteJointDef();
+  jointDef.Initialize(bodyA, bodyB, center);
+  jointDef.set_collideConnected(true);
+  jointDef.set_enableLimit(true);
+  jointDef.set_lowerAngle(-0.5);
+  jointDef.set_upperAngle(0.25);
+  jointDef.set_enableMotor(false);
+  const joint = Box2D.castObject(world.CreateJoint(jointDef), Box2D.b2RevoluteJoint);
+  Box2D.destroy(jointDef);
+  Box2D.destroy(center);
+  assert.equal(joint.IsLimitEnabled(), 1);
+  assert.ok(Math.abs(joint.GetLowerLimit() + 0.5) < 1e-6);
+  assert.ok(Math.abs(joint.GetUpperLimit() - 0.25) < 1e-6);
+  assert.equal(joint.IsMotorEnabled(), 0);
+  assert.equal(joint.GetCollideConnected(), 1);
+
+  assert.equal(world.GetBodyCount(), 2);
+  assert.equal(world.GetJointCount(), 1);
+  bodyA.SetLinearDamping(3);
+  bodyA.SetAngularDamping(4);
+  assert.equal(bodyA.GetLinearDamping(), 3);
+  assert.equal(bodyA.GetAngularDamping(), 4);
+  Box2D.destroy(world);
+});
+
 test('JSContactFilter can be subclassed and installed with SetContactFilter', () => {
   const world = createWorld();
   const ground = createBox(world, 0, 0, Box2D.b2_staticBody);
