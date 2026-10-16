@@ -9,6 +9,8 @@ import { referencesTo } from '../model/queries.js';
  *   then fixture order.
  * @property {ReadonlyArray<number>} joints Joints removed, in `joints` order.
  * @property {ReadonlyArray<number>} tracks Tracks removed, in clip order, then track order.
+ * @property {ReadonlyArray<Readonly<{ uid: number, tracks: number, keys: number }>>} clips One entry per clip holding a
+ *   removed track, in clip order, with its removed tracks and their keys; empty when `tracks` is.
  * @property {Readonly<{ from: string, to: string|null }>|null} rootBody The `rootBody` change when the current
  *   root body is removed, else `null`.
  * @property {boolean} confirm Whether the deletion removes tracks and needs a confirmation.
@@ -33,6 +35,17 @@ function requestedByType(model, uids) {
 
 function allTracks(model) {
   return model.children(ROOT_UID, 'clips').flatMap((clip) => model.children(clip, 'tracks'));
+}
+
+function clipsOfTracks(model, removedTracks) {
+  const clips = [];
+  for (const clip of model.children(ROOT_UID, 'clips')) {
+    const removed = model.children(clip, 'tracks').filter((track) => removedTracks.has(track));
+    if (removed.length === 0) continue;
+    const keys = removed.reduce((total, track) => total + model.children(track, 'keys').length, 0);
+    clips.push(Object.freeze({ uid: clip, tracks: removed.length, keys }));
+  }
+  return Object.freeze(clips);
 }
 
 function rootBodyChange(model, bodyOrder, removedBodies) {
@@ -84,6 +97,7 @@ export function deletionPlan(model, uids) {
     shapes,
     joints,
     tracks,
+    clips: clipsOfTracks(model, removedTracks),
     rootBody: rootBodyChange(model, bodyOrder, removedBodies),
     confirm: tracks.length > 0,
     empty: bodies.length + shapes.length + joints.length + tracks.length === 0,
