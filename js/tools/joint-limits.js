@@ -164,7 +164,8 @@ export function formatLimits(lower, upper) {
  * the range moves both. When both limits are 0 a limit handle waits for the first non-zero sweep: counter-clockwise
  * takes the upper limit, clockwise the lower one. SHIFT is read live. Each changed step sets `limits.lower`,
  * `limits.upper` and `limits.enabled` = true through one `Edit limits` command; a step back to the press limits
- * restores the press values, `enabled` included.
+ * restores the press values, `enabled` included. A joint without a `limits` object is written and restored as a whole
+ * `limits`, so a drag back leaves it untouched.
  * @param {import('./tool.js').ToolContext} ctx Tool context.
  * @param {{ joint: number, handle: LimitHandleId, press: import('./tool.js').ToolPointerEvent }} options Joint uid,
  *   pressed handle and press event.
@@ -173,7 +174,8 @@ export function formatLimits(lower, upper) {
 export function startLimitDrag(ctx, { joint, handle, press }) {
   const { model } = ctx;
   const raw = rawLimits(model, joint);
-  const pressed = { enabled: raw.enabled, lower: raw.lower, upper: raw.upper };
+  const original = model.get(joint).props.limits;
+  const whole = raw !== original;
   const start = resolveLimits(raw);
   const anchor = placement(model).anchors.get(joint);
   const pivot = Object.freeze({ x: anchor.x + 0, y: anchor.y + 0 });
@@ -187,16 +189,26 @@ export function startLimitDrag(ctx, { joint, handle, press }) {
     ctx.history.execute(setProps([joint], props, LABEL));
   }
 
+  function changed({ lower, upper }) {
+    if (whole) return { limits: { enabled: true, lower, upper } };
+    return { 'limits.lower': lower, 'limits.upper': upper, 'limits.enabled': true };
+  }
+
+  function restored() {
+    if (whole) return { limits: original };
+    return { 'limits.lower': raw.lower, 'limits.upper': raw.upper, 'limits.enabled': raw.enabled };
+  }
+
   return Object.freeze({
     apply(e) {
       const sweep = tracker.update(e.world);
       if (resolved === null && sweep !== 0) resolved = sweep > 0 ? 'limit-upper' : 'limit-lower';
       values = resolved === null ? { lower: start.lower, upper: start.upper } : limitValues(start, resolved, sweep, e.shift);
       if (values.lower !== start.lower || values.upper !== start.upper) {
-        write({ 'limits.lower': values.lower, 'limits.upper': values.upper, 'limits.enabled': true });
+        write(changed(values));
         written = true;
       } else if (written) {
-        write({ 'limits.lower': pressed.lower, 'limits.upper': pressed.upper, 'limits.enabled': pressed.enabled });
+        write(restored());
       }
     },
     pivot() {

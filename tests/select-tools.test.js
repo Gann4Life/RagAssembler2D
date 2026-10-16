@@ -550,7 +550,7 @@ function recorder() {
       calls.length = 0;
     },
   };
-  for (const method of ['moveTo', 'lineTo', 'poly', 'rect', 'circle', 'fill', 'stroke']) {
+  for (const method of ['moveTo', 'lineTo', 'arc', 'closePath', 'poly', 'rect', 'circle', 'fill', 'stroke']) {
     g[method] = (...args) => {
       calls.push([method, ...args]);
       return g;
@@ -883,8 +883,9 @@ test('overlay: the gizmo for the root, one body, one joint without a ring, and s
   assert.deepEqual(body.at(-1), ['stroke', { width: LINE_WIDTH.outline, color: COLORS.gizmo }]);
   selection.set([joints[1]]);
   const joint = overlay(tools);
-  assert.equal(ringAt(joint), null);
-  assert.deepEqual(xArrowStart(joint), { x: 350, y: 200 });
+  assert.deepEqual(joint.slice(0, 3), [['moveTo', 356, 200], ['lineTo', 422, 200], ['stroke', { width: LINE_WIDTH.outline, color: COLORS.gizmo }]]);
+  assert.equal(ringAt(joint.slice(3)), null);
+  assert.deepEqual(xArrowStart(joint.slice(3)), { x: 350, y: 200 });
   selection.set([shapes[2], shapes[1], joints[2]]);
   near(ringAt(overlay(tools)).x, 200 + (100 * (2 + 1 + 2.5)) / 3);
   actions.run('pivot-mode');
@@ -1113,4 +1114,177 @@ test('Animate and Simulate show no resize handles and resize nothing', () => {
     path(tools, [[250, 170], [290, 140]]);
     assert.equal(env.geometryOf(), before, mode);
   }
+});
+
+const LIMIT_CENTER = { x: 350, y: 200 };
+
+function ringPoint(degrees, radius = 72) {
+  const angle = (degrees * Math.PI) / 180;
+  return [LIMIT_CENTER.x + radius * Math.cos(angle), LIMIT_CENTER.y - radius * Math.sin(angle)];
+}
+
+function limitChain(limits = { enabled: true, lower: -Math.PI / 6, upper: Math.PI / 4 }) {
+  const env = chain();
+  env.history.execute(setProps([env.joints[1]], { limits }, 'Set limits'));
+  env.selection.set([env.joints[1]]);
+  return env;
+}
+
+function limitsOf(env) {
+  return env.model.get(env.joints[1]).props.limits;
+}
+
+function limitDegrees(env) {
+  const { lower, upper } = limitsOf(env);
+  return [Math.round((lower * 180) / Math.PI * 1e6) / 1e6 + 0, Math.round((upper * 180) / Math.PI * 1e6) / 1e6 + 0];
+}
+
+test('limits: one joint shows the ring only when its range can rotate', () => {
+  const cases = [
+    [{ enabled: true, lower: -Math.PI / 6, upper: Math.PI / 4 }, 'ring'],
+    [{ enabled: false, lower: 0, upper: 0 }, null],
+    [{ enabled: true, lower: -Math.PI, upper: Math.PI }, null],
+  ];
+  for (const [limits, expected] of cases) {
+    const { tools } = limitChain(limits);
+    assert.equal(tools.handleAt({ x: 350, y: 128 }), expected, JSON.stringify(limits));
+  }
+  const env = limitChain();
+  env.history.execute(setProps([env.joints[1]], { bodyB: null }));
+  assert.equal(env.tools.handleAt({ x: 278, y: 200 }), null);
+  const [x, y] = ringPoint(45);
+  assert.equal(env.tools.handleAt({ x, y }), null);
+});
+
+test('limits: handles win over the ring, the square still wins, and a lower / upper tie goes to lower', () => {
+  const { tools } = limitChain();
+  const [ux, uy] = ringPoint(45);
+  assert.equal(tools.handleAt({ x: ux, y: uy }), 'limit-upper');
+  assert.equal(tools.handleAt({ x: ux + 5, y: uy }), 'limit-upper');
+  const [lx, ly] = ringPoint(-30);
+  assert.equal(tools.handleAt({ x: lx, y: ly }), 'limit-lower');
+  assert.equal(tools.handleAt({ x: 372, y: 172 }), 'square');
+  const pin = limitChain({ enabled: false, lower: 0, upper: 0 });
+  assert.equal(pin.tools.handleAt({ x: 422, y: 200 }), 'limit-lower');
+});
+
+test('limits: a handle drag moves one limit, enables limits, SHIFT live, one Edit limits step', () => {
+  const env = limitChain({ enabled: false, lower: -Math.PI / 6, upper: Math.PI / 4 });
+  const { tools, history } = env;
+  path(tools, [ringPoint(45), ringPoint(35), ringPoint(25)]);
+  assert.deepEqual(limitDegrees(env), [-30, 25]);
+  assert.equal(limitsOf(env).enabled, true);
+  assert.equal(history.state.undoLabel, 'Edit limits');
+  history.undo();
+  assert.deepEqual(limitDegrees(env), [-30, 45]);
+  assert.equal(limitsOf(env).enabled, false);
+  path(tools, [ringPoint(45), ringPoint(35), ringPoint(25)], { shift: true });
+  assert.deepEqual(limitDegrees(env), [-30, 30]);
+  history.undo();
+  path(tools, [ringPoint(45), ringPoint(60), ringPoint(45)]);
+  assert.equal(history.state.undoLabel, 'Set limits');
+  assert.equal(limitsOf(env).enabled, false);
+});
+
+test('limits: a ring drag rotates the range with the clamp, SHIFT live', () => {
+  const env = limitChain();
+  const { tools, history, model, bodies, joints } = env;
+  const anchors = joints.map((uid) => model.prop(uid, 'anchor'));
+  path(tools, [ringPoint(180), ringPoint(205), ringPoint(230)]);
+  assert.deepEqual(limitDegrees(env), [0, 75]);
+  assert.equal(history.state.undoLabel, 'Edit limits');
+  assert.deepEqual(joints.map((uid) => model.prop(uid, 'anchor')), anchors);
+  assert.deepEqual(model.prop(bodies[2], 'position'), [2, 0]);
+  history.undo();
+  path(tools, [ringPoint(180), ringPoint(170), ringPoint(160)], { shift: true });
+  assert.deepEqual(limitDegrees(env), [-45, 30]);
+});
+
+test('limits: Esc, Undo, a tool switch and a mode change mid-drag restore the limits', () => {
+  const aborts = [
+    (env) => env.actions.run('escape'),
+    (env) => env.history.undo(),
+    (env) => env.tools.activate('select-box'),
+    (env) => env.modes.openClip(env.clip),
+  ];
+  for (const abort of aborts) {
+    for (const start of [ringPoint(45), ringPoint(180)]) {
+      const env = limitChain();
+      env.clip = addClipTo(env.history);
+      env.selection.set([env.joints[1]]);
+      const before = JSON.stringify(limitsOf(env));
+      send(env.tools, 'down', ...start);
+      send(env.tools, 'move', ...ringPoint(start[0] > 350 ? 20 : 200));
+      assert.notEqual(JSON.stringify(limitsOf(env)), before);
+      abort(env);
+      send(env.tools, 'move', ...ringPoint(0));
+      send(env.tools, 'up', ...ringPoint(0));
+      const name = `${abort.toString()} ${start}`;
+      assert.equal(JSON.stringify(limitsOf(env)), before, name);
+      assert.equal(env.history.state.undoLabel, 'Add clip', name);
+    }
+  }
+});
+
+test('limits: two joints rotate their anchors; no limit editor for a joint plus a body, the root, Animate or Simulate', () => {
+  const env = limitChain();
+  const { tools, selection, history, model, joints, shapes, modes } = env;
+  const [ux, uy] = ringPoint(45);
+  selection.set([joints[0], joints[1]]);
+  assert.equal(tools.handleAt({ x: 222, y: 200 }), 'ring');
+  path(tools, [[222, 200], [200, 150], [150, 128]]);
+  assert.equal(history.state.undoLabel, 'Rotate');
+  assert.notDeepEqual(model.prop(joints[1], 'anchor'), [1.5, 0]);
+  history.undo();
+  for (const objects of [[joints[1], shapes[2]], [ROOT_UID]]) {
+    selection.set(objects);
+    assert.notEqual(tools.handleAt({ x: ux, y: uy }), 'limit-upper', JSON.stringify(objects));
+    assert.equal(overlay(tools).some(([method]) => method === 'arc'), false);
+  }
+  modes.openClip(addClipTo(history));
+  for (const mode of ['animate', 'simulate']) {
+    if (mode === 'simulate') modes.startSimulate();
+    selection.set([joints[1]]);
+    assert.equal(tools.handleAt({ x: ux, y: uy }), null, mode);
+    assert.deepEqual(overlay(tools), [], mode);
+  }
+});
+
+test('limits: overlay draws the range under the gizmo and the handles with hover and active', () => {
+  const env = limitChain({ enabled: false, lower: -Math.PI / 6, upper: Math.PI / 4 });
+  const { tools } = env;
+  const calls = overlay(tools);
+  assert.deepEqual(calls[0], ['moveTo', 350, 200]);
+  assert.equal(calls[1][0], 'arc');
+  assert.deepEqual(calls[3], ['fill', { color: COLORS.gizmoZ, alpha: 0.075 }]);
+  const handles = calls.filter(([method, , , radius]) => method === 'circle' && (radius === 5 || radius === 6));
+  assert.equal(handles.length, 2);
+  hover(tools, ...ringPoint(45));
+  const hot = overlay(tools).filter(([method, , , radius]) => method === 'circle' && radius === 6);
+  assert.equal(hot.length, 1);
+  near(hot[0][1], ringPoint(45)[0]);
+  send(tools, 'down', ...ringPoint(45));
+  send(tools, 'move', ...ringPoint(30));
+  const active = overlay(tools).filter(([method, , , radius]) => method === 'circle' && radius === 6);
+  near(active[0][1], ringPoint(30)[0]);
+  send(tools, 'up', ...ringPoint(30));
+});
+
+test('limits: cursors and readout', () => {
+  const env = limitChain();
+  const { tools, calls } = env;
+  hover(tools, ...ringPoint(45));
+  assert.equal(calls.cursor.at(-1), 'pointer');
+  hover(tools, ...ringPoint(-30));
+  assert.equal(calls.cursor.at(-1), 'pointer');
+  hover(tools, ...ringPoint(180));
+  assert.equal(calls.cursor.at(-1), 'pointer');
+  send(tools, 'down', ...ringPoint(45));
+  assert.equal(calls.cursor.at(-1), 'pointer');
+  assert.equal(tools.readout(), null);
+  const to = ringPoint(25);
+  send(tools, 'move', ...to);
+  assert.deepEqual(tools.readout(), { text: 'lower: -30.0°  upper: 25.0°', screen: { x: to[0] + 16, y: to[1] + 16 } });
+  send(tools, 'up', ...to);
+  assert.equal(tools.readout(), null);
 });

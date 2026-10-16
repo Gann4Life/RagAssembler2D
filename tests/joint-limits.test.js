@@ -285,6 +285,32 @@ test('startLimitDrag enables limits on change in one Edit limits step; a disable
   assert.deepEqual(limitsOf(model, joint), before);
 });
 
+test('startLimitDrag on a joint without a limits object: a drag back leaves it untouched, a change is one step', () => {
+  const env = environment();
+  const { model, ctx, history, joint } = env;
+  history.execute(setProps([joint], { limits: undefined }));
+  const before = model.get(joint).props;
+  assert.equal(Object.hasOwn(before, 'limits'), false);
+  const pivot = { x: 0.5, y: 0 };
+  history.beginGesture();
+  const back = startLimitDrag(ctx, { joint, handle: 'limit-upper', press: event(env, onCircle(pivot, 0.72, 0)) });
+  back.apply(event(env, onCircle(pivot, 0.72, 30 * DEG)));
+  near(limitsOf(model, joint).upper, 30 * DEG);
+  back.apply(event(env, onCircle(pivot, 0.72, -30 * DEG)));
+  assert.equal(history.endGesture(), false);
+  assert.deepEqual(model.get(joint).props, before);
+  history.beginGesture();
+  const drag = startLimitDrag(ctx, { joint, handle: 'limit-lower', press: event(env, onCircle(pivot, 0.72, 0)) });
+  drag.apply(event(env, onCircle(pivot, 0.72, -40 * DEG)));
+  assert.equal(history.endGesture(), true);
+  assert.equal(history.state.undoLabel, 'Edit limits');
+  assert.equal(limitsOf(model, joint).enabled, true);
+  near(limitsOf(model, joint).lower, -40 * DEG);
+  assert.equal(limitsOf(model, joint).upper, 0);
+  history.undo();
+  assert.deepEqual(model.get(joint).props, before);
+});
+
 test('drawLimitRange draws the wedge, the reference line and the range arc', () => {
   const g = fakeGraphics();
   const layout = limitLayout({ x: 100, y: 100 }, 0, { enabled: true, lower: -30 * DEG, upper: 45 * DEG });

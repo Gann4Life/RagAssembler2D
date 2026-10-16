@@ -1,4 +1,6 @@
+import { placement } from '../viewport/placement.js';
 import { COLORS, HIT_RADIUS, LINE_WIDTH } from '../viewport/style.js';
+import { drawLimitHandles, drawLimitRange, limitJoint, limitLayout, limitRange, startLimitDrag } from './joint-limits.js';
 import { canRotate, gizmoPivot, manipulationTarget, startMove, startRotation } from './manipulation.js';
 import { drawResizeHandles, resizeCursor, resizeHandles, resizeShapes, startResize } from './resize.js';
 import { applyBox, boxAabb } from './select-box.js';
@@ -9,7 +11,14 @@ const PRIMARY = 0;
 const BOX_FILL_ALPHA = 0.1;
 const READOUT_OFFSET = 16;
 const MOVE_AXES = Object.freeze({ square: 'xy', x: 'x', y: 'y' });
-const HANDLE_CURSORS = Object.freeze({ square: 'move', x: 'ew-resize', y: 'ns-resize', ring: 'pointer' });
+const HANDLE_CURSORS = Object.freeze({
+  square: 'move',
+  x: 'ew-resize',
+  y: 'ns-resize',
+  ring: 'pointer',
+  'limit-lower': 'pointer',
+  'limit-upper': 'pointer',
+});
 
 /**
  * Object a Select click acts on: the topmost hit, or with ALT the hit just below the topmost selected hit,
@@ -53,15 +62,19 @@ function travelled(from, to) {
 }
 
 function gizmoPick(id) {
-  return id === null ? null : { id, key: id, resize: null };
+  return id === null ? null : { id, key: id, resize: null, limit: false };
 }
 
 function resizeKey(entry) {
   return `${entry.shape}:${entry.id}`;
 }
 
-function resizePick(entry) {
-  return { id: entry.id, key: resizeKey(entry), resize: entry };
+function pointPick(entry) {
+  return { id: entry.id, key: entry.key, resize: entry.resize, limit: entry.limit };
+}
+
+function limitId(pick) {
+  return pick?.limit ? pick.id : null;
 }
 
 function nearestPoint(points, screen) {
@@ -85,7 +98,8 @@ function pickCursor(pick) {
  * Select tool (`V`): a click selects the object under the press point, a drag on empty space selects with a box.
  * In Edit mode a drag on an object moves the selection (selecting the object first when it is not part of it),
  * the transform gizmo on the selection moves it along X, along Y or freely, or rotates it, and resize handles on
- * the selected circles and boxes resize one shape each. Each move, rotation or resize drag is one undo step.
+ * the selected circles and boxes resize one shape each; with one joint selected, limit handles and the ring edit its
+ * limits. Each move, rotation, resize or limit drag is one undo step.
  * Default cursor, hover feedback shown.
  * @returns {Readonly<import('./tool.js').Tool>} The tool.
  */
@@ -100,19 +114,45 @@ export function selectTool() {
   const currentTarget = () => manipulationTarget(ctx.model, ctx.selection.objects);
   const currentPivot = (withCtrl) => gizmoPivot(ctx.model, ctx.selection.objects, { mode: pivotMode(), ctrl: withCtrl });
 
+  function limitEditor() {
+    const joint = limitJoint(ctx.model, ctx.selection.objects);
+    if (joint === null) return null;
+    const place = placement(ctx.model);
+    const center = ctx.camera.worldToScreen(place.anchors.get(joint));
+    return { joint, layout: limitLayout(center, place.zero.get(joint), ctx.model.get(joint).props.limits) };
+  }
+
+  function rangeRotates(editor) {
+    if (editor === null) return false;
+    const range = limitRange(editor.layout);
+    return range.max - range.min > 0;
+  }
+
   function layout() {
     if (!ctx || !editing()) return null;
     if (press?.dragging && press.kind !== 'handle' && !press.manipulation) return null;
     const pivot = press?.manipulation ? press.manipulation.pivot() : currentPivot(ctrl);
     if (pivot === null) return null;
-    return gizmoLayout(ctx.camera.worldToScreen(pivot), { ring: canRotate(currentTarget()) });
+    const ring = canRotate(currentTarget()) || rangeRotates(limitEditor());
+    return gizmoLayout(ctx.camera.worldToScreen(pivot), { ring });
   }
 
   function pointHandles(found) {
     if (found === null) return [];
-    return resizeShapes(ctx.model, ctx.selection.objects)
+    const editor = limitEditor();
+    const limits = editor
+      ? editor.layout.handles.map(({ id, screen }) => ({ id, key: id, screen, resize: null, limit: true }))
+      : [];
+    const resizes = resizeShapes(ctx.model, ctx.selection.objects)
       .flatMap((uid) => resizeHandles(ctx.model, uid))
-      .map((entry) => ({ ...entry, screen: ctx.camera.worldToScreen(entry.point) }));
+      .map((entry) => ({
+        id: entry.id,
+        key: resizeKey(entry),
+        screen: ctx.camera.worldToScreen(entry.point),
+        resize: entry,
+        limit: false,
+      }));
+    return [...limits, ...resizes];
   }
 
   function objectAtPivot(found, screen) {
@@ -127,7 +167,7 @@ export function selectTool() {
     if (gizmo === 'square') return gizmoPick(gizmo);
     const points = pointHandles(found);
     const index = nearestPoint(points, screen);
-    if (index !== -1 && !objectAtPivot(found, screen)) return resizePick(points[index]);
+    if (index !== -1 && !objectAtPivot(found, screen)) return pointPick(points[index]);
     return gizmoPick(gizmo);
   }
 
@@ -148,6 +188,9 @@ export function selectTool() {
     if (pick.resize) {
       return startResize(ctx, { shape: pick.resize.shape, handle: pick.id, press: e, pivot: currentPivot(e.ctrl) });
     }
+    const joint = limitJoint(ctx.model, ctx.selection.objects);
+    if (pick.limit) return startLimitDrag(ctx, { joint, handle: pick.id, press: e });
+    if (pick.id === 'ring' && joint !== null) return startLimitDrag(ctx, { joint, handle: 'limit-range', press: e });
     const target = currentTarget();
     if (pick.id === 'ring') return startRotation(ctx, { target, press: e, mode: pivotMode() });
     return startMove(ctx, { target, ref: currentPivot(e.ctrl), axis: MOVE_AXES[pick.id], press: e });
@@ -268,16 +311,21 @@ export function selectTool() {
       if (found === null) return;
       const active = press?.dragging && press.kind === 'handle' ? press.handle : null;
       const hover = press?.dragging ? null : hovered;
-      const points = pointHandles(found);
-      const indexOf = (pick) => (pick?.resize ? points.findIndex((entry) => resizeKey(entry) === pick.key) : -1);
-      const gizmoId = (pick) => (pick && !pick.resize ? pick.id : null);
+      const resizes = pointHandles(found).filter((entry) => entry.resize);
+      const indexOf = (pick) => (pick?.resize ? resizes.findIndex((entry) => entry.key === pick.key) : -1);
+      const gizmoId = (pick) => (pick && !pick.resize && !pick.limit ? pick.id : null);
       const state = { hover: indexOf(hover), active: indexOf(active) };
+      const editor = limitEditor();
       drawGizmo(g, found, {
         hover: gizmoId(hover),
         active: gizmoId(active),
         mode: pivotMode(),
         sweep: press?.dragging ? (press.manipulation?.sweep?.() ?? null) : null,
-        points: (graphics) => drawResizeHandles(graphics, points.map((entry) => entry.screen), state),
+        under: editor ? (graphics) => drawLimitRange(graphics, editor.layout) : undefined,
+        points: (graphics) => {
+          drawResizeHandles(graphics, resizes.map((entry) => entry.screen), state);
+          if (editor) drawLimitHandles(graphics, editor.layout, { hover: limitId(hover), active: limitId(active) });
+        },
       });
     },
   });
