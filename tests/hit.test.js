@@ -56,6 +56,7 @@ test('style constants follow DESIGN §5.4', () => {
     gizmoX: 0xe0524f,
     gizmoY: 0x58b85c,
     gizmoFree: 0xf2c94c,
+    handleOutline: 0x1b1d21,
   });
   assert.deepEqual(LINE_WIDTH, { outline: 1, selected: 2, gizmo: 2 });
   assert.deepEqual(GIZMO_SIZE, {
@@ -74,6 +75,8 @@ test('style constants follow DESIGN §5.4', () => {
     squareSize: 12,
     rotateRing: 72,
     pivot: 4,
+    resizeHandle: 8,
+    resizeHandleActive: 10,
   });
   assert.deepEqual(HIT_RADIUS, { joint: 8, root: 12, shape: 4, handle: 8, gizmo: 6 });
   assert.equal(LABEL_SIZE, 11);

@@ -10,6 +10,7 @@ import { defaultsOf } from '../lib/schema.js';
 import { createJoint, createShapeBody } from '../js/commands/create.js';
 import { setProps } from '../js/commands/props.js';
 import { formatMove } from '../js/tools/transform-gizmo.js';
+import { formatSize } from '../js/tools/resize.js';
 
 const EPSILON = 1e-9;
 const NO_MODIFIERS = { shift: false, ctrl: false, alt: false };
@@ -735,6 +736,7 @@ test('#127: the joint at the pivot is pressed as an object; a child joint under 
   nearPair(model.prop(joints[0], 'anchor'), [0.5, -0.3]);
   assert.deepEqual(model.prop(bodies[1], 'position'), [1, 0]);
   env.history.undo();
+  env.history.execute(setProps([shapes[1]], { 'shape.radius': 0.2 }));
   camera.zoomAt({ x: 200, y: 200 }, 0.4);
   selection.set([shapes[1]]);
   const child = camera.worldToScreen({ x: 1.5, y: 0 });
@@ -897,7 +899,7 @@ test('overlay: the gizmo follows a move, stays during a rotation, highlights hov
   selection.set([shapes[1]]);
   hover(tools, 272, 178);
   const hovered = overlay(tools);
-  const rect = hovered.findIndex(([method]) => method === 'rect');
+  const rect = hovered.findLastIndex(([method]) => method === 'rect');
   assert.deepEqual(hovered[rect + 1], ['fill', { color: 0xffffff, alpha: 0.4 }]);
   send(tools, 'down', 272, 178);
   send(tools, 'move', 302, 168);
@@ -917,4 +919,197 @@ test('overlay: the gizmo follows a move, stays during a rotation, highlights hov
   assert.deepEqual(box.map(([method]) => method), ['rect', 'fill', 'stroke']);
   tools.cancel();
   assert.deepEqual(ringAt(overlay(tools)), { x: 280, y: 190 });
+});
+function resizeEnv() {
+  const editor = createEditor();
+  const { model, camera, tools } = editor;
+  const { meta, units, preview } = defaultsOf('document');
+  model.reset({
+    type: 'root',
+    props: { ...defaultsOf('root'), position: [0, 0], angle: 0, meta, units, preview },
+    children: {
+      bodies: [
+        body('b_1', [0, 0], [
+          shape('f_1', { type: 'box', center: [0, 0], width: 1, height: 0.6, angle: 0 }),
+          shape('f_2', { type: 'circle', center: [0, 0], radius: 0.2 }),
+          shape('f_3', { type: 'polygon', vertices: [[0, 0], [0.1, 0], [0, 0.1]] }),
+        ]),
+        body('b_2', [2, 0], [shape('f_4', { type: 'box', center: [0, 0], width: 0.6, height: 0.6, angle: 0 })]),
+      ],
+      joints: [joint('j_1', 'b_1', 'b_2', [1.7, 0])],
+      clips: [],
+    },
+  });
+  camera.setSize(400, 400);
+  camera.zoomAt({ x: 200, y: 200 }, 100 / camera.scale);
+  const calls = { cursor: [], invalidations: 0 };
+  tools.bindView({
+    hitTest: (screen) => hitTest(model, camera, screen),
+    boxTest: (box) => boxTest(model, box),
+    setCursor: (css) => calls.cursor.push(css),
+    invalidateOverlay: () => {
+      calls.invalidations++;
+    },
+  });
+  const uid = (id) => (id === 'root' ? ROOT_UID : model.uidOf(id));
+  const record = (id) => model.prop(uid(id), 'shape');
+  const geometryOf = () => JSON.stringify(['f_1', 'f_2', 'f_4'].map(record));
+  return { ...editor, calls, uid, record, geometryOf };
+}
+
+function handleRects(calls) {
+  return calls.filter(([method, , , width]) => method === 'rect' && (width === 8 || width === 10));
+}
+
+test('resize handles: a selected box only, a selected body on its circles and boxes, a multi-selection as the union', () => {
+  const env = resizeEnv();
+  const { tools, selection, uid, history } = env;
+  selection.set([uid('f_1')]);
+  assert.equal(handleRects(overlay(tools)).length, 8);
+  assert.equal(tools.handleAt({ x: 250, y: 170 }), 'resize-ne');
+  assert.equal(tools.handleAt({ x: 220, y: 200 }), 'x');
+  selection.set([uid('b_1')]);
+  assert.equal(handleRects(overlay(tools)).length, 9);
+  assert.equal(tools.handleAt({ x: 220, y: 200 }), 'resize-r');
+  selection.set([uid('f_1'), uid('b_2'), uid('j_1')]);
+  assert.equal(handleRects(overlay(tools)).length, 16);
+  assert.equal(tools.handleAt({ x: 430, y: 170 }), 'resize-ne');
+  selection.set([uid('f_3')]);
+  assert.equal(handleRects(overlay(tools)).length, 0);
+  selection.set([uid('f_1'), ROOT_UID]);
+  assert.equal(handleRects(overlay(tools)).length, 0);
+  selection.set([uid('f_1')]);
+  path(tools, [[222, 178], [242, 178]]);
+  nearPair(env.model.prop(uid('b_1'), 'position'), [0.2, 0]);
+  history.undo();
+});
+
+test('resize priority: square, nearest point handle, arrows, ring; a joint at the pivot wins', () => {
+  const env = resizeEnv();
+  const { tools, selection, uid, history, model } = env;
+  selection.set([uid('f_1')]);
+  assert.equal(tools.handleAt({ x: 250, y: 200 }), 'resize-e');
+  assert.equal(tools.handleAt({ x: 200, y: 170 }), 'resize-n');
+  history.execute(setProps([uid('j_1')], { anchor: [0.5, 0.3] }));
+  assert.equal(tools.handleAt({ x: 250, y: 170 }), 'resize-ne');
+  path(tools, [[250, 170], [260, 160]]);
+  assert.deepEqual(selection.objects, [uid('f_1')]);
+  near(env.record('f_1').width, 1.1);
+  history.undo();
+  history.undo();
+  selection.set([uid('f_4')]);
+  assert.equal(tools.handleAt({ x: 370, y: 200 }), null);
+  path(tools, [[370, 200], [370, 230]]);
+  assert.deepEqual(selection.objects, [uid('j_1')]);
+  assert.equal(env.record('f_4').width, 0.6);
+  history.undo();
+  selection.set([uid('f_1')]);
+  history.execute(setProps([uid('f_1')], { 'shape.width': 0.44, 'shape.height': 0.44 }));
+  assert.equal(tools.handleAt({ x: 222, y: 178 }), 'square');
+  history.execute(setProps([uid('b_1')], { position: [-1, 0] }));
+  history.execute(setProps([uid('f_1')], { 'shape.width': 0.3, 'shape.height': 0.06 }));
+  assert.equal(tools.handleAt({ x: 115, y: 199.5 }), 'resize-e');
+  assert.equal(tools.handleAt({ x: 115, y: 198.5 }), 'resize-ne');
+  history.execute(setProps([uid('f_2')], { 'shape.radius': 0.05 }));
+  selection.set([uid('f_2')]);
+  assert.equal(tools.handleAt({ x: 105, y: 200 }), 'resize-r');
+  history.execute(setProps([uid('b_1')], { position: [0, 0] }));
+  assert.equal(tools.handleAt({ x: 205, y: 200 }), null);
+  assert.ok(hitTest(model, env.camera, { x: 205, y: 200 }).some((hit) => model.get(hit).type === 'root'));
+});
+
+test('resize priority: an exact tie across shapes goes to the earlier shape in resize order', () => {
+  const env = resizeEnv();
+  const { tools, selection, uid, history } = env;
+  history.execute(setProps([uid('f_2')], { 'shape.radius': 0.5 }));
+  selection.set([uid('f_2'), uid('f_1')]);
+  assert.equal(tools.handleAt({ x: 250, y: 200 }), 'resize-r');
+  selection.set([uid('f_1'), uid('f_2')]);
+  assert.equal(tools.handleAt({ x: 250, y: 200 }), 'resize-e');
+  assert.equal(tools.handleAt({ x: 252, y: 200 }), 'resize-e');
+});
+
+test('a resize drag changes only its shape, keeps the gizmo, shows the size and is one undo step', () => {
+  const env = resizeEnv();
+  const { tools, selection, uid, history, model, calls } = env;
+  selection.set([uid('f_1'), uid('f_4')]);
+  const ring = ringAt(overlay(tools));
+  assert.deepEqual(ring, { x: 300, y: 200 });
+  const before = { f_2: env.record('f_2'), f_4: env.record('f_4') };
+  hover(tools, 250, 170);
+  assert.equal(calls.cursor.at(-1), 'nesw-resize');
+  hover(tools, 200, 170);
+  assert.equal(calls.cursor.at(-1), 'ns-resize');
+  hover(tools, 250, 200);
+  assert.equal(calls.cursor.at(-1), 'ew-resize');
+  send(tools, 'down', 250, 200);
+  assert.equal(calls.cursor.at(-1), 'ew-resize');
+  send(tools, 'move', 260, 200);
+  send(tools, 'move', 270, 205);
+  const ppm = model.prop(ROOT_UID, 'units.pixelsPerMeter');
+  assert.deepEqual(tools.readout(), { text: formatSize({ width: 1.2, height: 0.6 }, ppm), screen: { x: 286, y: 221 } });
+  const drawing = overlay(tools);
+  assert.deepEqual(ringAt(drawing), ring);
+  const active = handleRects(drawing).filter(([, , , width]) => width === 10);
+  assert.equal(active.length, 1);
+  assert.deepEqual(active[0].slice(1, 3), [265, 195]);
+  send(tools, 'up', 270, 205);
+  near(env.record('f_1').width, 1.2);
+  near(env.record('f_1').height, 0.6);
+  near(env.record('f_1').center[0], 0.1);
+  assert.deepEqual(env.record('f_4'), before.f_4);
+  assert.deepEqual(env.record('f_2'), before.f_2);
+  assert.deepEqual(model.prop(uid('b_1'), 'position'), [0, 0]);
+  assert.deepEqual(selection.objects, [uid('f_1'), uid('f_4')]);
+  assert.equal(history.state.undoLabel, 'Resize');
+  history.undo();
+  assert.equal(env.record('f_1').width, 1);
+  assert.equal(history.canUndo, false);
+  path(tools, [[250, 200], [280, 200], [250, 200]]);
+  assert.equal(history.canUndo, false);
+  path(tools, [[250, 200]]);
+  assert.equal(history.canUndo, false);
+  assert.equal(env.record('f_1').width, 1);
+});
+
+test('Esc, Undo, a tool switch and a mode change mid-resize restore the shape', () => {
+  const aborts = [
+    (env) => env.actions.run('escape'),
+    (env) => env.history.undo(),
+    (env) => env.tools.activate('select-box'),
+    (env) => env.modes.openClip(env.clip),
+  ];
+  for (const abort of aborts) {
+    const env = resizeEnv();
+    env.clip = addClipTo(env.history);
+    const { tools, selection, uid } = env;
+    selection.set([uid('f_1')]);
+    const before = env.geometryOf();
+    send(tools, 'down', 250, 170);
+    send(tools, 'move', 290, 140);
+    assert.notEqual(env.geometryOf(), before);
+    abort(env);
+    send(tools, 'move', 300, 120);
+    send(tools, 'up', 300, 120);
+    const name = abort.toString();
+    assert.equal(env.geometryOf(), before, name);
+    assert.deepEqual(selection.objects, [uid('f_1')], name);
+    assert.equal(env.history.state.undoLabel, 'Add clip', name);
+  }
+});
+
+test('Animate and Simulate show no resize handles and resize nothing', () => {
+  const env = resizeEnv();
+  const { tools, selection, uid, modes, history } = env;
+  selection.set([uid('b_1')]);
+  modes.openClip(addClipTo(history));
+  const before = env.geometryOf();
+  for (const mode of ['animate', 'simulate']) {
+    if (mode === 'simulate') modes.startSimulate();
+    assert.equal(handleRects(overlay(tools)).length, 0, mode);
+    assert.equal(tools.handleAt({ x: 250, y: 170 }), null, mode);
+    selection.set([uid('b_1')]);
+    path(tools, [[250, 170], [290, 140]]);
+    assert.equal(env.geometryOf(), before, mode);
+  }
 });

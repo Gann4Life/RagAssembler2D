@@ -63,11 +63,12 @@
 - [ ] #126 Highlight the viewport object of the hovered Hierarchy row
 - [x] #127 Keep the Manipulate rotate knob clear of nearby joint gizmos
 - [x] #128 Select tool with transform gizmo (merge Manipulate into Select)
-- [ ] #129 Resize shapes with handles in the Select tool
+- [x] #129 Resize shapes with handles in the Select tool
 - [ ] #130 Polygon vertex handles in the Select tool
 - [x] #132 Split DESIGN.md and the large docs into per-section files
 - [x] #134 Dashed blue rotation ring and orange shape outlines
 - [x] #138 Shapes render without their translucent fill
+- [ ] #139 Body focus mode: isolate a body to edit and add its shapes
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
