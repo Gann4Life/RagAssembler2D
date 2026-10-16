@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-16
+
+### Added
+- `RagImporter.configure` to inject the liquidfun.js and PIXI.js namespaces instead of using globals.
+- `RagImporter.parse` returns an immutable `RagDef` and throws `RagFormatError` with the validation errors and warnings.
+- `RagDef.spawn` creates a ragdoll in a LiquidFun world in rest pose, optionally mirrored with `flipX`.
+- `RagInstance.destroy` removes the ragdoll's joints, bodies and view from the world.
+
 ## [0.2.0] - 2026-10-16
 
 ### Added

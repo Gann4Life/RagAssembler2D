@@ -18,13 +18,10 @@ A module whose functions serve several issues is created by the first of them to
 | `lib/serialize.js` | Canonical writer: schema key order, numbers rounded to 1e-5, `-0` → `0`, 2-space indent, `\n`, final newline ([`DESIGN.md` §6.5](../design/06-file-format.md#65-round-trip-guarantee)). | `serialize(json) → string` | schema | #27 |
 | `lib/migrate.js` | Migrates older format versions to `FORMAT_VERSION`; throws on unknown versions. Used by the editor loader only. | `migrate(json) → { json, notes }` | schema | #27 |
 | `lib/evaluate.js` | Pure animation evaluator: track sampling, interpolation, channel resolution ([`DESIGN.md` §4.3–4.4](../design/04-animation-model.md#43-keys-and-interpolation)). | `sampleTrack`, `evaluateClip`, `resolveChannels`, typedef `ResolvedPose` | schema | #30, #31 |
-| `lib/ragimporter.js` | Public entry: `configure` (including `contactFilter`), `parse`, `setContactFilter`, `releaseWorld`; resolves `Box2D`/`PIXI`. `validate` and `supportedVersions` are built (see the built map). | `RagImporter`, `RagFormatError` | all `lib/` | #25, #44, #49 |
-| `lib/def.js` | `RagDef`: immutable parsed definition, `spriteUrls`, `spawn` (destroys every def, shape and filter it creates, casts each joint once to `b2RevoluteJoint`; [§7.4](../design/07-ragimporter.md#74-native-memory)). | `RagDef` (via `parse`) | validate, schema, geometry, instance | #44 |
-| `lib/instance.js` | `RagInstance`: playback, events, overrides, motor controller, `update`, `sync` (both allocate nothing) and `destroy` (joints before bodies); [§7.4](../design/07-ragimporter.md#74-native-memory). | `RagInstance` (via `spawn`) | emitter, evaluate, geometry, render, collision | #44–#48 |
 | `lib/render.js` | PIXI sprites, texture resolver and cache, z order, debug draw. | internal | geometry | #50, #51 |
 | `lib/collision.js` | Per-world collision state ([`DESIGN.md` §2.5, §7.5](../design/07-ragimporter.md#75-contact-filter-and-host-integration)): one `JSContactFilter` per world (default rule, self-collision registry keyed by fixture pointer, host predicate), install on first use, `releaseWorld` teardown, instance ids and the `groupIndex` fallback. | internal | — | #49 |
 
-The runtime split (`def`, `instance`, `render`, `collision`) is confirmed by the architect when phase 4 starts. Hosts copy the whole `lib/` folder ([`DESIGN.md` §8](../design/08-integration-workflow.md#8-integration-workflow-separate-js-project)).
+The runtime split (`def`, `instance`, `render`, `collision`) was confirmed by the architect for #44; `ragimporter`, `def` and `instance` are built (see [Module map: lib and tests](module-map-lib-tests.md)). Hosts copy the whole `lib/` folder ([`DESIGN.md` §8](../design/08-integration-workflow.md#8-integration-workflow-separate-js-project)).
 
 ## js/ core (planned)
 
