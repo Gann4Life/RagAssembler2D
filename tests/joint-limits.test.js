@@ -150,7 +150,39 @@ const VALUE_TABLE = [
 
 for (const [[lower, upper], handle, sweep, shift, expected] of VALUE_TABLE) {
   test(`limitValues(${lower} / ${upper}, ${handle}, ${sweep}, ${shift}) is ${expected.join(' / ')} degrees`, () => {
-    const values = limitValues({ lower: lower * DEG, upper: upper * DEG }, handle, sweep * DEG, shift);
+    const values = limitValues({ lower: lower * DEG, upper: upper * DEG }, handle, sweep * DEG, { shift, alt: false });
+    near(values.lower, expected[0] * DEG);
+    near(values.upper, expected[1] * DEG);
+    notNegativeZero(values.lower);
+    notNegativeZero(values.upper);
+  });
+}
+
+const ALT_TABLE = [
+  [[-20, 70], 'limit-upper', -20, {}, [-50, 50]],
+  [[-30, 45], 'limit-upper', -20, {}, [-25, 25]],
+  [[-30, 45], 'limit-lower', -10, {}, [-40, 40]],
+  [[-30, 45], 'limit-upper', -20, { shift: true }, [-30, 30]],
+  [[-30, 45], 'limit-lower', -8, { shift: true }, [-45, 45]],
+  [[0, 0], 'limit-upper', 30, {}, [-30, 30]],
+  [[0, 0], 'limit-lower', -30, {}, [-30, 30]],
+  [[-30, 45], 'limit-upper', -60, {}, [0, 0]],
+  [[-30, 45], 'limit-upper', 150, {}, [-180, 180]],
+  [[-200, 10], 'limit-upper', 20, {}, [-30, 30]],
+  [[-200, 10], 'limit-lower', -30, {}, [-200, 180]],
+  [[-10, 200], 'limit-lower', -190, {}, [-180, 180]],
+  [[-10, 200], 'limit-lower', -5, {}, [-15, 15]],
+  [[-30, 45], 'limit-range', 20, {}, [-10, 65]],
+  [[-30, 45], 'limit-range', 50, { shift: true }, [0, 75]],
+];
+
+for (const [[lower, upper], handle, sweep, modifiers, expected] of ALT_TABLE) {
+  test(`limitValues with ALT ${JSON.stringify(modifiers)}: ${lower} / ${upper}, ${handle}, ${sweep} is ${expected.join(' / ')} degrees`, () => {
+    const values = limitValues({ lower: lower * DEG, upper: upper * DEG }, handle, sweep * DEG, {
+      shift: false,
+      ...modifiers,
+      alt: true,
+    });
     near(values.lower, expected[0] * DEG);
     near(values.upper, expected[1] * DEG);
     notNegativeZero(values.lower);
@@ -244,6 +276,57 @@ test('startLimitDrag: coincident 0 / 0 handles resolve by the first non-zero swe
     history.endGesture();
     assert.equal(history.state.undoLabel, 'Create joint');
     assert.equal(limitsOf(model, joint).enabled, false);
+  }
+});
+
+test('startLimitDrag: ALT mirrors the other limit live from any press values, one undo step, ignored on the ring', () => {
+  const env = environment({ limits: { enabled: true, lower: -20 * DEG, upper: 70 * DEG } });
+  const { model, ctx, history, joint } = env;
+  const pivot = { x: 0.5, y: 0 };
+  history.beginGesture();
+  const drag = startLimitDrag(ctx, { joint, handle: 'limit-upper', press: event(env, onCircle(pivot, 0.72, 70 * DEG)) });
+  drag.apply(event(env, onCircle(pivot, 0.72, 50 * DEG), { alt: true }));
+  near(limitsOf(model, joint).lower, -50 * DEG);
+  near(limitsOf(model, joint).upper, 50 * DEG);
+  assert.equal(drag.readout(), 'lower: -50.0°  upper: 50.0°');
+  drag.apply(event(env, onCircle(pivot, 0.72, 50 * DEG)));
+  near(limitsOf(model, joint).lower, -20 * DEG);
+  near(limitsOf(model, joint).upper, 50 * DEG);
+  drag.apply(event(env, onCircle(pivot, 0.72, 52 * DEG), { alt: true, shift: true }));
+  near(limitsOf(model, joint).lower, -45 * DEG);
+  near(limitsOf(model, joint).upper, 45 * DEG);
+  assert.equal(history.endGesture(), true);
+  assert.equal(history.state.undoLabel, 'Edit limits');
+  history.undo();
+  near(limitsOf(model, joint).lower, -20 * DEG);
+  near(limitsOf(model, joint).upper, 70 * DEG);
+  assert.equal(history.state.undoLabel, 'Create joint');
+  history.beginGesture();
+  const range = startLimitDrag(ctx, { joint, handle: 'limit-range', press: event(env, onCircle(pivot, 0.72, 0)) });
+  range.apply(event(env, onCircle(pivot, 0.72, 10 * DEG), { alt: true }));
+  near(limitsOf(model, joint).lower, -10 * DEG);
+  near(limitsOf(model, joint).upper, 80 * DEG);
+  history.endGesture();
+});
+
+test('startLimitDrag: coincident 0 / 0 handles open symmetrically with ALT', () => {
+  for (const [first, pressedOn] of [
+    [25, 'limit-lower'],
+    [-25, 'limit-upper'],
+  ]) {
+    const env = environment({ limits: { enabled: false, lower: 0, upper: 0 } });
+    const { model, ctx, history, joint } = env;
+    const pivot = { x: 0.5, y: 0 };
+    history.beginGesture();
+    const drag = startLimitDrag(ctx, { joint, handle: pressedOn, press: event(env, onCircle(pivot, 0.72, 0)) });
+    drag.apply(event(env, onCircle(pivot, 0.72, first * DEG), { alt: true }));
+    near(limitsOf(model, joint).lower, -25 * DEG);
+    near(limitsOf(model, joint).upper, 25 * DEG);
+    assert.equal(limitsOf(model, joint).enabled, true);
+    drag.apply(event(env, onCircle(pivot, 0.72, (first + Math.sign(first) * 5) * DEG), { alt: true }));
+    near(limitsOf(model, joint).lower, -30 * DEG);
+    near(limitsOf(model, joint).upper, 30 * DEG);
+    assert.equal(history.endGesture(), true);
   }
 });
 

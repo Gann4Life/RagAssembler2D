@@ -103,19 +103,24 @@ export function limitRange({ lower, upper }) {
 /**
  * Limits after a limit drag: a handle adds the sweep to its own limit, rounded to 15° with SHIFT and clamped to its
  * side of 0 and within ±π (or its press value when that is beyond); the range adds the clamped, snapped sweep to
- * both (see `limitRange`). Pure.
+ * both (see `limitRange`). With ALT on a handle, the other limit is the mirror of the dragged one, clamped the same
+ * way, whatever the press values; ALT does nothing on the range. Pure.
  * @param {{ lower: number, upper: number }} start Limits at the press, radians.
  * @param {LimitHandleId} handle Dragged handle.
  * @param {number} sweep Angle swept since the press, radians, counter-clockwise positive.
- * @param {boolean} shift Whether SHIFT is held.
+ * @param {{ shift: boolean, alt: boolean }} modifiers SHIFT and ALT held.
  * @returns {Readonly<{ lower: number, upper: number }>} New limits, radians, never `-0`.
  */
-export function limitValues(start, handle, sweep, shift) {
+export function limitValues(start, handle, sweep, { shift, alt }) {
   let { lower, upper } = start;
+  const lowerMin = Math.min(-Math.PI, start.lower);
+  const upperMax = Math.max(Math.PI, start.upper);
   if (handle === 'limit-lower') {
-    lower = clamp(snapAngle(start.lower + sweep, shift), Math.min(-Math.PI, start.lower), 0);
+    lower = clamp(snapAngle(start.lower + sweep, shift), lowerMin, 0);
+    if (alt) upper = clamp(-lower, 0, upperMax);
   } else if (handle === 'limit-upper') {
-    upper = clamp(snapAngle(start.upper + sweep, shift), 0, Math.max(Math.PI, start.upper));
+    upper = clamp(snapAngle(start.upper + sweep, shift), 0, upperMax);
+    if (alt) lower = clamp(-upper, lowerMin, 0);
   } else {
     const range = limitRange(start);
     const delta = clamp(snapAngle(sweep, shift), range.min, range.max);
@@ -162,7 +167,7 @@ export function formatLimits(lower, upper) {
 /**
  * Starts a limit drag of one joint. A limit handle adds the angle the pointer sweeps around the anchor to its limit;
  * the range moves both. When both limits are 0 a limit handle waits for the first non-zero sweep: counter-clockwise
- * takes the upper limit, clockwise the lower one. SHIFT is read live. Each changed step sets `limits.lower`,
+ * takes the upper limit, clockwise the lower one. SHIFT and ALT (mirror of the other limit) are read live. Each changed step sets `limits.lower`,
  * `limits.upper` and `limits.enabled` = true through one `Edit limits` command; a step back to the press limits
  * restores the press values, `enabled` included. A joint without a `limits` object is written and restored as a whole
  * `limits`, so a drag back leaves it untouched.
@@ -203,7 +208,7 @@ export function startLimitDrag(ctx, { joint, handle, press }) {
     apply(e) {
       const sweep = tracker.update(e.world);
       if (resolved === null && sweep !== 0) resolved = sweep > 0 ? 'limit-upper' : 'limit-lower';
-      values = resolved === null ? { lower: start.lower, upper: start.upper } : limitValues(start, resolved, sweep, e.shift);
+      values = resolved === null ? { lower: start.lower, upper: start.upper } : limitValues(start, resolved, sweep, { shift: e.shift, alt: e.alt });
       if (values.lower !== start.lower || values.upper !== start.upper) {
         write(changed(values));
         written = true;

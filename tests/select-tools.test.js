@@ -1186,6 +1186,24 @@ test('limits: a handle drag moves one limit, enables limits, SHIFT live, one Edi
   assert.equal(limitsOf(env).enabled, false);
 });
 
+test('limits: an ALT handle drag mirrors the other limit from non-zero limits, and ALT does nothing on the ring', () => {
+  const env = limitChain({ enabled: true, lower: (-20 * Math.PI) / 180, upper: (70 * Math.PI) / 180 });
+  const { tools, history } = env;
+  path(tools, [ringPoint(70), ringPoint(60), ringPoint(50)], { alt: true });
+  assert.deepEqual(limitDegrees(env), [-50, 50]);
+  assert.equal(history.state.undoLabel, 'Edit limits');
+  history.undo();
+  send(tools, 'down', ...ringPoint(70));
+  send(tools, 'move', ...ringPoint(50), { alt: true });
+  assert.deepEqual(limitDegrees(env), [-50, 50]);
+  send(tools, 'move', ...ringPoint(50));
+  assert.deepEqual(limitDegrees(env), [-20, 50]);
+  send(tools, 'up', ...ringPoint(50));
+  history.undo();
+  path(tools, [ringPoint(180), ringPoint(185), ringPoint(190)], { alt: true });
+  assert.deepEqual(limitDegrees(env), [-10, 80]);
+});
+
 test('limits: a ring drag rotates the range with the clamp, SHIFT live', () => {
   const env = limitChain();
   const { tools, history, model, bodies, joints } = env;
