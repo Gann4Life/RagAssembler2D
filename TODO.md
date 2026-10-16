@@ -14,6 +14,7 @@
 - [x] #105 Enforce that only js/main.js reads the PIXI and Box2D globals
 - [x] #106 Load core and pure modules in Node without a DOM
 - [x] #107 Anchor Pure and Runtime parsing to the component diagram
+- [ ] #135 Hotkey to duplicate/clone objects.
 
 ## Phase 1 – Editor: rigging
 - [ ] #6 Spike: verify sprite folder access across browsers
@@ -65,7 +66,8 @@
 - [x] #128 Select tool with transform gizmo (merge Manipulate into Select)
 - [ ] #129 Resize shapes with handles in the Select tool
 - [ ] #130 Polygon vertex handles in the Select tool
-- [ ] #132 Split DESIGN.md and the large docs into per-section files
+- [x] #132 Split DESIGN.md and the large docs into per-section files
+- [ ] #134 Dashed blue rotation ring and orange shape outlines
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
