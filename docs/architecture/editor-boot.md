@@ -22,4 +22,4 @@ Tools overlay ([`DESIGN.md` §5.5](../design/05-5-tools.md#55-tools)):
 
 Hierarchy: right after `createDock` (step 7), `js/main.js` calls `createHierarchy(dock.panelElement('hierarchy'), editor)`, which replaces the placeholder content of that element ([Hierarchy and deletion](hierarchy-and-deletion.md#hierarchy-and-deletion)). The panel element exists while the panel is closed, so the Hierarchy is created once and keeps its state across close and reopen.
 
-**(planned)** Boot grows: `main.js` mounts the other panels (Hierarchy is mounted) and passes them the editor object, registers the other actions that need the DOM (file pickers, confirmations), and offers draft recovery ([`DESIGN.md` §1](../design/01-conventions.md#1-conventions)).
+**(planned)** Boot grows: `main.js` mounts the other panels (Hierarchy is mounted) and passes them the editor object, registers the other actions that need the DOM (file pickers), passes `confirmDialog` as the editor's `confirm` option (#124, [Editor composition](editor-composition.md#editor-composition)), and offers draft recovery ([`DESIGN.md` §1](../design/01-conventions.md#1-conventions)).
