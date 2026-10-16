@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-16
+
+### Added
+- Validation of `.rag.json` files with stable error and warning codes, including duplicate-name warnings.
+- `RagImporter.validate` and `RagImporter.supportedVersions`.
+
+
 ## [0.1.0] - 2026-10-16
 
 ### Added

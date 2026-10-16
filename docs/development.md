@@ -69,7 +69,9 @@ The checks scan `js/`, `lib/`, `demo/` and `tests/` (never `vendor/`) with a sma
 - **Load check:** `tests/architecture.test.js` also imports every pure module on disk (the `lib/` pure set and the `js/` core) with `document`, `window`, `PIXI` and `Box2D` undefined, so a module that touches one at load time fails the suite, naming the module and the error. Modules not on disk yet are skipped. It cannot see globals used only inside functions the load does not call.
 - **Comments:** only `/** … */` blocks are allowed; any `//` or `/* */` comment fails.
 
-Tests for validation, canonical serialization (round-trip), the animation evaluator and event timing are **(planned)**.
+- `tests/validate.test.js` covers `lib/validate.js` and `RagImporter.validate` against [`DESIGN.md` §6.4](design/06-file-format.md#64-validation); `tests/geometry.test.js` covers `polygonProblems`.
+
+Tests for canonical serialization (round-trip), the animation evaluator and event timing are **(planned)**.
 
 ## Vendored libraries
 

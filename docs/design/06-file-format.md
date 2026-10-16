@@ -191,7 +191,7 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 | `W_CLIP_EMPTY` | A clip with no tracks and no events. | `/clips/i` |
 | `W_SPRITE_UNUSED` | A sprite asset referenced by no `sprite.asset` and no `sprite` key value. | `/sprites/i` |
 | `W_SPRITE_IMAGE_MISSING` | Editor only: `hasImage(asset)` returned `false`. | `/sprites/i/src` |
-| `W_DUPLICATE_NAME` | A body, shape or joint whose `name` equals an earlier one of the same kind (all shapes of the file form one kind). Runtime lookups by name then return the first ([§7.1](07-ragimporter.md#71-api)). | `…/name` |
+| `W_DUPLICATE_NAME` | One warning per duplicated name within a kind (bodies, joints, shapes; all shapes of the file form one kind). `path` is the second occurrence and the message lists every colliding id. Equal names across kinds do not warn. Runtime lookups by name return the first ([§7.1](07-ragimporter.md#71-api)). | `…/name` |
 
 Joint edges, unlinked bodies and loop joints follow one rule, shared with the editor's joint graph: a joint is an edge when `bodyA` and `bodyB` are two different body ids; a breadth-first search from `rootBody`, visiting edges in `joints` order, marks tree joints; every other edge between reachable bodies is a loop joint.
 
