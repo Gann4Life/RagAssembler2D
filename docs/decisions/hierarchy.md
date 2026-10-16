@@ -2,6 +2,11 @@
 
 Newest first. See the [index](../decisions.md).
 
+## 2026-10-16
+- **Delete's confirmation goes through a `confirm: (request) => Promise<boolean>` option of `createEditor` (default: always `true`), backed in the browser by the new UI module `js/confirm-dialog.js` (`confirmDialog`, a native modal `<dialog>`), and the request wording is built in core.** `DeletionPlan` gains `clips` (per-clip track and key counts). `delete` stays synchronous when nothing needs confirming and is disabled while a confirmation is pending; after a `true` it re-checks its enabled rule before deleting. Reason: the core stays DOM-free and Node-tested, wording included; one option serves New (#27) too; a synchronous no-confirm path keeps every existing caller and test unchanged. (DESIGN §5.6; docs/architecture.md, Editor composition, Hierarchy and deletion, Module map)
+- **The dialog's key mapping, `confirmKey`, is a DOM-free export of `js/confirm-dialog.js`, listed in the `tests/` dependency row, not a separate core module.** Enter on a focused Cancel cancels. Reason: same pattern as `js/header.js` and `js/viewport/toolbar.js`; one file instead of two for a five-case function. (docs/architecture.md, Dependency rules)
+- **The confirmation states the removed objects, the track and key totals and the affected clips with per-clip counts,** extending §5.6's "clips affected and the number of tracks and keys removed". Reason: the user is deciding about the cascade, and per-clip counts show where the loss is. (DESIGN §5.6)
+
 ## 2026-10-15
 - **Backspace is not a Delete key; Del is the only one.** §5.9 is unchanged. Reason: owner decision; Backspace edits text in the search field and inspector, and a second, easily hit key for a destructive action without confirmation adds risk for no gain on keyboards that have Del. (DESIGN §5.6, §5.9)
 - **The Delete button's tooltip gives "the ragdoll root cannot be deleted" when only the root is selected,** an explicit exception to §5.3's rule that state-only unavailability shows no reason. The mode reason wins outside Edit mode, and a gesture shows none. Reason: a selected object that cannot be deleted is otherwise unexplained, unlike Undo with nothing to undo. (DESIGN §5.3, §5.6; docs/architecture.md, Hierarchy and deletion)

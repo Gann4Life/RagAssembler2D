@@ -7,8 +7,8 @@ import { defaultsOf } from '../lib/schema.js';
 
 const COLLECTIONS = { root: ['sprites', 'bodies', 'joints', 'clips'], body: ['fixtures'], clip: ['tracks', 'events'], track: ['keys'] };
 
-function build({ bodies = {}, joints = [], rootBody = null, clips = [], sprites = [] }) {
-  const editor = createEditor();
+function build({ bodies = {}, joints = [], rootBody = null, clips = [], sprites = [], editorOptions = {} }) {
+  const editor = createEditor(editorOptions);
   const { history } = editor;
   const uids = {};
   history.execute({
@@ -216,4 +216,101 @@ test('deleteObjects throws on an empty plan or an unknown uid and mutates nothin
   assert.throws(() => history.execute(deleteObjects([uids.b_1, 999])), Error);
   assert.deepEqual(dump(model), before);
   assert.equal(history.state.undoLabel, 'Build');
+});
+
+test('deletionPlan: clips lists each clip holding a removed track, in clip order, with track and key counts', () => {
+  const { model, uids } = build({ ...RIG, clips: [['f_1', 'j_1', 'f_4'], ['f_4'], ['f_2']] });
+  const plan = deletionPlan(model, [uids.b_1, uids.b_3]);
+  assert.deepEqual(plan.clips, [
+    { uid: uids.c_1, tracks: 3, keys: 3 },
+    { uid: uids.c_2, tracks: 1, keys: 1 },
+  ]);
+  assert.ok(Object.isFrozen(plan.clips));
+  assert.deepEqual(deletionPlan(model, [uids.j_2]).clips, []);
+});
+
+function confirmRig(answer) {
+  const requests = [];
+  const confirm = (request) => {
+    requests.push(request);
+    return answer(request);
+  };
+  const built = build({
+    bodies: { b_1: ['f_1'], b_2: ['f_2'], b_3: ['f_3'] },
+    joints: [['b_1', 'b_2'], ['b_1', 'b_3']],
+    rootBody: 'b_1',
+    clips: [['f_1', 'j_1', 'j_2'], ['f_1']],
+    editorOptions: { confirm },
+  });
+  built.editor.selection.set([built.uids.b_1]);
+  return { ...built, requests };
+}
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('delete without tracks never asks and runs synchronously', () => {
+  const requests = [];
+  const { editor, model, uids } = build({ ...RIG, clips: [['f_1']], editorOptions: { confirm: (request) => requests.push(request) } });
+  editor.selection.set([uids.j_1]);
+  assert.equal(editor.actions.run('delete'), true);
+  assert.equal(requests.length, 0);
+  assert.equal(model.get(uids.j_1), null);
+});
+
+test('delete with tracks asks once with the delete request and deletes as one undo step on true', async () => {
+  const { editor, model, uids, requests } = confirmRig(() => Promise.resolve(true));
+  const before = dump(model);
+  editor.actions.run('delete');
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0], {
+    kind: 'delete',
+    title: 'Delete animation tracks?',
+    message: 'Deleting 1 body and 2 joints also removes 4 tracks and 4 keys from 2 clips. Undo restores them.',
+    items: ['New Clip: 3 tracks, 3 keys', 'New Clip: 1 track, 1 key'],
+    confirmLabel: 'Delete',
+    cancelLabel: 'Cancel',
+  });
+  await settle();
+  assert.equal(model.get(uids.b_1), null);
+  assert.equal(editor.history.state.undoLabel, 'Delete');
+  editor.history.undo();
+  assert.deepEqual(dump(model), before);
+});
+
+test('cancelling or a rejected confirmation deletes nothing and leaves the stack untouched', async () => {
+  for (const answer of [() => Promise.resolve(false), () => Promise.reject(new Error('boom'))]) {
+    const { editor, model, requests } = confirmRig(answer);
+    const before = dump(model);
+    const label = editor.history.state.undoLabel;
+    editor.actions.run('delete');
+    await settle();
+    assert.equal(requests.length, 1);
+    assert.deepEqual(dump(model), before);
+    assert.equal(editor.history.state.undoLabel, label);
+    assert.equal(editor.actions.isEnabled('delete'), true);
+  }
+});
+
+test('delete is disabled with no reason while the confirmation is pending, and a mode change cancels the deletion', async () => {
+  let resolve;
+  const { editor, model, uids } = confirmRig(() => new Promise((done) => (resolve = done)));
+  const before = dump(model);
+  editor.actions.run('delete');
+  assert.equal(editor.actions.isEnabled('delete'), false);
+  assert.equal(editor.actions.reason('delete'), null);
+  assert.equal(editor.actions.run('delete'), false);
+  editor.modes.openClip(uids.c_1);
+  resolve(true);
+  await settle();
+  assert.deepEqual(dump(model), before);
+  assert.notEqual(model.get(uids.b_1), null);
+});
+
+test('createEditor: the default confirm deletes and a non-function confirm throws TypeError', async () => {
+  const { editor, model, uids } = build({ ...RIG, clips: [['f_4']] });
+  editor.selection.set([uids.b_3]);
+  editor.actions.run('delete');
+  await settle();
+  assert.equal(model.get(uids.b_3), null);
+  assert.throws(() => createEditor({ confirm: 'yes' }), TypeError);
 });

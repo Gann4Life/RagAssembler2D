@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-16
+
+### Added
+- Confirmation dialog for Delete: when removing objects also deletes animation tracks, a modal lists the affected clips, tracks and keys and asks to confirm (Enter confirms, Escape or clicking outside cancels).
+
 ## [0.4.1] - 2026-10-16
 
 ### Changed

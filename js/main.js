@@ -11,6 +11,7 @@ import { createHierarchy } from './panels/hierarchy.js';
 import { openMenu } from './menu.js';
 import { Settings } from './settings.js';
 import { openSettings } from './settings-dialog.js';
+import { confirmDialog } from './confirm-dialog.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { ROOT_UID } from './model/model.js';
 import { setProps } from './commands/props.js';
@@ -28,7 +29,11 @@ for (const warning of restored.warnings) console.warn(warning);
 
 RagImporter.configure({ Box2D, PIXI });
 const physics = Object.freeze({ startPose: (json, options) => createPoseSession(Box2D, json, options) });
-const editor = createEditor({ settings: restored.settings, physics });
+const editor = createEditor({
+  settings: restored.settings,
+  physics,
+  confirm: (request) => confirmDialog(document, request),
+});
 const { actions, history, modes, selection, model, settings, camera, tools } = editor;
 settings.on('settings', () => saveSettings(settings.toJSON()));
 

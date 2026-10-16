@@ -29,7 +29,54 @@ import { hingeTool } from './tools/hinge.js';
  * @property {ToolRegistry} tools Viewport tool registry; not undoable.
  */
 
+/**
+ * What a core action asks the user to confirm before a destructive step; rendered by the confirmation dialog.
+ * @typedef {object} ConfirmRequest
+ * @property {'delete'} kind What asks.
+ * @property {string} title Dialog heading.
+ * @property {string} message Plain-text sentence or two.
+ * @property {ReadonlyArray<string>} items Plain-text list under the message; may be empty.
+ * @property {string} confirmLabel Label of the confirm button.
+ * @property {string} cancelLabel Label of the cancel button.
+ */
+
 const MODE_NAMES = Object.freeze({ edit: 'Edit', animate: 'Animate', simulate: 'Simulate' });
+
+function countOf(count, word) {
+  return `${count} ${count === 1 ? word : word === 'body' ? 'bodies' : `${word}s`}`;
+}
+
+function joinWords(parts) {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+function deleteRequest(model, plan) {
+  const objects = joinWords(
+    [
+      [plan.bodies.length, 'body'],
+      [plan.shapes.length, 'shape'],
+      [plan.joints.length, 'joint'],
+    ]
+      .filter(([count]) => count > 0)
+      .map(([count, word]) => countOf(count, word)),
+  );
+  const keys = plan.clips.reduce((total, clip) => total + clip.keys, 0);
+  return Object.freeze({
+    kind: 'delete',
+    title: 'Delete animation tracks?',
+    message: `Deleting ${objects} also removes ${countOf(plan.tracks.length, 'track')} and ${countOf(keys, 'key')} from ${countOf(plan.clips.length, 'clip')}. Undo restores them.`,
+    items: Object.freeze(
+      plan.clips.map((clip) => {
+        const name = model.prop(clip.uid, 'name');
+        const label = typeof name === 'string' && name !== '' ? name : model.prop(clip.uid, 'key');
+        return `${label}: ${countOf(clip.tracks, 'track')}, ${countOf(clip.keys, 'key')}`;
+      }),
+    ),
+    confirmLabel: 'Delete',
+    cancelLabel: 'Cancel',
+  });
+}
 
 const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, boxTool, hingeTool]);
 
@@ -39,13 +86,17 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
  * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
  * and the `delete`, `add-shape` and `add-joint` actions.
- * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null }} [options] Restored editor
- *   settings, defaults when omitted; physics service for the Pose tool, `null` when omitted.
+ * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null,
+ *   confirm?: (request: ConfirmRequest) => Promise<boolean> }} [options] Restored editor settings, defaults when
+ *   omitted; physics service for the Pose tool, `null` when omitted; how actions ask before a destructive step,
+ *   always confirming when omitted.
  * @returns {Readonly<Editor>} The editor.
- * @throws {TypeError} When `settings` is given and is not a `Settings` instance.
+ * @throws {TypeError} When `settings` is given and is not a `Settings` instance, or `confirm` is given and is not
+ *   a function.
  */
-export function createEditor({ settings = Settings.restore(undefined).settings, physics = null } = {}) {
+export function createEditor({ settings = Settings.restore(undefined).settings, physics = null, confirm = () => Promise.resolve(true) } = {}) {
   if (!(settings instanceof Settings)) throw new TypeError('settings must be a Settings instance');
+  if (typeof confirm !== 'function') throw new TypeError('confirm must be a function');
   const model = new Model();
   const history = new History(model);
   const selection = new Selection(model);
@@ -90,16 +141,47 @@ export function createEditor({ settings = Settings.restore(undefined).settings, 
   });
 
   const canEditRest = () => modes.can('edit.rest') && !history.inGesture;
+  let confirming = false;
+  const canDelete = (uids) => {
+    try {
+      return selection.focus === 'objects' && canEditRest() && !deletionPlan(model, uids).empty;
+    } catch {
+      return false;
+    }
+  };
+  const runDelete = () => {
+    const uids = [...selection.objects];
+    const plan = deletionPlan(model, uids);
+    if (!plan.confirm) {
+      history.execute(deleteObjects(uids));
+      return undefined;
+    }
+    confirming = true;
+    let asked;
+    try {
+      asked = Promise.resolve(confirm(deleteRequest(model, plan)));
+    } catch (error) {
+      asked = Promise.reject(error);
+    }
+    return asked
+      .then(
+        (accepted) => accepted === true,
+        () => false,
+      )
+      .then((accepted) => {
+        confirming = false;
+        if (accepted && canDelete(uids)) history.execute(deleteObjects(uids));
+      });
+  };
   actions.register('delete', {
-    run: () => history.execute(deleteObjects(selection.objects)),
-    isEnabled: () =>
-      selection.focus === 'objects' && canEditRest() && !deletionPlan(model, selection.objects).empty,
+    run: runDelete,
+    isEnabled: () => !confirming && canDelete(selection.objects),
     reason: () => {
       if (selection.focus !== 'objects') return null;
       const byMode = modeReason('edit.rest');
       if (byMode !== null) return byMode;
       const rootOnly = selection.objects.length === 1 && selection.objects[0] === ROOT_UID;
-      return rootOnly && !history.inGesture ? 'the ragdoll root cannot be deleted' : null;
+      return rootOnly && !history.inGesture && !confirming ? 'the ragdoll root cannot be deleted' : null;
     },
   });
   actions.register('add-shape', {

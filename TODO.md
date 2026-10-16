@@ -59,7 +59,7 @@
 - [ ] #94 Show a sprite edit indicator on the Select tool button
 - [ ] #112 Add shortcuts to toggle grid snap and cycle display mode
 - [ ] #113 Review Settings popover focus handling and grid colors
-- [ ] #124 Shared confirmation dialog for destructive actions
+- [x] #124 Shared confirmation dialog for destructive actions
 - [ ] #126 Highlight the viewport object of the hovered Hierarchy row
 - [x] #127 Keep the Manipulate rotate knob clear of nearby joint gizmos
 - [x] #128 Select tool with transform gizmo (merge Manipulate into Select)
