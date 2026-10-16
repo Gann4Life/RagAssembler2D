@@ -5,6 +5,7 @@ import {
   composeTransforms,
   invertTransform,
   pointInShape,
+  polygonProblems,
   shapeBounds,
   shapeGeometryValid,
   shapeMass,
@@ -213,4 +214,50 @@ test('bodyMass weights the shape centers by mass, sensors included, and has no c
     bodyMass([{ shape: { type: 'circle', center: [1, 1], radius: 1 }, density: 0 }]),
     { mass: 0, center: null },
   );
+});
+
+test('polygonProblems: a valid convex counter-clockwise polygon gives null', () => {
+  assert.equal(polygonProblems([[0, 0], [1, 0], [1, 1], [0, 1]]), null);
+  assert.equal(polygonProblems([[0, 0], [1, 0], [0, 1]]), null);
+});
+
+test('polygonProblems: fewer than 3 or more than 8 vertices, or bad items, give count', () => {
+  assert.equal(polygonProblems([[0, 0], [1, 0]]), 'count');
+  assert.equal(polygonProblems([]), 'count');
+  assert.equal(polygonProblems('x'), 'count');
+  assert.equal(polygonProblems(null), 'count');
+  assert.equal(polygonProblems([[0, 0], [1, 0], [NaN, 1]]), 'count');
+  assert.equal(polygonProblems([[0, 0], [1, 0], 5]), 'count');
+  const nine = Array.from({ length: 9 }, (_, i) => [Math.cos((i * 2 * Math.PI) / 9), Math.sin((i * 2 * Math.PI) / 9)]);
+  assert.equal(polygonProblems(nine), 'count');
+  assert.equal(polygonProblems(nine.slice(0, 8)), null);
+});
+
+test('polygonProblems: clockwise gives notCcw', () => {
+  assert.equal(polygonProblems([[0, 0], [0, 1], [1, 1], [1, 0]]), 'notCcw');
+});
+
+test('polygonProblems: a reflex vertex gives notConvex', () => {
+  assert.equal(polygonProblems([[0, 0], [2, 0], [1, 0.5], [2, 2], [0, 2]]), 'notConvex');
+});
+
+test('polygonProblems: collinear consecutive vertices give degenerate', () => {
+  assert.equal(polygonProblems([[0, 0], [1, 0], [2, 0], [2, 1], [0, 1]]), 'degenerate');
+  assert.equal(polygonProblems([[0, 0], [1, 1], [2, 2]]), 'degenerate');
+});
+
+test('polygonProblems: vertices closer than 0.0025 m give degenerate', () => {
+  assert.equal(polygonProblems([[0, 0], [0.002, 0], [1, 1], [0, 1]]), 'degenerate');
+  assert.equal(polygonProblems([[0, 0], [1, 0], [1, 1], [1, 1], [0, 1]]), 'degenerate');
+  assert.equal(polygonProblems([[0, 0], [0.003, 0], [0.003, 1], [0, 1]]), null);
+});
+
+test('polygonProblems: a five-point star gives notConvex', () => {
+  const star = [0, 2, 4, 1, 3].map((i) => [Math.cos((i * 2 * Math.PI) / 5), Math.sin((i * 2 * Math.PI) / 5)]);
+  assert.equal(polygonProblems(star), 'notConvex');
+});
+
+test('polygonProblems: checks run in the documented order', () => {
+  assert.equal(polygonProblems([[0, 0], [0, 0], [0, 1], [1, 1], [1, 0]]), 'degenerate');
+  assert.equal(polygonProblems([[0, 0], [0, 1], [1, 1]]), 'notCcw');
 });
