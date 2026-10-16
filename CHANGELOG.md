@@ -42,6 +42,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Select Box tool (B): drag a selection box with the same rules; a click without a drag clears the selection.
 - Hinge Joint tool (H): click where two shapes overlap to create a pin joint at the snapped point, or drag from it to set symmetric ±θ limits (SHIFT snaps to 15° steps). The parent body is chosen automatically, a pair of bodies that already has a joint is refused, and each joint is one undo step.
 - Manipulate tool (M): drag the root, or a body with everything hanging from it (ALT moves only that body), and drag joint anchors. A rotation knob turns the selected body around its parent joint anchor (CTRL: its center) or the root around its position, with SHIFT snapping to 15°. Moves snap to the grid when snapping is on, and each drag is one undo step. Available in Edit mode; in Animate mode it only selects.
+- Hierarchy panel: a tree of the root, bodies, shapes and joints that stays in sync with the viewport selection, with search by name or id, an Add menu (shape, joint) and a Delete button; unlinked bodies and unassigned joints are grouped and marked.
+- Del deletes the selected bodies, shapes and joints, together with the joints and animation tracks that depend on them, as one undo step.
 
 ### Changed
 - Tools is now a floating toolbar over the viewport instead of a dock panel; it no longer appears in the Window menu, and a saved layout that still lists it resets to the default layout.

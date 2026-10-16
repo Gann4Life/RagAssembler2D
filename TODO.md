@@ -29,12 +29,12 @@
 - [x] #16 Hinge Joint tool with pin and drag-limits
 - [x] #17 Manipulate tool: move and rotate root and body subtrees
 - [ ] #18 Group and Ungroup bodies
-- [ ] #19 Hierarchy panel with tree, search, delete and add
+- [x] #19 Hierarchy panel with tree, search, delete and add
 - [ ] #20 Inspector framework with root and body properties
 - [ ] #21 Assets panel with import, drag-assign, usage and delete guard
 - [ ] #22 Inspector: shape and sprite properties
 - [ ] #23 Inspector: joint properties
-- [ ] #24 Manipulate tool: joint anchor, aimAxis and sprite edit mode
+- [ ] #24 Select tool: aimAxis handle and sprite edit mode
 - [ ] #25 Implement RagImporter.validate with all errors and warnings
 - [ ] #26 Problems panel with live validation
 - [ ] #27 Canonical .rag.json serializer and loader with migration
@@ -56,9 +56,15 @@
 - [ ] #90 Dim the drag ghost over invalid drop targets
 - [ ] #91 Place workspace edge drop strips on the visible area
 - [ ] #92 Make panel bodies a Tab stop only when they have no focusable content
-- [ ] #94 Show a sprite edit indicator on the Manipulate tool button
+- [ ] #94 Show a sprite edit indicator on the Select tool button
 - [ ] #112 Add shortcuts to toggle grid snap and cycle display mode
 - [ ] #113 Review Settings popover focus handling and grid colors
+- [ ] #124 Shared confirmation dialog for destructive actions
+- [ ] #126 Highlight the viewport object of the hovered Hierarchy row
+- [x] #127 Keep the Manipulate rotate knob clear of nearby joint gizmos
+- [ ] #128 Select tool with transform gizmo (merge Manipulate into Select)
+- [ ] #129 Resize shapes with handles in the Select tool
+- [ ] #130 Polygon vertex handles in the Select tool
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
@@ -72,6 +78,7 @@
 - [ ] #38 Pose tool with mouse-joint posing
 - [ ] #39 Autokey, Key selected (K) and inspector key buttons
 - [ ] #93 Show the mode and clip summary in the folded Timeline bar
+- [ ] #125 Select: rotation in Animate mode sets the parent joint angle at the playhead
 
 ## Phase 3 – Round-trip verification
 - [ ] #40 Valid round-trip fixture set
