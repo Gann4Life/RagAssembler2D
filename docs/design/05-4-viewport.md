@@ -24,9 +24,9 @@
 
   | Mode | Sprites | Shapes |
   |---|---|---|
-  | Shapes | Hidden | Filled with `editor.color` at 40 % opacity, outlined in `editor.color` |
+  | Shapes | Hidden | Filled with `editor.color` at 40 % opacity, outlined in orange `#f08a24` |
   | Sprites | Shown | Hidden, except hover and selection outlines |
-  | Both | Shown | Outlined in `editor.color` at 60 % opacity, no fill, over the sprites |
+  | Both | Shown | Outlined in orange `#f08a24` at 60 % opacity, no fill, over the sprites |
 
   Outlines are 1 CSS px wide at every zoom (selection outlines 2 px, below). Hit testing does not depend on the display mode, so a hidden shape can still be hovered and selected. A sprite whose image is missing is drawn as a placeholder whenever sprites are shown.
 - **Displayed pose.** Gizmos, feedback, overlays and hit testing all follow the pose the viewport shows: the rest pose in Edit mode, the FK pose in Animate mode, the live bodies in Simulate mode. A joint anchor moves with its `bodyA`.
