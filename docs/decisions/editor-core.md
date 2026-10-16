@@ -2,6 +2,9 @@
 
 Newest first. See the [index](../decisions.md).
 
+## 2026-10-16
+- **The editor version reaches `toJson` through `createEditor({ editorVersion })` (#27).** `js/version.js` (core, `fetch` injected) exports `loadVersion(fetchFn) → Promise<{ editorVersion, label }>`, never rejecting and falling back to `dev`; `js/main.js` calls it once, updates the label and a variable read by the getter `editorVersion: () => string` it passes to `createEditor`. The editor exposes `Editor.editorVersion` and the registry `ToolContext.editorVersion`, so Pose, Problems and Save all use the same value; the Pose session's `'0.0.0'` placeholder is removed. Not a physics-service option: the version is document export data, not physics, and Problems and Save have no physics service. A getter, not a string, because `version.json` arrives after boot and Save during the fetch must write `dev` (DESIGN §6.5). (DESIGN §6.5; docs/architecture/model-io.md, Editor composition, Module map)
+
 ## 2026-10-15
 - **`ActionRegistry.isRepeatable(id)` is part of the registry API,** read by `dispatchKey` for key repeat. Reason: the spec gave `ActionSpec.repeatable` but no way for the dispatcher to read it without reaching into the stored specs. (docs/architecture.md, Actions and hotkeys)
 - **DOM actions stay registered in `js/main.js`.** #10 moved the Window menu, panel toggles and Reset layout behind `actions.run`, but their registration needs the dock and header, so it lives in `js/main.js`; `js/editor.js` registers only DOM-free actions. The menu's Down/Up opening stays on the button. Reason: `js/editor.js` is core and cannot touch the DOM. (docs/architecture.md, Editor boot, Actions and hotkeys)
