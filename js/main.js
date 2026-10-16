@@ -41,6 +41,16 @@ const toolbar = createToolbar(document.getElementById('panel-viewport'), {
   host: viewportHost,
   onActivate: (id) => actions.run('tool:' + id),
 });
+const versionLabel = document.createElement('div');
+versionLabel.className = 'version-label';
+versionLabel.textContent = 'dev';
+document.getElementById('panel-viewport').append(versionLabel);
+fetch('version.json', { cache: 'no-store' })
+  .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.statusText))))
+  .then(({ version, commit }) => {
+    versionLabel.textContent = `${version} · ${commit}`;
+  })
+  .catch(() => {});
 const windowButton = header.querySelector('[data-action="window"]');
 const settingsButton = header.querySelector('[data-action="settings"]');
 settingsButton.setAttribute('aria-haspopup', 'dialog');
