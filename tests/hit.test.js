@@ -57,8 +57,11 @@ test('style constants follow DESIGN §5.4', () => {
     jointNeedle: 20,
     aimArrow: 32,
     centerOfMass: 5,
+    rotateHandle: 40,
+    rotateKnob: 5,
+    pivot: 4,
   });
-  assert.deepEqual(HIT_RADIUS, { joint: 8, root: 12, shape: 4 });
+  assert.deepEqual(HIT_RADIUS, { joint: 8, root: 12, shape: 4, handle: 8 });
   assert.equal(LABEL_SIZE, 11);
   for (const table of [COLORS, LINE_WIDTH, GIZMO_SIZE, HIT_RADIUS]) assert.ok(Object.isFrozen(table));
 });
