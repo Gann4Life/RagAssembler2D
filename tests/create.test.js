@@ -236,3 +236,36 @@ test('createJoint refuses a pair already joined, in either order', () => {
   }
   assert.equal(model.nextId('j'), 'j_2');
 });
+
+test('createJoint with both bodies null creates an unassigned joint; undo and redo keep its id and uid', () => {
+  const { model, history } = setup();
+  const before = plain(model.get(ROOT_UID).props);
+  const uid = history.execute(createJoint({ bodyA: null, bodyB: null, anchor: { x: 0, y: 0 } }, 'Add joint'));
+  assert.deepEqual(joints(model), [uid]);
+  assert.deepEqual(plain(model.get(uid).props), {
+    ...defaultsOf('joint'),
+    id: 'j_1',
+    name: 'joint_1',
+    bodyA: null,
+    bodyB: null,
+    anchor: [0, 0],
+  });
+  assert.deepEqual(plain(model.get(ROOT_UID).props), before);
+  assert.equal(history.state.undoLabel, 'Add joint');
+  assert.equal(history.undo(), true);
+  assert.deepEqual(joints(model), []);
+  assert.equal(history.redo(), true);
+  assert.deepEqual(joints(model), [uid]);
+  assert.equal(model.uidOf('j_1'), uid);
+  const second = history.execute(createJoint({ bodyA: null, bodyB: null, anchor: { x: 0, y: 0 } }));
+  assert.equal(model.prop(second, 'id'), 'j_2');
+});
+
+test('createJoint refuses one null body', () => {
+  const { model, history, b1 } = jointSetup();
+  for (const [bodyA, bodyB] of [[null, b1], [b1, null], [null, undefined]]) {
+    assert.throws(() => history.execute(createJoint({ bodyA, bodyB, anchor: { x: 0, y: 0 } })), Error);
+  }
+  assert.deepEqual(joints(model), []);
+  assert.equal(model.nextId('j'), 'j_1');
+});

@@ -12,6 +12,7 @@ import { Camera } from '../js/viewport/camera.js';
 import { ToolRegistry } from '../js/tools/registry.js';
 import { TOOL_SPECS } from '../js/tools/tool.js';
 import { defaultsOf } from '../lib/schema.js';
+import { dispatchKey } from '../js/hotkeys.js';
 
 function addClip(editor) {
   const { tracks, events, ...props } = defaultsOf('clip');
@@ -252,4 +253,173 @@ test('undo through the action during a gesture only cancels it', () => {
   history.execute(setProps([ROOT_UID], { 'meta.name': 'dragged' }));
   actions.run('undo');
   assert.equal(model.prop(ROOT_UID, 'meta.name'), 'kept');
+});
+
+const EDIT_ACTIONS = ['delete', 'add-shape', 'add-joint'];
+
+function deleteKey() {
+  return {
+    key: 'Delete',
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+    repeat: false,
+    target: { tagName: 'BODY' },
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+  };
+}
+
+test('add-shape creates a selected default box body at the origin as one Add shape step', () => {
+  const { model, history, selection, actions } = createEditor();
+  assert.equal(actions.isEnabled('add-shape'), true);
+  assert.equal(actions.isRepeatable('add-shape'), false);
+  assert.equal(actions.run('add-shape'), true);
+  const [body] = model.children(ROOT_UID, 'bodies');
+  const [shape] = model.children(body, 'fixtures');
+  assert.deepEqual(selection.objects, [shape]);
+  assert.deepEqual([...model.prop(body, 'position')], [0, 0]);
+  assert.equal(model.prop(body, 'angle'), 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(model.prop(shape, 'shape'))), defaultsOf('shape', 'box').shape);
+  assert.equal(model.prop(shape, 'name'), 'box_1');
+  assert.equal(model.prop(ROOT_UID, 'rootBody'), model.prop(body, 'id'));
+  assert.equal(history.state.undoLabel, 'Add shape');
+  history.undo();
+  assert.deepEqual(model.children(ROOT_UID, 'bodies'), []);
+  assert.equal(model.prop(ROOT_UID, 'rootBody'), null);
+});
+
+test('add-joint creates a selected unassigned joint at the origin as one Add joint step', () => {
+  const { model, history, selection, actions } = createEditor();
+  assert.equal(actions.run('add-joint'), true);
+  const [joint] = model.children(ROOT_UID, 'joints');
+  assert.deepEqual(selection.objects, [joint]);
+  assert.equal(model.prop(joint, 'bodyA'), null);
+  assert.equal(model.prop(joint, 'bodyB'), null);
+  assert.deepEqual([...model.prop(joint, 'anchor')], [0, 0]);
+  assert.equal(model.prop(joint, 'limits.enabled'), false);
+  assert.equal(model.prop(joint, 'name'), 'joint_1');
+  assert.equal(history.state.undoLabel, 'Add joint');
+  history.undo();
+  assert.deepEqual(model.children(ROOT_UID, 'joints'), []);
+});
+
+test('delete removes the selection as one Delete step and is disabled when nothing can be deleted', () => {
+  const { model, history, selection, actions } = createEditor();
+  assert.equal(actions.isEnabled('delete'), false);
+  assert.equal(actions.reason('delete'), null);
+  selection.set([ROOT_UID]);
+  assert.equal(actions.isEnabled('delete'), false);
+  assert.equal(actions.reason('delete'), 'the ragdoll root cannot be deleted');
+  actions.run('add-shape');
+  const shape = selection.objects[0];
+  selection.add([ROOT_UID]);
+  assert.equal(actions.isEnabled('delete'), true);
+  assert.equal(actions.isRepeatable('delete'), false);
+  assert.equal(actions.run('delete'), true);
+  assert.deepEqual(model.children(ROOT_UID, 'bodies'), []);
+  assert.deepEqual(selection.objects, [ROOT_UID]);
+  assert.equal(history.state.undoLabel, 'Delete');
+  history.undo();
+  assert.equal(model.get(shape).type, 'shape');
+});
+
+test('with only the root selected, the mode reason wins over the root reason, and a gesture shows none', () => {
+  const editor = createEditor();
+  const { history, selection, actions, modes } = editor;
+  selection.set([ROOT_UID]);
+  history.beginGesture();
+  assert.equal(actions.reason('delete'), null);
+  history.endGesture();
+  assert.equal(actions.reason('delete'), 'the ragdoll root cannot be deleted');
+  modes.openClip(addClip(editor));
+  selection.set([ROOT_UID]);
+  assert.equal(actions.reason('delete'), 'not available in Animate mode');
+  modes.openClip(null);
+  modes.startSimulate();
+  selection.set([ROOT_UID]);
+  assert.equal(actions.reason('delete'), 'not available in Simulate mode');
+});
+
+test('delete is disabled with no reason while the timeline holds the selection focus', () => {
+  const editor = createEditor();
+  const { history, selection, actions } = editor;
+  actions.run('add-shape');
+  const clip = addClip(editor);
+  const key = history.execute({
+    label: 'Add track',
+    run: (tx) => {
+      const track = tx.add(clip, 'tracks', undefined, {
+        type: 'track',
+        props: { target: 'root', channel: 'strength' },
+        children: { keys: [{ type: 'key', props: { time: 0, value: 1 } }] },
+      });
+      return tx.model.children(track, 'keys')[0];
+    },
+  });
+  selection.set([key]);
+  assert.equal(actions.isEnabled('delete'), false);
+  assert.equal(actions.reason('delete'), null);
+});
+
+test('delete, add-shape and add-joint are refused with the mode reason in Animate and Simulate', () => {
+  const editor = createEditor();
+  const { selection, actions, modes } = editor;
+  actions.run('add-shape');
+  const shape = selection.objects[0];
+  modes.openClip(addClip(editor));
+  selection.set([shape]);
+  for (const id of EDIT_ACTIONS) {
+    assert.equal(actions.isEnabled(id), false, id);
+    assert.equal(actions.reason(id), 'not available in Animate mode', id);
+    assert.equal(actions.run(id), false, id);
+  }
+  modes.openClip(null);
+  modes.startSimulate();
+  selection.set([shape]);
+  for (const id of EDIT_ACTIONS) assert.equal(actions.reason(id), 'not available in Simulate mode', id);
+  assert.equal(editor.model.get(shape).type, 'shape');
+});
+
+test('delete, add-shape and add-joint are disabled with no reason during a gesture', () => {
+  const { model, history, selection, actions } = createEditor();
+  actions.run('add-shape');
+  history.beginGesture();
+  for (const id of EDIT_ACTIONS) {
+    assert.equal(actions.isEnabled(id), false, id);
+    assert.equal(actions.reason(id), null, id);
+    assert.equal(actions.run(id), false, id);
+  }
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
+  assert.equal(selection.objects.length, 1);
+  history.endGesture();
+});
+
+test('deleting the open clip during a gesture does not throw', () => {
+  const editor = createEditor();
+  const { history, selection, actions, modes } = editor;
+  const clip = addClip(editor);
+  modes.openClip(clip);
+  selection.set([clip]);
+  history.beginGesture();
+  assert.doesNotThrow(() => actions.run('delete'));
+  assert.equal(history.inGesture, true);
+  assert.equal(modes.clip, clip);
+  history.cancelGesture();
+});
+
+test('Del through dispatchKey deletes the selection', () => {
+  const { model, selection, actions } = createEditor();
+  actions.run('add-joint');
+  actions.run('add-shape');
+  selection.add([model.children(ROOT_UID, 'joints')[0]]);
+  const event = deleteKey();
+  assert.equal(dispatchKey(event, { actions }), true);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(model.children(ROOT_UID, 'bodies'), []);
+  assert.deepEqual(model.children(ROOT_UID, 'joints'), []);
+  assert.deepEqual(selection.objects, []);
 });

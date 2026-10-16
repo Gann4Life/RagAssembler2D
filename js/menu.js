@@ -19,8 +19,8 @@ import { rovingIndex } from './roving-focus.js';
 let menuCount = 0;
 
 /**
- * Opens a popup menu below a button, aligned to its right edge, and moves focus into it.
- * Sets `aria-expanded` and `aria-controls` on the button while open. Closes on choice, Esc, Tab,
+ * Opens a popup menu below a button, aligned to its right edge, and moves focus into it. The menu is labelled
+ * with the button's `aria-label`, or its text content when it has none. Sets `aria-expanded` and `aria-controls` on the button while open. Closes on choice, Esc, Tab,
  * Left/Right and outside pointer presses.
  * @param {HTMLElement} button The menu button.
  * @param {ReadonlyArray<MenuItem>} items
@@ -33,7 +33,7 @@ export function openMenu(button, items, { onSelect, onNavigate, focus = 'first' 
   menu.className = 'menu';
   menu.id = `menu-${++menuCount}`;
   menu.setAttribute('role', 'menu');
-  menu.setAttribute('aria-label', button.textContent);
+  menu.setAttribute('aria-label', button.getAttribute('aria-label') || button.textContent);
 
   const entries = [];
   for (const item of items) {

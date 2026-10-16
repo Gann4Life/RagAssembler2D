@@ -7,6 +7,7 @@ import { framingInsets } from './viewport/bounds.js';
 import { TOOL_SPECS } from './tools/tool.js';
 import { createDock } from './panels/dock.js';
 import { PANELS } from './panels/layout.js';
+import { createHierarchy } from './panels/hierarchy.js';
 import { openMenu } from './menu.js';
 import { Settings } from './settings.js';
 import { openSettings } from './settings-dialog.js';
@@ -33,6 +34,7 @@ document.getElementById('header').replaceWith(header);
 const dock = createDock(document.getElementById('workspace'), {
   viewportElement: document.getElementById('panel-viewport'),
 });
+createHierarchy(dock.panelElement('hierarchy'), editor);
 
 const viewportHost = document.getElementById('viewport-host');
 const toolbar = createToolbar(document.getElementById('panel-viewport'), {
