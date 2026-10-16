@@ -112,7 +112,8 @@
   - Valid channels for `root`: `strength | gain | damping`.
   - Valid channels for a joint: `angle | strength | gain | damping`.
   - Valid channel for a shape: `sprite` (key values are a sprite asset id or `null`).
-- **Editor-only data:** `editor` objects (on fixtures), `preview` and `ragdoll.position/angle`. RagImporter ignores them, except `editor.color`, which is used by `debug` drawing.
+- **`meta`**: written by Save, not edited by the user: `meta.name` repeats `ragdoll.name` and `meta.editorVersion` names the editor version that saved the file ([§6.5](#65-round-trip-guarantee)). Their loaded values affect nothing.
+- **Editor-only data:** `editor` objects (on fixtures), `meta`, `preview` and `ragdoll.position/angle`. RagImporter ignores them, except `editor.color`, which is used by `debug` drawing.
 - **Explicit values:** every field is written explicitly, even when it equals its default, so files are self-describing. A missing field is an error, except `fixtures[].sprite` (absent means `null`).
 - **Field schema:** the type, default (for new objects), range or enum, unit and editor-only flag of every field, in canonical key order, are listed in `docs/schema.md`. That table and its code version (`lib/schema.js`) must agree with this section and [§6.1](#61-complete-example).
 
@@ -196,9 +197,21 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 Joint edges, unlinked bodies and loop joints follow one rule, shared with the editor's joint graph: a joint is an edge when `bodyA` and `bodyB` are two different body ids; a breadth-first search from `rootBody`, visiting edges in `joints` order, marks tree joints; every other edge between reachable bodies is a loop joint.
 
 ## 6.5 Round-trip guarantee
-**Load → Save produces a byte-identical file** for any valid file written by the same format version. To achieve this:
+Save always writes the **canonical form**:
 - Key order follows the example above.
 - Arrays keep editor order: sprite assets in Assets panel order; bodies, joints and clips in hierarchy/list order; fixtures in body order; keys sorted by `t`; events sorted by `t`.
 - Numbers are rounded to 1e-5 and written without trailing zeros. `-0` is written as `0`.
 - 2-space indentation, `\n` line endings, final newline.
+- `meta` is derived on every Save, never copied from the loaded file:
+  - `meta.name` is `ragdoll.name`;
+  - `meta.editorVersion` is the running editor's version: the `version` of the deployed `version.json` without its leading `v` (`v0.4.0` → `0.4.0`), or `dev` when it is unavailable (local server, failed or pending fetch).
+  - The model export takes the editor version as a parameter and reads no global state, so tests pass it explicitly. Validation before Save and in the Problems panel runs on that export, so a document never saved has no missing `meta` field.
 - Sprite images are written back unchanged (same bytes, same paths).
+
+**Load → Save is byte-identical** for a canonical file: valid, at the latest format version, without unknown fields, written by the rules above, with `meta.name` equal to `ragdoll.name` and `meta.editorVersion` equal to the running editor's version. Every file Save writes is canonical for the editor that wrote it, so saving it again from that editor version gives the same bytes.
+
+Any other valid file loads and saves without losing data; the output differs from the input only by:
+- `meta.editorVersion` (a file saved by another editor version, including `dev`) and `meta.name` (when it differed from `ragdoll.name`);
+- migration from an older format version ([§6.3](#63-versioning));
+- dropped unknown fields (`W_UNKNOWN_FIELD`, [§6.3](#63-versioning));
+- canonical formatting: key order, number rounding and whitespace.
