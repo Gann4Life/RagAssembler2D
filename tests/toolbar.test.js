@@ -25,7 +25,7 @@ test('TOOL_BUTTONS take label and shortcut from TOOL_SPECS', () => {
     assert.equal(entry.label, spec.label);
     assert.equal(entry.shortcut, spec.hotkey);
   }
-  assert.deepEqual(entries.map((entry) => entry.shortcut), ['V', 'B', 'P', 'C', 'R', 'N', 'H']);
+  assert.deepEqual(entries.map((entry) => entry.shortcut), ['V', 'B', 'D', 'C', 'R', 'N', 'H']);
 });
 
 test('TOOL_BUTTONS icons are bare SVG child markup without scripts or references', () => {

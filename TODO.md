@@ -2,6 +2,7 @@
 
 > Generated from [GitHub issues](https://github.com/Gann4Life/RagAssembler2D/issues) by `doc-writer`. Do not edit by hand; file new work as issues through `planner`.
 
+
 ## Phase 0 – Foundations
 - [x] #2 Pin PIXI.js v8 and liquidfun.js builds in vendor/
 - [x] #3 Add node --test harness with a first smoke test
@@ -38,7 +39,7 @@
 - [x] #25 Implement RagImporter.validate with all errors and warnings
 - [ ] #26 Problems panel with live validation
 - [x] #27 Canonical .rag.json serializer and loader with migration
-- [ ] #28 Header Save/Load with sprite folder resolution
+- [ ] #28 Header Save/Load of .rag.json files
 - [ ] #29 Autosave draft and recovery on startup
 - [ ] #63 Duplicate selection with Ctrl+D
 - [x] #70 Deploy the editor to GitHub Pages on every merge to main
@@ -74,8 +75,9 @@
 - [ ] #144 Move a shape to another body by dragging it in the Hierarchy
 - [x] #147 Version every deploy as a release and show the version in the editor
 - [ ] #152 Edit hinge joint limits with angle handles
-- [ ] #153 Lock the root transform and name it root
-- [ ] #156 Change the Pose tool hotkey from P to D
+- [ ] #153 Lock the root transform, name it root and let the user rename it
+- [x] #156 Change the Pose tool hotkey from P to D
+- [ ] #158 Sprite folder resolution on Load and image export on Save
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults

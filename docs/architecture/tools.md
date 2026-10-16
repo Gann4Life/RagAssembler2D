@@ -7,7 +7,7 @@ TOOL_SPECS (frozen, DESIGN §5.5 order; the only place tool ids, labels, hotkeys
   id            label          hotkey  capability         group
   'select'      'Select'       'V'     'select'           'selection'
   'select-box'  'Select Box'   'B'     'select'           'selection'
-  'pose'        'Pose'         'P'     'tool.pose'        'manipulation'
+  'pose'        'Pose'         'D'     'tool.pose'        'manipulation'
   'circle'      'Circle'       'C'     'tool.circle'      'creation'
   'box'         'Box'          'R'     'tool.box'         'creation'
   'polygon'     'Polygon'      'N'     'tool.polygon'     'creation'

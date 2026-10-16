@@ -442,9 +442,9 @@ test('Del through dispatchKey deletes the selection', () => {
   assert.deepEqual(selection.objects, []);
 });
 
-test('P activates Pose in Edit mode', () => {
+test('D activates Pose in Edit mode', () => {
   const { actions, tools } = createEditor({ physics: { startPose: () => null } });
-  const event = { key: 'p', target: { tagName: 'BODY' }, preventDefault() {} };
+  const event = { key: 'd', target: { tagName: 'BODY' }, preventDefault() {} };
   assert.equal(actions.isEnabled('tool:pose'), true);
   assert.equal(actions.reason('tool:pose'), null);
   assert.equal(dispatchKey(event, { actions, tools, viewportFocused: true }), true);
