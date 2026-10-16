@@ -73,7 +73,7 @@ loadVersion(fetchFn) → Promise<VersionInfo>        VersionInfo { editorVersion
 ## Flows
 
 - **Load (#28):** the `load` action or a drop goes through `Editor.loadFrom(read)`, which reads the text, asks through `confirm` when `history.dirty`, then calls `loadJson`. On `ok: false` the errors go to `notify` and nothing changes; on `ok: true` notes and warnings go to `notify` when there are any, and `reset` clears history (saved point at the loaded document), selection and the open gesture ([Commands and undo](commands-and-undo.md#commands-and-undo), [Editor composition](editor-composition.md#editor-composition)).
-- **Save (#28):** the `save` action calls `saveJson(model, editor.editorVersion())`; on `ok: false` the errors go to `notify`; on `ok: true` it calls `files.saveText(fileName, text)`, then `history.markSaved()`. #158 adds `validate(json, { hasImage })` and the images.
+- **Save (#28):** the `save` action calls `saveJson(model, editor.editorVersion())`; on `ok: false` the errors go to `notify`; on `ok: true` it awaits `files.saveText(fileName, text)` and calls `history.markSaved()` only when it saved (not when the user cancelled). #158 adds `validate(json, { hasImage })` and the images.
 - **New (#27):** the action asks through `confirm` when `history.dirty`, then `newDocument(model)`.
 - **Round trip:** for a canonical file, `saveJson(model, v).text` (`serialize(toJson(model, v))`) after `loadJson(model, text)` equals `text` when `v` is the file's `meta.editorVersion` ([`DESIGN.md` §6.5](../design/06-file-format.md#65-round-trip-guarantee)).
 

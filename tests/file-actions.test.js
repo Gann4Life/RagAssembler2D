@@ -12,14 +12,17 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const bodyCount = (editor) => editor.model.children(ROOT_UID, 'bodies').length;
 const validText = () => serialize({ ...ragFile(), meta: { name: 'sample', editorVersion: 'dev' } });
 
-function setup({ text = validText(), confirmAnswer = true, dirty = false, files = true } = {}) {
+function setup({ text = validText(), confirmAnswer = true, dirty = false, files = true, saveResult = true } = {}) {
   const log = { confirms: [], notices: [], saved: [], reads: 0 };
   const service = {
     openText: () => {
       log.reads += 1;
       return typeof text === 'function' ? text() : Promise.resolve(text);
     },
-    saveText: (fileName, content) => log.saved.push({ fileName, content }),
+    saveText: (fileName, content) => {
+      log.saved.push({ fileName, content });
+      return typeof saveResult === 'function' ? saveResult() : Promise.resolve(saveResult);
+    },
   };
   const editor = createEditor({
     confirm: (request) => {
@@ -191,7 +194,7 @@ test('a notify that throws or rejects does not break the load', async () => {
   }
 });
 
-test('save writes the canonical file under its name and marks the document saved', () => {
+test('save writes the canonical file under its name and marks the document saved', async () => {
   const { editor, log } = setup({ dirty: true });
   editor.history.execute(setProps([ROOT_UID], { name: 'a/b: c' }));
   assert.equal(editor.history.dirty, true);
@@ -199,6 +202,8 @@ test('save writes the canonical file under its name and marks the document saved
   assert.equal(log.saved.length, 1);
   assert.equal(log.saved[0].fileName, 'a_b_ c.rag.json');
   assert.ok(log.saved[0].content.endsWith('\n'));
+  assert.equal(editor.history.dirty, true);
+  await settle();
   assert.equal(editor.history.dirty, false);
   assert.equal(editor.history.canUndo, true);
   editor.history.undo();
@@ -212,6 +217,7 @@ test('save is enabled on a clean document and writes a document with warnings on
   assert.equal(editor.history.dirty, false);
   assert.equal(editor.actions.isEnabled('save'), true);
   editor.actions.run('save');
+  await settle();
   assert.equal(log.saved.length, 1);
   assert.equal(log.notices.length, notices);
 });
@@ -230,24 +236,57 @@ test('save with validation errors writes nothing, stays dirty and notifies save-
   assert.ok(log.notices[0].items.length > 0);
 });
 
-test('a throwing saveText leaves the document dirty and notifies a save-error', () => {
+test('a throwing or rejecting saveText leaves the document dirty and notifies a save-error', async () => {
+ for (const saveText of [
+    () => {
+      throw new Error('disk');
+    },
+    () => Promise.reject(new Error('disk')),
+  ]) {
   const notices = [];
   const editor = createEditor({
     notify: (notice) => {
       notices.push(notice);
       return Promise.resolve();
     },
-    files: { openText() {}, saveText: () => { throw new Error('disk'); } },
+    files: { openText() {}, saveText },
   });
   editor.history.execute(
     createShapeBody({ position: { x: 0, y: 0 }, angle: 0, shape: { type: 'box', width: 1, height: 1 } }),
   );
   editor.actions.run('save');
+  await settle();
   assert.equal(editor.history.dirty, true);
   assert.equal(notices.length, 1);
   assert.equal(notices[0].kind, 'save-error');
   assert.equal(notices[0].message, 'The file could not be written. The ragdoll still has unsaved changes.');
   assert.deepEqual([...notices[0].items], []);
+  assert.equal(editor.actions.isEnabled('save'), true);
+ }
+});
+
+test('a cancelled save keeps the document dirty and shows no notice', async () => {
+  const { editor, log } = setup({ dirty: true, saveResult: false });
+  editor.actions.run('save');
+  await settle();
+  assert.equal(log.saved.length, 1);
+  assert.equal(editor.history.dirty, true);
+  assert.deepEqual(log.notices, []);
+  assert.equal(editor.actions.isEnabled('save'), true);
+});
+
+test('new, load and save are disabled while a save is pending, and the document is marked saved only after it resolves', async () => {
+  let finish;
+  const { editor, log } = setup({ dirty: true, saveResult: () => new Promise((resolve) => (finish = resolve)) });
+  editor.actions.run('save');
+  for (const id of ['new', 'load', 'save']) assert.equal(editor.actions.isEnabled(id), false, id);
+  assert.equal(editor.actions.run('save'), false);
+  assert.equal(log.saved.length, 1);
+  assert.equal(editor.history.dirty, true);
+  finish(true);
+  await settle();
+  assert.equal(editor.history.dirty, false);
+  for (const id of ['new', 'load', 'save']) assert.equal(editor.actions.isEnabled(id), true, id);
 });
 
 test('load then save is byte-identical for a canonical file of the same editor version', async () => {
@@ -255,6 +294,7 @@ test('load then save is byte-identical for a canonical file of the same editor v
   const { editor, log } = setup({ text });
   await editor.loadFrom(() => Promise.resolve(text));
   editor.actions.run('save');
+  await settle();
   assert.equal(log.saved[0].content, text);
   assert.equal(log.saved[0].fileName, 'sample.rag.json');
 });

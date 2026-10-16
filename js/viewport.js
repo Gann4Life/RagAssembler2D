@@ -169,7 +169,9 @@ export async function createViewport(
   observer.observe(host);
   const stopResolutionWatch = watchResolution(resize);
 
-  const onReset = () => frame(null);
+  const onReset = ({ cause }) => {
+    if (cause !== 'load') frame(null);
+  };
   const offReset = model.on('reset', onReset);
   const detachInput = attachInput(host, { camera, onSpaceTap, tools, onHover });
   const restoreHost = describeHost(host);

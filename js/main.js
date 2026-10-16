@@ -12,7 +12,7 @@ import { openMenu } from './menu.js';
 import { Settings } from './settings.js';
 import { openSettings } from './settings-dialog.js';
 import { confirmDialog, noticeDialog } from './confirm-dialog.js';
-import { RAG_FILE_ACCEPT, attachFileDrop, blockFileNavigation, downloadText, pickTextFile } from './files.js';
+import { RAG_FILE_ACCEPT, attachFileDrop, blockFileNavigation, pickTextFile, saveTextFile } from './files.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { ROOT_UID } from './model/model.js';
 import { setProps } from './commands/props.js';
@@ -40,7 +40,7 @@ const editor = createEditor({
   notify: (notice) => noticeDialog(document, notice),
   files: {
     openText: () => pickTextFile(document, RAG_FILE_ACCEPT),
-    saveText: (fileName, text) => downloadText(document, fileName, text),
+    saveText: (fileName, text) => saveTextFile(document, fileName, text),
   },
 });
 const { actions, history, modes, selection, model, settings, camera, tools } = editor;

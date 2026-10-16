@@ -40,7 +40,8 @@ import { hingeTool } from './tools/hinge.js';
  * @typedef {object} FileService
  * @property {() => Promise<string|null>} openText Shows the file picker; resolves the chosen file's text, `null`
  *   when cancelled, rejects when the file cannot be read.
- * @property {(fileName: string, text: string) => void} saveText Starts the download of `text` as `fileName`.
+ * @property {(fileName: string, text: string) => Promise<boolean>} saveText Writes `text`, suggesting `fileName`;
+ *   resolves `true` when saved and `false` when the user cancelled, rejects when it cannot be written.
  */
 
 /**
@@ -302,7 +303,8 @@ export function createEditor({
     },
   });
   let loading = false;
-  const canFile = () => modes.can('file') && !history.inGesture && !confirming && !loading;
+  let saving = false;
+  const canFile = () => modes.can('file') && !history.inGesture && !confirming && !loading && !saving;
   const tell = (message) => {
     try {
       Promise.resolve(notify(message)).catch(() => {});
@@ -364,13 +366,23 @@ export function createEditor({
           tell(saveErrorNotice(result.errors));
           return;
         }
+        saving = true;
+        let pending;
         try {
-          files.saveText(result.fileName, result.text);
-        } catch {
-          tell(saveWriteErrorNotice());
-          return;
+          pending = Promise.resolve(files.saveText(result.fileName, result.text));
+        } catch (error) {
+          pending = Promise.reject(error);
         }
-        history.markSaved();
+        return pending
+          .then(
+            (saved) => {
+              if (saved === true) history.markSaved();
+            },
+            () => tell(saveWriteErrorNotice()),
+          )
+          .finally(() => {
+            saving = false;
+          });
       },
       isEnabled: canFile,
       reason: () => modeReason('file'),

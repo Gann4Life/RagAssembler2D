@@ -59,6 +59,43 @@ export function downloadText(doc, fileName, text) {
 }
 
 /**
+ * Saves a `.rag.json` text. Where the window has `showSaveFilePicker` it asks the user for the file, suggesting
+ * `fileName`, and writes it; otherwise it downloads the file under `fileName` with {@link downloadText}. Call it
+ * directly from a click or key handler: the picker needs the user activation.
+ * @param {Document} doc The document whose window may offer the save picker.
+ * @param {string} fileName Suggested name.
+ * @param {string} text File content.
+ * @returns {Promise<boolean>} `true` when saved or downloaded, `false` when the user cancelled the picker; rejects
+ *   when the file cannot be written.
+ */
+export async function saveTextFile(doc, fileName, text) {
+  const view = doc.defaultView;
+  if (typeof view?.showSaveFilePicker !== 'function') {
+    downloadText(doc, fileName, text);
+    return true;
+  }
+  let handle;
+  try {
+    handle = await view.showSaveFilePicker({
+      suggestedName: fileName,
+      types: [{ description: 'Ragdoll', accept: { 'application/json': ['.rag.json'] } }],
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') return false;
+    throw error;
+  }
+  const writable = await handle.createWritable();
+  try {
+    await writable.write(text);
+  } catch (error) {
+    await writable.abort?.().catch(() => {});
+    throw error;
+  }
+  await writable.close();
+  return true;
+}
+
+/**
  * Makes `element` accept file drops: a drop carrying files calls `onRead` with a reader of the first file only.
  * Never stops propagation. While `enabled()` is false, file drags show the `none` cursor and drops are swallowed.
  * @param {EventTarget} element Drop target.
