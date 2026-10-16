@@ -384,6 +384,15 @@ test('the context physics is the core service, or null when omitted', () => {
   assert.equal(without.context().physics, null);
 });
 
+test('the context editorVersion is the core getter, or dev when omitted', () => {
+  const given = dragTool('select');
+  new ToolRegistry({ ...core(), editorVersion: () => '1.2.3' }, [given.tool]);
+  assert.equal(given.context().editorVersion(), '1.2.3');
+  const without = dragTool('select');
+  new ToolRegistry(core(), [without.tool]);
+  assert.equal(without.context().editorVersion(), 'dev');
+});
+
 test('tick forwards the frame time to the active tool only', () => {
   const ticks = [];
   const registry = new ToolRegistry(core(), [

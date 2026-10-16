@@ -3,6 +3,7 @@ import { invertTransform, transformPoint } from '../../lib/geometry.js';
 import { ROOT_UID } from '../model/model.js';
 import { snapAngle, snapLength, snapPoint } from '../viewport/snap.js';
 import { TOOL_SPECS } from './tool.js';
+import { DEV_VERSION } from '../version.js';
 
 const PRIMARY = 0;
 const SECONDARY = 2;
@@ -19,6 +20,7 @@ const ESCAPE_KEYS = new Set(['Escape', 'Esc']);
  * @property {import('../settings.js').Settings} settings Editor settings.
  * @property {import('../viewport/camera.js').Camera} camera Viewport camera.
  * @property {import('./tool.js').PhysicsService|null} [physics] Physics service; `null` when omitted.
+ * @property {() => string} [editorVersion] Version of the running editor; dev when omitted.
  */
 
 /**
@@ -279,6 +281,7 @@ export class ToolRegistry {
       invalidateOverlay: () => this.#invalidate(),
       setPose: (pose) => this.#view?.setPose?.(pose ?? null),
       physics: this.#core.physics ?? null,
+      editorVersion: this.#core.editorVersion ?? (() => DEV_VERSION),
     });
   }
 

@@ -16,6 +16,7 @@ import { loadSettings, saveSettings } from './storage.js';
 import { ROOT_UID } from './model/model.js';
 import { setProps } from './commands/props.js';
 import { createPoseSession } from './physics/pose-session.js';
+import { DEV_VERSION, loadVersion } from './version.js';
 import { RagImporter } from '../lib/ragimporter.js';
 
 const { PIXI, Box2D } = globalThis;
@@ -29,9 +30,11 @@ for (const warning of restored.warnings) console.warn(warning);
 
 RagImporter.configure({ Box2D, PIXI });
 const physics = Object.freeze({ startPose: (json, options) => createPoseSession(Box2D, json, options) });
+let editorVersion = DEV_VERSION;
 const editor = createEditor({
   settings: restored.settings,
   physics,
+  editorVersion: () => editorVersion,
   confirm: (request) => confirmDialog(document, request),
 });
 const { actions, history, modes, selection, model, settings, camera, tools } = editor;
@@ -54,12 +57,10 @@ const versionLabel = document.createElement('div');
 versionLabel.className = 'version-label';
 versionLabel.textContent = 'dev';
 document.getElementById('panel-viewport').append(versionLabel);
-fetch('version.json', { cache: 'no-store' })
-  .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.statusText))))
-  .then(({ version, commit }) => {
-    versionLabel.textContent = `${version} · ${commit}`;
-  })
-  .catch(() => {});
+loadVersion(fetch).then((info) => {
+  editorVersion = info.editorVersion;
+  versionLabel.textContent = info.label;
+});
 const windowButton = header.querySelector('[data-action="window"]');
 const settingsButton = header.querySelector('[data-action="settings"]');
 settingsButton.setAttribute('aria-haspopup', 'dialog');

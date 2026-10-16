@@ -122,6 +122,14 @@ function defaultRootProps() {
   return { ...defaultsOf('root'), meta, units, preview };
 }
 
+/**
+ * The empty document: a root with schema defaults and no children.
+ * @returns {NodeSnapshot} A new root snapshot per call.
+ */
+export function emptyRootSnapshot() {
+  return { type: 'root', props: defaultRootProps() };
+}
+
 function checkSlotIndex(index, length, label) {
   if (!Number.isInteger(index) || index < 0 || index > length) {
     throw new RangeError(`${label} index ${index} is outside 0..${length}`);
@@ -144,7 +152,7 @@ export class Model {
    * Creates a model holding a new, empty document with schema defaults.
    */
   constructor() {
-    this.#install(this.#buildTree({ type: 'root', props: defaultRootProps() }, null, null, 'root'));
+    this.#install(this.#buildTree(emptyRootSnapshot(), null, null, 'root'));
   }
 
   /**

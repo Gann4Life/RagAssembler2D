@@ -20,20 +20,15 @@ export const POSE = Object.freeze({
 const VELOCITY_ITERATIONS = 8;
 const POSITION_ITERATIONS = 3;
 const STEP_EPSILON = 1e-9;
-const POSE_TEST_EDITOR_VERSION = '0.0.0';
 
 /**
  * The document reduced to what the pose test simulates: no sprites, no clips, no shape sprites, and shapes that
- * collide with nothing; a missing `meta.editorVersion` (a document never saved) is filled with a placeholder, since
- * meta is not part of the test. Never mutates `json`.
+ * collide with nothing. Never mutates `json`.
  * @param {object} json A `.rag.json` document.
  * @returns {object} A new document object.
  */
 export function poseTestJson(json) {
   const copy = structuredClone(json);
-  if (copy.meta !== null && typeof copy.meta === 'object' && copy.meta.editorVersion === undefined) {
-    copy.meta.editorVersion = POSE_TEST_EDITOR_VERSION;
-  }
   copy.sprites = [];
   copy.clips = [];
   for (const body of Array.isArray(copy.bodies) ? copy.bodies : []) {

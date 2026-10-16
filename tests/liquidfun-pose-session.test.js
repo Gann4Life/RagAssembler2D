@@ -126,9 +126,6 @@ test('poseTestJson drops sprites, clips and shape sprites, disables collision an
   assert.deepEqual(test.joints, json.joints);
   assert.deepEqual(test.meta, json.meta);
   assert.deepEqual(RagImporter.validate(test).errors, []);
-  delete json.meta.editorVersion;
-  assert.equal(poseTestJson(json).meta.editorVersion, '0.0.0');
-  assert.equal(Object.hasOwn(json.meta, 'editorVersion'), false);
 });
 
 test('pose() equals the rest pose right after start with a rotated root, and grab() starts at the press point', () => {

@@ -7,6 +7,8 @@ import { History } from './commands/history.js';
 import { Modes } from './modes.js';
 import { ActionRegistry } from './actions.js';
 import { Settings } from './settings.js';
+import { DEV_VERSION } from './version.js';
+import { newDocument } from './model/io.js';
 import { Camera } from './viewport/camera.js';
 import { ToolRegistry } from './tools/registry.js';
 import { selectTool } from './tools/select.js';
@@ -27,12 +29,13 @@ import { hingeTool } from './tools/hinge.js';
  * @property {Settings} settings Editor settings; not undoable.
  * @property {Camera} camera Viewport camera; not undoable.
  * @property {ToolRegistry} tools Viewport tool registry; not undoable.
+ * @property {() => string} editorVersion Version of the running editor; `dev` until known.
  */
 
 /**
  * What a core action asks the user to confirm before a destructive step; rendered by the confirmation dialog.
  * @typedef {object} ConfirmRequest
- * @property {'delete'} kind What asks.
+ * @property {'delete'|'new'} kind What asks.
  * @property {string} title Dialog heading.
  * @property {string} message Plain-text sentence or two.
  * @property {ReadonlyArray<string>} items Plain-text list under the message; may be empty.
@@ -78,6 +81,17 @@ function deleteRequest(model, plan) {
   });
 }
 
+function newRequest() {
+  return Object.freeze({
+    kind: 'new',
+    title: 'Discard unsaved changes?',
+    message: 'Starting a new ragdoll discards the changes made since the last save. This cannot be undone.',
+    items: Object.freeze([]),
+    confirmLabel: 'Discard',
+    cancelLabel: 'Cancel',
+  });
+}
+
 const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, boxTool, hingeTool]);
 
 /**
@@ -87,23 +101,29 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
  * and the `delete`, `add-shape` and `add-joint` actions.
  * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null,
- *   confirm?: (request: ConfirmRequest) => Promise<boolean> }} [options] Restored editor settings, defaults when
+ *   confirm?: (request: ConfirmRequest) => Promise<boolean>, editorVersion?: () => string }} [options] Restored editor settings, defaults when
  *   omitted; physics service for the Pose tool, `null` when omitted; how actions ask before a destructive step,
- *   always confirming when omitted.
+ *   always confirming when omitted; getter of the running editor's version, `dev` when omitted.
  * @returns {Readonly<Editor>} The editor.
  * @throws {TypeError} When `settings` is given and is not a `Settings` instance, or `confirm` is given and is not
- *   a function.
+ *   a function, or `editorVersion` is given and is not a function.
  */
-export function createEditor({ settings = Settings.restore(undefined).settings, physics = null, confirm = () => Promise.resolve(true) } = {}) {
+export function createEditor({
+  settings = Settings.restore(undefined).settings,
+  physics = null,
+  confirm = () => Promise.resolve(true),
+  editorVersion = () => DEV_VERSION,
+} = {}) {
   if (!(settings instanceof Settings)) throw new TypeError('settings must be a Settings instance');
   if (typeof confirm !== 'function') throw new TypeError('confirm must be a function');
+  if (typeof editorVersion !== 'function') throw new TypeError('editorVersion must be a function');
   const model = new Model();
   const history = new History(model);
   const selection = new Selection(model);
   const modes = new Modes(model);
   const camera = new Camera();
   const tools = new ToolRegistry(
-    { model, history, selection, modes, settings, camera, physics },
+    { model, history, selection, modes, settings, camera, physics, editorVersion },
     TOOLS.map((createTool) => createTool()),
   );
   const actions = new ActionRegistry();
@@ -149,17 +169,11 @@ export function createEditor({ settings = Settings.restore(undefined).settings, 
       return false;
     }
   };
-  const runDelete = () => {
-    const uids = [...selection.objects];
-    const plan = deletionPlan(model, uids);
-    if (!plan.confirm) {
-      history.execute(deleteObjects(uids));
-      return undefined;
-    }
+  const ask = (request) => {
     confirming = true;
     let asked;
     try {
-      asked = Promise.resolve(confirm(deleteRequest(model, plan)));
+      asked = Promise.resolve(confirm(request));
     } catch (error) {
       asked = Promise.reject(error);
     }
@@ -170,8 +184,19 @@ export function createEditor({ settings = Settings.restore(undefined).settings, 
       )
       .then((accepted) => {
         confirming = false;
-        if (accepted && canDelete(uids)) history.execute(deleteObjects(uids));
+        return accepted;
       });
+  };
+  const runDelete = () => {
+    const uids = [...selection.objects];
+    const plan = deletionPlan(model, uids);
+    if (!plan.confirm) {
+      history.execute(deleteObjects(uids));
+      return undefined;
+    }
+    return ask(deleteRequest(model, plan)).then((accepted) => {
+      if (accepted && canDelete(uids)) history.execute(deleteObjects(uids));
+    });
   };
   actions.register('delete', {
     run: runDelete,
@@ -183,6 +208,20 @@ export function createEditor({ settings = Settings.restore(undefined).settings, 
       const rootOnly = selection.objects.length === 1 && selection.objects[0] === ROOT_UID;
       return rootOnly && !history.inGesture && !confirming ? 'the ragdoll root cannot be deleted' : null;
     },
+  });
+  const canNew = () => canEditRest() && !confirming;
+  actions.register('new', {
+    run: () => {
+      if (!history.dirty) {
+        newDocument(model);
+        return undefined;
+      }
+      return ask(newRequest()).then((accepted) => {
+        if (accepted && canNew()) newDocument(model);
+      });
+    },
+    isEnabled: canNew,
+    reason: () => modeReason('edit.rest'),
   });
   actions.register('add-shape', {
     run: () => {
@@ -204,5 +243,5 @@ export function createEditor({ settings = Settings.restore(undefined).settings, 
     reason: () => modeReason('edit.rest'),
   });
 
-  return Object.freeze({ model, history, selection, modes, actions, settings, camera, tools });
+  return Object.freeze({ model, history, selection, modes, actions, settings, camera, tools, editorVersion });
 }

@@ -1,6 +1,6 @@
 # Model I/O
 
-> Status: planned (#27). `toJson(model)` exists since #145 ([Tools: Pose](tools-pose.md#tools-pose)); everything else here is the agreed design.
+> Status: built (#27). `toJson` appeared in #145 ([Tools: Pose](tools-pose.md#tools-pose)).
 
 Behavior in [`DESIGN.md` §6.3–6.5](../design/06-file-format.md#63-versioning). Modules:
 
@@ -61,7 +61,7 @@ loadVersion(fetchFn) → Promise<VersionInfo>        VersionInfo { editorVersion
 
 - **Load (#28 wires the file picker and drop):** text → `loadJson`. On `ok: false` the errors are shown and nothing changes; on `ok: true` warnings and notes are shown, and `reset` clears history, selection and the open gesture ([Commands and undo](commands-and-undo.md#commands-and-undo)).
 - **Save (#28):** `json = toJson(model, editor.editorVersion())` → `validate(json, { hasImage })` → blocked when `errors.length > 0` → `serialize(json)`.
-- **New (wired after #124):** the action asks through `confirm` when `history.dirty`, then `newDocument(model)`.
+- **New (#27):** the action asks through `confirm` when `history.dirty`, then `newDocument(model)`.
 - **Round trip:** for a canonical file, `serialize(toJson(model, v))` after `loadJson(model, text)` equals `text` when `v` is the file's `meta.editorVersion` ([`DESIGN.md` §6.5](../design/06-file-format.md#65-round-trip-guarantee)).
 
 ## Tests

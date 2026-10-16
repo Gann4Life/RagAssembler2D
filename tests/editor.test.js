@@ -31,7 +31,7 @@ test('createEditor builds the core objects', () => {
   assert.ok(editor.modes instanceof Modes);
   assert.ok(editor.actions instanceof ActionRegistry);
   for (const id of ['undo', 'redo', 'escape']) assert.equal(editor.actions.has(id), true, id);
-  for (const id of ['new', 'load', 'save', 'play', 'pause', 'next-frame', 'stop', 'toggle-play']) {
+  for (const id of ['load', 'save', 'play', 'pause', 'next-frame', 'stop', 'toggle-play']) {
     assert.equal(editor.actions.reason(id), 'not available yet', id);
   }
 });

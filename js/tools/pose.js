@@ -74,7 +74,7 @@ export function poseTool() {
       if (shape === null) return;
       const body = ctx.model.get(ctx.model.get(shape).parent);
       try {
-        const json = toJson(ctx.model);
+        const json = toJson(ctx.model, ctx.editorVersion());
         session = ctx.physics.startPose(json, {
           root: rootTransform(json),
           bodyId: body.props.id,
