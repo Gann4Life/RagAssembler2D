@@ -206,6 +206,7 @@ export function createHierarchy(element, editor) {
   let dirty = false;
   let frame = 0;
   let pendingReveal = null;
+  let collapseFocusKey = null;
   let pendingQueryChange = false;
   let selfSelecting = false;
   let lastObjects = selection.objects;
@@ -286,9 +287,11 @@ export function createHierarchy(element, editor) {
     }
     let focusKey = null;
     if (focusedKey !== null) {
-      focusKey = keys.has(focusedKey) ? focusedKey : replacement(focusedIndex);
+      if (keys.has(focusedKey)) focusKey = focusedKey;
+      else focusKey = collapseFocusKey !== null && keys.has(collapseFocusKey) ? collapseFocusKey : replacement(focusedIndex);
       if (!keys.has(focusedKey)) nextRoving = focusKey;
     }
+    collapseFocusKey = null;
     setRovingKey(nextRoving);
     noMatches.hidden = !(searching() && rows.length === 0);
     if (focusKey !== null) {
@@ -368,6 +371,8 @@ export function createHierarchy(element, editor) {
       let end = index + 1;
       while (end < rows.length && rows[end].level > row.level) end++;
       if (rovingIndex > index && rovingIndex < end) setRovingKey(row.item.key);
+      const focusedIndex = rowIndexOf(doc.activeElement?.dataset?.key ?? null);
+      if (focusedIndex > index && focusedIndex < end) collapseFocusKey = row.item.key;
       set.add(row.item.key);
     } else {
       set.delete(row.item.key);
