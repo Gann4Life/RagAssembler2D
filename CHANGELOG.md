@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [0.9.0] - 2026-10-16
 
 ### Added
-- With one hinge joint selected in Select (Edit mode), lower and upper limit handles on the gizmo ring edit its limits; SHIFT snaps to 15°, dragging enables the limits, and each drag is one undo step.
+- With one hinge joint selected in Select (Edit mode), lower and upper limit handles on the gizmo ring edit its limits; SHIFT snaps to 15°, ALT mirrors the other limit, dragging enables the limits, and each drag is one undo step.
 - Dragging the ring of a selected hinge joint rotates its whole limit range.
 - A fixed rest reference line marks the zero direction; disabled limits are drawn at half opacity.
 
