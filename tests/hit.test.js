@@ -49,6 +49,8 @@ function uids(model, ...ids) {
 test('style constants follow DESIGN §5.4', () => {
   assert.deepEqual(COLORS, {
     highlight: 0x5b9cf5,
+    shapeOutline: 0xf08a24,
+    gizmoZ: 0x3d6dff,
     invalid: 0xe5484d,
     gizmo: 0xd8dade,
     gizmoX: 0xe0524f,
