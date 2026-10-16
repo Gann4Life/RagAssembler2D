@@ -1,24 +1,24 @@
 # Property schema
 
-> Status: built. The code version is `lib/schema.js` ([architecture](architecture.md#schema)). This document describes it and must match it field for field. Its consumers other than the model are planned.
+> Status: built. The code version is `lib/schema.js` ([architecture](architecture/schema.md#schema)). This document describes it and must match it field for field. Its consumers other than the model are planned.
 
-One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](../DESIGN.md#6-file-format-ragjson)). It is the **single source** for:
+One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/06-file-format.md#6-file-format-ragjson)). It is the **single source** for:
 
 | Consumer | Uses |
 |---|---|
 | Editor model (#9) | `defaultsOf('root')` and `defaultsOf('document')` for the empty document. |
 | Creation commands (#14–#16, #19, #21) | `defaultsOf(type, variant)` for every new object, plus the fields the tool sets. |
-| Validation (#25) | Field types, ranges and enums: one generic error per violation ([`DESIGN.md` §6.4](../DESIGN.md#64-validation)). Cross-field rules (limits around 0, convex polygons, key order, references) stay hand-written in `lib/validate.js`. |
-| Serializer (#27) | Key order: the row order below is the canonical order of [`DESIGN.md` §6.5](../DESIGN.md#65-round-trip-guarantee). Only schema fields are written. |
+| Validation (#25) | Field types, ranges and enums: one generic error per violation ([`DESIGN.md` §6.4](design/06-file-format.md#64-validation)). Cross-field rules (limits around 0, convex polygons, key order, references) stay hand-written in `lib/validate.js`. |
+| Serializer (#27) | Key order: the row order below is the canonical order of [`DESIGN.md` §6.5](design/06-file-format.md#65-round-trip-guarantee). Only schema fields are written. |
 | Inspector (#20, #22, #23) | Rows, read-only flags, ranges, enums, and the display unit derived from the data unit. |
 
 ## Columns
 
 - **Path:** dotted path inside the object's JSON record. Consecutive rows with the same prefix form one nested object (`limits.enabled`, `limits.lower`, `limits.upper` → `"limits": { … }`).
 - **Type:** `string`, `number`, `integer`, `boolean`, `vec2` (`[x, y]`), `vec2[]`, `enum`, `ref:<type>` (an id of that type, or `null` where noted), `ref` (an id of one of the kinds given in Range), `color` (`#rrggbb`), `json` (any JSON value), `channel` (a key value, typed by the track's channel), `root` / `sprite` (a nested record described by its own table), `list:<type>` (ordered child collection).
-- **Default:** value given to new objects. "Set by the creating tool", "generated" and context-dependent defaults are `undefined` in `lib/schema.js`; the creating command supplies them. Loaded files never get defaults: every field is explicit ([`DESIGN.md` §6.2](../DESIGN.md#62-field-reference)), and a missing field is an error unless marked *optional*.
+- **Default:** value given to new objects. "Set by the creating tool", "generated" and context-dependent defaults are `undefined` in `lib/schema.js`; the creating command supplies them. Loaded files never get defaults: every field is explicit ([`DESIGN.md` §6.2](design/06-file-format.md#62-field-reference)), and a missing field is an error unless marked *optional*.
 - **Range:** per-field constraint checked by validation. `>0` means exclusive.
-- **Unit:** data unit (file and model). The UI unit follows [`DESIGN.md` §1](../DESIGN.md#1-conventions): `m` → px (× `pixelsPerMeter`), `rad` → degrees, `mult` (0–1) → %. Other units are shown as stored.
+- **Unit:** data unit (file and model). The UI unit follows [`DESIGN.md` §1](design/01-conventions.md#1-conventions): `m` → px (× `pixelsPerMeter`), `rad` → degrees, `mult` (0–1) → %. Other units are shown as stored.
 - **Flags:** `E` editor-only (RagImporter ignores it), `R` read-only in the inspector, `V` variant (only for the listed shape type), `A` base value of an animation channel.
 
 ## document (file top level)
@@ -105,7 +105,7 @@ Inspector-only, derived: `mass` (kg, from `lib/geometry.js`), `shapes` list.
 
 Variant rows keep their relative order, so a box is written `type, center, width, height, angle` and a circle `type, center, radius`.
 
-In default names (`body_<n>`, `<type>_<n>`, `joint_<n>`), `<n>` is the number of the object's own generated id: body `b_3` is `body_3`, shape `f_5` of type circle is `circle_5`. Shape creation (#14) uses the circle and box size defaults above for a click without a drag ([`DESIGN.md` §5.5](../DESIGN.md#55-tools)).
+In default names (`body_<n>`, `<type>_<n>`, `joint_<n>`), `<n>` is the number of the object's own generated id: body `b_3` is `body_3`, shape `f_5` of type circle is `circle_5`. Shape creation (#14) uses the circle and box size defaults above for a click without a drag ([`DESIGN.md` §5.5](design/05-5-tools.md#55-tools)).
 
 ## sprite (`fixtures[].sprite`)
 
@@ -138,7 +138,7 @@ In default names (`body_<n>`, `<type>_<n>`, `joint_<n>`), `<n>` is the number of
 | `motor.maxSpeed` | number | `20` | ≥0 | rad/s | |
 | `aimAxis` | number | `0` | — | rad | |
 
-Joint creation by the Hinge tool (#16, `createJoint`) sets `id`, `name` (`joint_<n>`), `bodyA`, `bodyB` and `anchor`, and `limits` only for a drag (enabled, `−θ`/`θ`); a pin keeps the default disabled limits, and every other field takes the default above ([`DESIGN.md` §5.5](../DESIGN.md#55-tools)). Hierarchy *Add joint* (#19) sets only `id`, `name` and `anchor` `[0, 0]`, leaving `bodyA` and `bodyB` `null` ([`DESIGN.md` §5.6](../DESIGN.md#56-hierarchy-assets-and-problems-panels)). The motor defaults are provisional until the motor stability spike (#52) tunes them. `null` bodies are allowed in the model and in drafts, and are validation errors in files. The animated channels (`angle`, `strength`, `gain`, `damping` ◆) are not fields: the inspector shows their evaluated values at the playhead.
+Joint creation by the Hinge tool (#16, `createJoint`) sets `id`, `name` (`joint_<n>`), `bodyA`, `bodyB` and `anchor`, and `limits` only for a drag (enabled, `−θ`/`θ`); a pin keeps the default disabled limits, and every other field takes the default above ([`DESIGN.md` §5.5](design/05-5-tools.md#55-tools)). Hierarchy *Add joint* (#19) sets only `id`, `name` and `anchor` `[0, 0]`, leaving `bodyA` and `bodyB` `null` ([`DESIGN.md` §5.6](design/05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)). The motor defaults are provisional until the motor stability spike (#52) tunes them. `null` bodies are allowed in the model and in drafts, and are validation errors in files. The animated channels (`angle`, `strength`, `gain`, `damping` ◆) are not fields: the inspector shows their evaluated values at the playhead.
 
 ## clip (`clips[]`)
 
@@ -161,7 +161,7 @@ Joint creation by the Hinge tool (#16, `createJoint`) sets `id`, `name` (`joint_
 
 The schema default `new_clip` is `autoClipKey("New Clip")` with no taken keys; the create command (#19) recomputes it against the existing keys.
 
-**Key follows name:** when a clip is renamed, if its current `key` equals `autoClipKey(oldName, otherKeys)`, the rename command (`setProps` in `js/commands/props.js`, #10) also sets `key = autoClipKey(newName, otherKeys)` in the same transaction. The model and the schema do not apply this rule. A hand-edited key no longer matches, so it stops following ([`DESIGN.md` §4.1](../DESIGN.md#41-clips)).
+**Key follows name:** when a clip is renamed, if its current `key` equals `autoClipKey(oldName, otherKeys)`, the rename command (`setProps` in `js/commands/props.js`, #10) also sets `key = autoClipKey(newName, otherKeys)` in the same transaction. The model and the schema do not apply this rule. A hand-edited key no longer matches, so it stops following ([`DESIGN.md` §4.1](design/04-animation-model.md#41-clips)).
 
 ## track (`tracks[]`)
 
@@ -183,13 +183,13 @@ The schema default `new_clip` is `autoClipKey("New Clip")` with no taken keys; t
 
 | Path | Type | Default | Range | Unit | Flags |
 |---|---|---|---|---|---|
-| `t` | number | clicked time | [`DESIGN.md` §4.7](../DESIGN.md#47-events) | s | |
+| `t` | number | clicked time | [`DESIGN.md` §4.7](design/04-animation-model.md#47-events) | s | |
 | `name` | string | `"event"` | non-empty | — | |
 | `data` | json | `null` | any JSON value | — | |
 
 ## Channels
 
-`CHANNELS` in `lib/schema.js`, from [`DESIGN.md` §4.2](../DESIGN.md#42-channels):
+`CHANNELS` in `lib/schema.js`, from [`DESIGN.md` §4.2](design/04-animation-model.md#42-channels):
 
 | Target | Channel | Kind | Key value | Unit | Default when not animated |
 |---|---|---|---|---|---|
@@ -234,4 +234,4 @@ Code form: `CHANNELS[target][channel] = { kind, unit, min?, max?, default, baseP
 
 ## Open items
 
-- **`meta.name` vs `ragdoll.name`, and `meta.editorVersion` on Save:** [`DESIGN.md` §6](../DESIGN.md#6-file-format-ragjson) does not say whether Save rewrites them, which affects byte-identical round-trip across editor versions. Until decided, the serializer writes the model's values unchanged. A new document has no `meta.editorVersion` in the model (its default is `undefined`), so `toJson` (#27) must supply it.
+- **`meta.name` vs `ragdoll.name`, and `meta.editorVersion` on Save:** [`DESIGN.md` §6](design/06-file-format.md#6-file-format-ragjson) does not say whether Save rewrites them, which affects byte-identical round-trip across editor versions. Until decided, the serializer writes the model's values unchanged. A new document has no `meta.editorVersion` in the model (its default is `undefined`), so `toJson` (#27) must supply it.

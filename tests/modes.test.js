@@ -7,8 +7,8 @@ import { setProps } from '../js/commands/props.js';
 import { Modes, MODE_POLICY } from '../js/modes.js';
 import { defaultsOf } from '../lib/schema.js';
 
-const DESIGN = readFileSync(new URL('../DESIGN.md', import.meta.url), 'utf8');
-const ARCHITECTURE = readFileSync(new URL('../docs/architecture.md', import.meta.url), 'utf8');
+const DESIGN = readFileSync(new URL('../docs/design/05-1-modes.md', import.meta.url), 'utf8');
+const ARCHITECTURE = readFileSync(new URL('../docs/architecture/modes.md', import.meta.url), 'utf8');
 
 function tableAfter(markdown, marker) {
   const lines = markdown.split(/\r?\n/);
