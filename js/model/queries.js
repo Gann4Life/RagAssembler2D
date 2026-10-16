@@ -19,7 +19,13 @@ function isBody(model, uid) {
   return model.get(uid)?.type === 'body';
 }
 
-function jointEdges(model) {
+/**
+ * Lists the joints that connect two different bodies.
+ * @param {import('./model.js').Model} model Document model.
+ * @returns {ReadonlyArray<{ uid: number, a: number, b: number }>} Joint uid with its `bodyA` and `bodyB` body uids,
+ *   in `joints` order; joints whose references do not resolve to two different bodies are left out.
+ */
+export function jointEdges(model) {
   const edges = [];
   for (const uid of model.children(ROOT_UID, 'joints')) {
     const props = model.get(uid).props;
@@ -161,4 +167,27 @@ export function bodySubtree(model, bodyUid, parents = parentJoints(model)) {
     }
   }
   return subtree;
+}
+
+/**
+ * Finds the joints and tracks that reference a node by its file id. A reference resolves through
+ * `model.uidOf`, so only the first holder of a duplicated id is referenced.
+ * @param {import('./model.js').Model} model Document model.
+ * @param {number} uid Referenced node uid.
+ * @returns {{ joints: number[], tracks: number[] }} Joints whose `bodyA` or `bodyB` resolves to `uid`, in `joints`
+ *   order and each once; tracks whose `target` resolves to `uid`, in clip order, then track order.
+ * @throws {Error} When the uid is unknown.
+ */
+export function referencesTo(model, uid) {
+  if (model.get(uid) === null) throw new Error(`Unknown node uid ${uid}`);
+  const resolves = (id) => typeof id === 'string' && model.uidOf(id) === uid;
+  const joints = model.children(ROOT_UID, 'joints').filter((joint) => {
+    const { bodyA, bodyB } = model.get(joint).props;
+    return resolves(bodyA) || resolves(bodyB);
+  });
+  const tracks = model
+    .children(ROOT_UID, 'clips')
+    .flatMap((clip) => model.children(clip, 'tracks'))
+    .filter((track) => resolves(model.get(track).props.target));
+  return { joints, tracks };
 }

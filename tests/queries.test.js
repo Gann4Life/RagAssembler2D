@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Model, ROOT_UID } from '../js/model/model.js';
 import { History } from '../js/commands/history.js';
-import { bodySubtree, jointBetween, jointTree, orderJointBodies, parentJoints } from '../js/model/queries.js';
+import { bodySubtree, jointBetween, jointEdges, jointTree, orderJointBodies, parentJoints, referencesTo } from '../js/model/queries.js';
 import { defaultsOf } from '../lib/schema.js';
 
 function build({ bodies = [], joints = [], rootBody = null, shapes = [] }) {
@@ -338,4 +338,59 @@ test('bodySubtree throws for a uid that is not a body', () => {
   const { model, uids } = build({ bodies: ['b_1', 'b_2'], shapes: ['b_1'], joints: [['b_1', 'b_2']], rootBody: 'b_1' });
   const shapeUid = model.children(uids.b_1, 'fixtures')[0];
   for (const uid of [shapeUid, uids.j_1, ROOT_UID, 999]) assert.throws(() => bodySubtree(model, uid), Error);
+});
+
+test('jointEdges lists joints between two different bodies with their body uids, in joints order', () => {
+  const { model, uids } = build({
+    bodies: ['b_1', 'b_2', 'b_3'],
+    shapes: ['b_1'],
+    joints: [['b_2', 'b_1'], [null, null], ['b_1', 'b_1'], ['f_b_1', 'b_2'], ['b_2', 'b_3'], ['b_3', 'b_9']],
+  });
+  assert.deepEqual(jointEdges(model), [
+    { uid: uids.j_1, a: uids.b_2, b: uids.b_1 },
+    { uid: uids.j_5, a: uids.b_2, b: uids.b_3 },
+  ]);
+});
+
+function withTracks(clips) {
+  const { model, uids } = build({
+    bodies: ['b_1', 'b_2'],
+    shapes: ['b_1'],
+    joints: [['b_1', 'b_2'], ['b_1', 'b_1'], ['b_2', null]],
+  });
+  const history = new History(model);
+  const tracks = history.execute({
+    label: 'Clips',
+    run(tx) {
+      const { tracks: _tracks, events: _events, ...props } = defaultsOf('clip');
+      return clips.map((targets, index) => {
+        const clip = tx.add(ROOT_UID, 'clips', undefined, {
+          type: 'clip',
+          props: { ...props, key: `clip_${index}` },
+          children: { tracks: targets.map((target) => ({ type: 'track', props: { target, channel: 'angle' } })) },
+        });
+        return tx.model.children(clip, 'tracks');
+      });
+    },
+  });
+  return { model, uids, tracks };
+}
+
+test('referencesTo finds joints in both directions, each once, and tracks in clip then track order', () => {
+  const { model, uids, tracks } = withTracks([
+    ['j_1', 'f_b_1', 'root'],
+    ['f_b_1', 'j_1'],
+  ]);
+  const shape = model.children(uids.b_1, 'fixtures')[0];
+  assert.deepEqual(referencesTo(model, uids.b_1), { joints: [uids.j_1, uids.j_2], tracks: [] });
+  assert.deepEqual(referencesTo(model, uids.b_2), { joints: [uids.j_1, uids.j_3], tracks: [] });
+  assert.deepEqual(referencesTo(model, uids.j_1), { joints: [], tracks: [tracks[0][0], tracks[1][1]] });
+  assert.deepEqual(referencesTo(model, shape), { joints: [], tracks: [tracks[0][1], tracks[1][0]] });
+  assert.deepEqual(referencesTo(model, ROOT_UID), { joints: [], tracks: [tracks[0][2]] });
+});
+
+test('referencesTo returns empty lists for an unreferenced node and throws for an unknown uid', () => {
+  const { model, uids } = withTracks([['j_1']]);
+  assert.deepEqual(referencesTo(model, uids.j_2), { joints: [], tracks: [] });
+  assert.throws(() => referencesTo(model, 999), Error);
 });
