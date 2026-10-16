@@ -74,7 +74,6 @@ test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, tool rows first', (
     [
       'tool:select',
       'tool:select-box',
-      'tool:manipulate',
       'tool:pose',
       'tool:circle',
       'tool:box',
@@ -96,6 +95,7 @@ test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, tool rows first', (
       'frame-selection',
       'frame-all',
       'escape',
+      'pivot-mode',
     ],
   );
   assert.ok(Object.isFrozen(HOTKEYS));
@@ -171,7 +171,10 @@ test('matchHotkey matches letters case-insensitively with exact modifiers', () =
   assert.equal(matchHotkey(keyEvent('Z', { ctrlKey: true, shiftKey: true })), 'redo');
   assert.equal(matchHotkey(keyEvent('y', { ctrlKey: true })), 'redo');
   assert.equal(matchHotkey(keyEvent('z', { ctrlKey: true, altKey: true })), null);
-  assert.equal(matchHotkey(keyEvent('z')), null);
+  assert.equal(matchHotkey(keyEvent('z')), 'pivot-mode');
+  assert.equal(matchHotkey(keyEvent('Z')), 'pivot-mode');
+  assert.equal(matchHotkey(keyEvent('z', { shiftKey: true })), null);
+  assert.equal(matchHotkey(keyEvent('m')), null);
   assert.equal(matchHotkey(keyEvent('s')), 'sprite-edit');
   assert.equal(matchHotkey(keyEvent('S', { shiftKey: true })), null);
   assert.equal(matchHotkey(keyEvent('s', { ctrlKey: true })), 'save');

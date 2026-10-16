@@ -1,20 +1,29 @@
 /**
- * Viewport colors as `0xRRGGBB` integers: hover and selection, invalid feedback, and gizmos.
- * @type {Readonly<{ highlight: number, invalid: number, gizmo: number }>}
+ * Viewport colors as `0xRRGGBB` integers: hover and selection, invalid feedback, gizmos, and the transform gizmo's
+ * X arrow, Y arrow and free-move square.
+ * @type {Readonly<{ highlight: number, invalid: number, gizmo: number, gizmoX: number, gizmoY: number, gizmoFree: number }>}
  */
-export const COLORS = Object.freeze({ highlight: 0x5b9cf5, invalid: 0xe5484d, gizmo: 0xd8dade });
+export const COLORS = Object.freeze({
+  highlight: 0x5b9cf5,
+  invalid: 0xe5484d,
+  gizmo: 0xd8dade,
+  gizmoX: 0xe0524f,
+  gizmoY: 0x58b85c,
+  gizmoFree: 0xf2c94c,
+});
 
 /**
- * Line widths, CSS px: outlines (hover included) and selection outlines.
- * @type {Readonly<{ outline: number, selected: number }>}
+ * Line widths, CSS px: outlines (hover included), selection outlines and transform gizmo strokes.
+ * @type {Readonly<{ outline: number, selected: number, gizmo: number }>}
  */
-export const LINE_WIDTH = Object.freeze({ outline: 1, selected: 2 });
+export const LINE_WIDTH = Object.freeze({ outline: 1, selected: 2, gizmo: 2 });
 
 /**
  * Gizmo sizes, CSS px: root cross arm and ring radius, joint circle radius, limit arc radius, needle and
- * `aimAxis` arrow lengths, center-of-mass marker radius, and the Manipulate rotate knob distance from the pivot,
- * knob radius and pivot cross arm.
- * @type {Readonly<{ rootCross: number, rootRing: number, jointCircle: number, jointArc: number, jointNeedle: number, aimArrow: number, centerOfMass: number, rotateHandle: number, rotateKnob: number, pivot: number }>}
+ * `aimAxis` arrow lengths, center-of-mass marker radius, and the transform gizmo: arrow start and tip distances
+ * from the pivot, arrow head length and width, free-move square offset and side, rotation ring radius and pivot
+ * mark size.
+ * @type {Readonly<{ rootCross: number, rootRing: number, jointCircle: number, jointArc: number, jointNeedle: number, aimArrow: number, centerOfMass: number, arrowStart: number, arrowTip: number, arrowHead: number, arrowWidth: number, squareOffset: number, squareSize: number, rotateRing: number, pivot: number }>}
  */
 export const GIZMO_SIZE = Object.freeze({
   rootCross: 14,
@@ -24,16 +33,22 @@ export const GIZMO_SIZE = Object.freeze({
   jointNeedle: 20,
   aimArrow: 32,
   centerOfMass: 5,
-  rotateHandle: 40,
-  rotateKnob: 5,
+  arrowStart: 16,
+  arrowTip: 56,
+  arrowHead: 10,
+  arrowWidth: 8,
+  squareOffset: 16,
+  squareSize: 12,
+  rotateRing: 72,
   pivot: 4,
 });
 
 /**
- * Hit radii, CSS px: joint anchors, the root position, the distance around shapes and tool handles.
- * @type {Readonly<{ joint: number, root: number, shape: number, handle: number }>}
+ * Hit radii, CSS px: joint anchors, the root position, the distance around shapes, point handles and the
+ * transform gizmo's arrows and ring.
+ * @type {Readonly<{ joint: number, root: number, shape: number, handle: number, gizmo: number }>}
  */
-export const HIT_RADIUS = Object.freeze({ joint: 8, root: 12, shape: 4, handle: 8 });
+export const HIT_RADIUS = Object.freeze({ joint: 8, root: 12, shape: 4, handle: 8, gizmo: 6 });
 
 /** Overlay label font size, CSS px. */
 export const LABEL_SIZE = 11;

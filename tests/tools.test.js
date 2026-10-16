@@ -125,13 +125,12 @@ function fakeView() {
   };
 }
 
-test('TOOL_SPECS lists the eight tools of DESIGN §5.5 with policy capabilities', () => {
+test('TOOL_SPECS lists the seven tools of DESIGN §5.5 with policy capabilities', () => {
   assert.deepEqual(
     TOOL_SPECS.map((row) => [row.id, row.label, row.hotkey, row.capability, row.group]),
     [
       ['select', 'Select', 'V', 'select', 'selection'],
       ['select-box', 'Select Box', 'B', 'select', 'selection'],
-      ['manipulate', 'Manipulate', 'M', 'tool.manipulate', 'manipulation'],
       ['pose', 'Pose', 'P', 'tool.pose', 'manipulation'],
       ['circle', 'Circle', 'C', 'tool.circle', 'creation'],
       ['box', 'Box', 'R', 'tool.box', 'creation'],
@@ -161,6 +160,45 @@ test('defineTool copies the table row, fills defaults and freezes', () => {
   for (const name of ['activate', 'deactivate', 'pointerDown', 'pointerMove', 'pointerUp', 'drawOverlay']) {
     assert.equal(plain[name](), undefined);
   }
+  assert.equal(plain.handleAt({ x: 0, y: 0 }), null);
+  assert.equal(plain.readout(), null);
+});
+
+test('defineTool rejects handleAt and readout that are not functions', () => {
+  assert.throws(() => defineTool({ id: 'select', handleAt: 'x' }), TypeError);
+  assert.throws(() => defineTool({ id: 'select', readout: {} }), TypeError);
+});
+
+test('the registry forwards handleAt and readout to the active tool, null without a tool or a view', () => {
+  const services = core();
+  const seen = [];
+  const select = defineTool({
+    id: 'select',
+    handleAt: (screen) => {
+      seen.push(screen);
+      return 'ring';
+    },
+    readout: () => ({ text: 'Δθ: 1.0°', screen: { x: 1, y: 2 } }),
+  });
+  const registry = new ToolRegistry(services, [select, defineTool({ id: 'box' })]);
+  assert.equal(registry.handleAt({ x: 5, y: 6 }), null);
+  assert.equal(registry.readout(), null);
+  const unbind = registry.bindView(fakeView().view);
+  assert.equal(registry.handleAt({ x: 5, y: 6 }), 'ring');
+  assert.deepEqual(seen, [{ x: 5, y: 6 }]);
+  assert.deepEqual(registry.readout(), { text: 'Δθ: 1.0°', screen: { x: 1, y: 2 } });
+  registry.activate('box');
+  assert.equal(registry.handleAt({ x: 5, y: 6 }), null);
+  assert.equal(registry.readout(), null);
+  registry.activate('select');
+  unbind();
+  assert.equal(registry.handleAt({ x: 5, y: 6 }), null);
+  assert.equal(registry.readout(), null);
+  const empty = new ToolRegistry(core(), [defineTool({ id: 'box' })]);
+  empty.bindView(fakeView().view);
+  assert.equal(empty.active, null);
+  assert.equal(empty.handleAt({ x: 0, y: 0 }), null);
+  assert.equal(empty.readout(), null);
 });
 
 test('defineTool rejects unknown ids and malformed members', () => {
@@ -200,7 +238,7 @@ test('without Select no tool is active', () => {
 test('activate follows the mode policy and emits tool', () => {
   const services = core();
   const log = [];
-  const registry = new ToolRegistry(services, [dragTool('select', log).tool, dragTool('box', log).tool, dragTool('manipulate', log).tool]);
+  const registry = new ToolRegistry(services, [dragTool('select', log).tool, dragTool('box', log).tool, dragTool('pose', log).tool]);
   const events = [];
   registry.on('tool', (event) => events.push(event));
   assert.equal(registry.activate('hinge'), false);
@@ -214,9 +252,9 @@ test('activate follows the mode policy and emits tool', () => {
   assert.equal(registry.active.id, 'select');
   assert.equal(registry.canActivate('box'), false);
   assert.equal(registry.activate('box'), false);
-  assert.equal(registry.canActivate('manipulate'), true);
-  assert.equal(registry.activate('manipulate'), true);
-  assert.deepEqual(events.slice(1), [{ id: 'select', previous: 'box' }, { id: 'manipulate', previous: 'select' }]);
+  assert.equal(registry.canActivate('pose'), true);
+  assert.equal(registry.activate('pose'), true);
+  assert.deepEqual(events.slice(1), [{ id: 'select', previous: 'box' }, { id: 'pose', previous: 'select' }]);
 });
 
 test('a mode change without Select falls back to no tool', () => {

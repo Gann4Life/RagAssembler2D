@@ -62,9 +62,10 @@
 - [ ] #124 Shared confirmation dialog for destructive actions
 - [ ] #126 Highlight the viewport object of the hovered Hierarchy row
 - [x] #127 Keep the Manipulate rotate knob clear of nearby joint gizmos
-- [ ] #128 Select tool with transform gizmo (merge Manipulate into Select)
+- [x] #128 Select tool with transform gizmo (merge Manipulate into Select)
 - [ ] #129 Resize shapes with handles in the Select tool
 - [ ] #130 Polygon vertex handles in the Select tool
+- [ ] #132 Split DESIGN.md and the large docs into per-section files
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults

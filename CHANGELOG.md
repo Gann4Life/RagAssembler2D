@@ -52,3 +52,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - RagImporter is now specified to reach liquidfun.js through its `Box2D` namespace global (`Box2D.b2World`, …) instead of global `b2*` names, and to accept both libraries through `RagImporter.configure({ Box2D, PIXI })`.
 - `DESIGN.md` now specifies the header layout (four button groups, Window and Settings at the right end), its keyboard behavior and disabled state, and the accessibility role of the viewport.
 - `TODO.md` is now a generated index of GitHub issues instead of a hand-edited list.
+- Select now moves and rotates with a transform gizmo (X and Y arrows, a free-move square, a rotation ring and a live readout); Z toggles the pivot between the selection center and the last selected object.
+
+### Removed
+- The Manipulate tool and its M hotkey; Select does its moves and rotations.

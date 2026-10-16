@@ -7,6 +7,9 @@ import { COLORS, LINE_WIDTH } from '../js/viewport/style.js';
 import { applyClick, clickTarget, selectTool } from '../js/tools/select.js';
 import { applyBox, boxAabb, marqueeTool, selectBoxTool } from '../js/tools/select-box.js';
 import { defaultsOf } from '../lib/schema.js';
+import { createJoint, createShapeBody } from '../js/commands/create.js';
+import { setProps } from '../js/commands/props.js';
+import { formatMove } from '../js/tools/transform-gizmo.js';
 
 const EPSILON = 1e-9;
 const NO_MODIFIERS = { shift: false, ctrl: false, alt: false };
@@ -291,20 +294,23 @@ test('the click target comes from the press point and modifiers from the release
 });
 
 test('a press latches into a drag at 4 px and stays a drag when it comes back', () => {
-  const { tools, selection, uid } = environment();
+  const { tools, selection, history, uid } = environment();
   send(tools, 'down', 100, 200);
   send(tools, 'move', 103, 200);
   send(tools, 'up', 103, 200);
   assert.deepEqual(selection.objects, [uid('f_1')]);
-  selection.clear();
-  send(tools, 'down', 100, 200);
-  send(tools, 'move', 104, 200);
-  send(tools, 'move', 100, 200);
-  send(tools, 'up', 100, 200);
-  assert.deepEqual(selection.objects, []);
+  send(tools, 'down', 100, 200, { shift: true });
+  send(tools, 'move', 104, 200, { shift: true });
+  send(tools, 'move', 100, 200, { shift: true });
+  send(tools, 'up', 100, 200, { shift: true });
+  assert.deepEqual(selection.objects, [uid('f_1')]);
+  assert.equal(history.canUndo, false);
   selection.set([uid('f_2')]);
-  send(tools, 'down', 100, 200);
-  send(tools, 'up', 104, 200);
+  send(tools, 'down', 20, 20);
+  send(tools, 'up', 24, 20, { ctrl: true });
+  assert.deepEqual(selection.objects, [uid('f_2')]);
+  send(tools, 'down', 20, 20);
+  send(tools, 'up', 24, 20);
   assert.deepEqual(selection.objects, []);
 });
 
@@ -480,4 +486,434 @@ test('marqueeTool builds independent tools around a click handler', () => {
   assert.equal(tool.hover, false);
   assert.equal(tool.cancel(), false);
   assert.equal(tool.keyDown({ key: 'a' }), false);
+});
+
+function chain({ snap = false } = {}) {
+  const editor = createEditor();
+  const { model, history, settings, camera, tools } = editor;
+  settings.set('snap.grid', snap);
+  camera.setSize(400, 400);
+  camera.zoomAt({ x: 200, y: 200 }, 100 / camera.scale);
+  const shapes = [0, 1, 2, 3].map((x) =>
+    history.execute(createShapeBody({ position: { x, y: 0 }, angle: x === 2 ? 0.5 : 0, shape: { type: 'circle', radius: 0.4 } })),
+  );
+  const bodies = shapes.map((uid) => model.get(uid).parent);
+  const joints = [0, 1, 2].map((index) =>
+    history.execute(createJoint({ bodyA: bodies[index], bodyB: bodies[index + 1], anchor: { x: index + 0.5, y: 0 } })),
+  );
+  const calls = { cursor: [], invalidations: 0 };
+  tools.bindView({
+    hitTest: (screen) => hitTest(model, camera, screen),
+    boxTest: (box) => boxTest(model, box),
+    setCursor: (css) => calls.cursor.push(css),
+    invalidateOverlay: () => {
+      calls.invalidations++;
+    },
+  });
+  return { ...editor, calls, shapes, bodies, joints };
+}
+
+function path(tools, points, extra = {}, release = extra) {
+  const [first, ...rest] = points;
+  send(tools, 'down', first[0], first[1], extra);
+  for (const [x, y] of rest) send(tools, 'move', x, y, extra);
+  const last = rest.at(-1) ?? first;
+  send(tools, 'up', last[0], last[1], release);
+}
+
+function hover(tools, x, y, extra = {}) {
+  send(tools, 'move', x, y, { buttons: 0, ...extra });
+}
+
+function snapshot(env) {
+  const { model } = env;
+  return JSON.stringify([
+    model.prop(ROOT_UID, 'position'),
+    model.prop(ROOT_UID, 'angle'),
+    ...env.bodies.map((uid) => [model.prop(uid, 'position'), model.prop(uid, 'angle')]),
+    ...env.joints.map((uid) => model.prop(uid, 'anchor')),
+  ]);
+}
+
+function nearPair(actual, expected, message) {
+  assert.equal(actual.length, 2, message);
+  near(actual[0], expected[0], message);
+  near(actual[1], expected[1], message);
+}
+
+function recorder() {
+  const calls = [];
+  const g = {
+    calls,
+    clear() {
+      calls.length = 0;
+    },
+  };
+  for (const method of ['moveTo', 'lineTo', 'poly', 'rect', 'circle', 'fill', 'stroke']) {
+    g[method] = (...args) => {
+      calls.push([method, ...args]);
+      return g;
+    };
+  }
+  return g;
+}
+
+function overlay(tools) {
+  const g = recorder();
+  tools.drawOverlay(g);
+  return g.calls;
+}
+
+function ringAt(calls) {
+  const ring = calls.find(([method, , , radius]) => method === 'circle' && radius === 72);
+  return ring ? { x: ring[1], y: ring[2] } : null;
+}
+
+function xArrowStart(calls) {
+  const move = calls.find(([method]) => method === 'moveTo');
+  return move ? { x: move[1] - 16, y: move[2] } : null;
+}
+
+function addClipTo(history) {
+  const { tracks, events, ...props } = defaultsOf('clip');
+  return history.execute({
+    label: 'Add clip',
+    run: (tx) => tx.add(ROOT_UID, 'clips', undefined, { type: 'clip', props: { ...props, length: 1 } }),
+  });
+}
+
+test('Edit: dragging a selected shape moves its body with its subtree and the anchors it carries', () => {
+  const env = chain();
+  const { model, tools, selection, history, calls, shapes, bodies, joints } = env;
+  selection.set([shapes[1]]);
+  send(tools, 'down', 300, 232);
+  assert.equal(calls.cursor.at(-1), 'move');
+  send(tools, 'move', 315, 242);
+  send(tools, 'move', 330, 252);
+  send(tools, 'up', 330, 252);
+  nearPair(model.prop(bodies[1], 'position'), [1.3, -0.2]);
+  nearPair(model.prop(bodies[3], 'position'), [3.3, -0.2]);
+  nearPair(model.prop(joints[0], 'anchor'), [0.8, -0.2]);
+  nearPair(model.prop(joints[2], 'anchor'), [2.8, -0.2]);
+  assert.deepEqual(model.prop(bodies[0], 'position'), [0, 0]);
+  assert.deepEqual(selection.objects, [shapes[1]]);
+  assert.equal(history.state.undoLabel, 'Move');
+  assert.equal(calls.cursor.at(-1), 'default');
+});
+
+test('Edit: an unselected hit is selected alone at the latch, not at the press, and moves', () => {
+  const { model, tools, selection, shapes, bodies, joints } = chain();
+  selection.set([shapes[0]]);
+  send(tools, 'down', 400, 230);
+  assert.deepEqual(selection.objects, [shapes[0]]);
+  send(tools, 'move', 402, 230);
+  assert.deepEqual(selection.objects, [shapes[0]]);
+  send(tools, 'move', 410, 230);
+  assert.deepEqual(selection.objects, [shapes[2]]);
+  send(tools, 'up', 410, 230);
+  nearPair(model.prop(bodies[2], 'position'), [2.1, 0]);
+  nearPair(model.prop(bodies[3], 'position'), [3.1, 0]);
+  nearPair(model.prop(joints[1], 'anchor'), [1.6, 0]);
+  assert.deepEqual(model.prop(bodies[1], 'position'), [1, 0]);
+});
+
+test('Edit: an ALT drag starts from the topmost hit and moves only the bodies', () => {
+  const { model, tools, selection, shapes, bodies, joints } = chain();
+  path(tools, [[400, 230], [450, 230]], { alt: true });
+  assert.deepEqual(selection.objects, [shapes[2]]);
+  nearPair(model.prop(bodies[2], 'position'), [2.5, 0]);
+  assert.deepEqual(model.prop(bodies[3], 'position'), [3, 0]);
+  nearPair(model.prop(joints[1], 'anchor'), [2, 0]);
+  assert.deepEqual(model.prop(joints[2], 'anchor'), [2.5, 0]);
+});
+
+test('Edit: SHIFT and CTRL drags never change what a drag selects', () => {
+  const { model, tools, selection, shapes, bodies } = chain();
+  selection.set([shapes[1], shapes[2]]);
+  path(tools, [[400, 230], [430, 230]], { shift: true });
+  assert.deepEqual(selection.objects, [shapes[1], shapes[2]]);
+  nearPair(model.prop(bodies[1], 'position'), [1.3, 0]);
+  nearPair(model.prop(bodies[2], 'position'), [2.3, 0]);
+  nearPair(model.prop(bodies[3], 'position'), [3.3, 0]);
+  path(tools, [[200, 232], [200, 262]], { ctrl: true });
+  assert.deepEqual(selection.objects, [shapes[0]]);
+  nearPair(model.prop(bodies[0], 'position'), [0, -0.3]);
+  nearPair(model.prop(bodies[3], 'position'), [3.3, -0.3]);
+  path(tools, [[400, 262], [400, 292]], { shift: true });
+  assert.deepEqual(selection.objects, [shapes[2]]);
+});
+
+test('Edit: a drag on empty space draws a box and moves nothing', () => {
+  const env = chain();
+  const { tools, selection, history, shapes } = env;
+  selection.set([shapes[1]]);
+  const before = snapshot(env);
+  path(tools, [[20, 380], [380, 260]]);
+  assert.deepEqual(selection.objects, []);
+  path(tools, [[20, 380], [380, 20]]);
+  assert.deepEqual(selection.objects, [shapes[0], shapes[1], env.joints[0], env.joints[1]]);
+  assert.equal(snapshot(env), before);
+  assert.equal(history.state.undoLabel, 'Create joint');
+});
+
+test('gizmo square and arrows move the target with grid snap of the pivot, one axis per arrow', () => {
+  const cases = [
+    ['square', [[272, 178], [295, 161]], [1.2, 0.2], 'move'],
+    ['x', [[290, 200], [313, 230]], [1.2, 0], 'ew-resize'],
+    ['y', [[250, 170], [277, 147]], [1, 0.2], 'ns-resize'],
+  ];
+  const env = chain({ snap: true });
+  const { model, tools, selection, history, calls, shapes, bodies, joints } = env;
+  selection.set([shapes[1]]);
+  const before = snapshot(env);
+  for (const [handle, points, expected, cursor] of cases) {
+    assert.equal(tools.handleAt({ x: points[0][0], y: points[0][1] }), handle);
+    send(tools, 'down', ...points[0]);
+    assert.equal(calls.cursor.at(-1), cursor, handle);
+    send(tools, 'move', ...points[1]);
+    send(tools, 'up', ...points[1]);
+    nearPair(model.prop(bodies[1], 'position'), expected, handle);
+    nearPair(model.prop(bodies[2], 'position'), [expected[0] + 1, expected[1]], handle);
+    nearPair(model.prop(joints[0], 'anchor'), [expected[0] - 0.5, expected[1]], handle);
+    assert.deepEqual(selection.objects, [shapes[1]]);
+    assert.equal(history.state.undoLabel, 'Move');
+    history.undo();
+    assert.equal(snapshot(env), before, handle);
+  }
+});
+
+test('gizmo ring rotates around the parent anchor, SHIFT in 15 degree steps, CTRL around the origin', () => {
+  const env = chain();
+  const { model, tools, selection, history, shapes, bodies } = env;
+  selection.set([shapes[1]]);
+  const before = snapshot(env);
+  assert.equal(tools.handleAt({ x: 322, y: 200 }), 'ring');
+  path(tools, [[322, 200], [301, 149], [250, 128]]);
+  nearPair(model.prop(bodies[1], 'position'), [0.5, 0.5]);
+  near(model.prop(bodies[1], 'angle'), Math.PI / 2);
+  nearPair(model.prop(bodies[2], 'position'), [0.5, 1.5]);
+  assert.equal(history.state.undoLabel, 'Rotate');
+  history.undo();
+  assert.equal(snapshot(env), before);
+  const ten = 10 * (Math.PI / 180);
+  path(tools, [[322, 200], [250 + 72 * Math.cos(ten), 200 - 72 * Math.sin(ten)]], { shift: true });
+  near(model.prop(bodies[1], 'angle'), Math.PI / 12);
+  history.undo();
+  hover(tools, 10, 10, { ctrl: true });
+  assert.equal(tools.handleAt({ x: 372, y: 200 }), 'ring');
+  path(tools, [[372, 200], [351, 149], [300, 128]], { ctrl: true });
+  nearPair(model.prop(bodies[1], 'position'), [1, 0]);
+  near(model.prop(bodies[1], 'angle'), Math.PI / 2);
+  nearPair(model.prop(bodies[2], 'position'), [1, 1]);
+});
+
+test('gizmo ring rotates a multi-selection around the average pivot, or the last selected one after Z', () => {
+  const env = chain();
+  const { model, tools, selection, history, actions, shapes, bodies } = env;
+  selection.set([shapes[2], shapes[1]]);
+  assert.deepEqual(ringAt(overlay(tools)), { x: 350, y: 200 });
+  path(tools, [[422, 200], [401, 149], [350, 128]]);
+  nearPair(model.prop(bodies[1], 'position'), [1.5, -0.5]);
+  nearPair(model.prop(bodies[2], 'position'), [1.5, 0.5]);
+  nearPair(model.prop(bodies[3], 'position'), [1.5, 1.5]);
+  history.undo();
+  actions.run('pivot-mode');
+  assert.deepEqual(ringAt(overlay(tools)), { x: 250, y: 200 });
+  path(tools, [[322, 200], [301, 149], [250, 128]]);
+  nearPair(model.prop(bodies[1], 'position'), [0.5, 0.5]);
+  nearPair(model.prop(bodies[2], 'position'), [0.5, 1.5]);
+});
+
+test('#127: the joint at the pivot is pressed as an object; a child joint under the X arrow loses to the arrow', () => {
+  const env = chain();
+  const { model, tools, selection, camera, shapes, bodies, joints } = env;
+  selection.set([shapes[1]]);
+  assert.equal(tools.handleAt({ x: 252, y: 200 }), null);
+  path(tools, [[252, 200], [252, 230]]);
+  assert.deepEqual(selection.objects, [joints[0]]);
+  nearPair(model.prop(joints[0], 'anchor'), [0.5, -0.3]);
+  assert.deepEqual(model.prop(bodies[1], 'position'), [1, 0]);
+  env.history.undo();
+  camera.zoomAt({ x: 200, y: 200 }, 0.4);
+  selection.set([shapes[1]]);
+  const child = camera.worldToScreen({ x: 1.5, y: 0 });
+  assert.deepEqual(child, { x: 260, y: 200 });
+  assert.equal(tools.handleAt(child), 'x');
+  path(tools, [[child.x, child.y], [child.x + 20, child.y + 20]]);
+  assert.deepEqual(selection.objects, [shapes[1]]);
+  nearPair(model.prop(bodies[1], 'position'), [1.5, 0]);
+  nearPair(model.prop(joints[1], 'anchor'), [2, 0]);
+});
+
+test('a handle click changes nothing; each drag is one undo step and a drag back leaves none', () => {
+  const env = chain();
+  const { tools, selection, history, shapes, bodies, model } = env;
+  selection.set([shapes[1]]);
+  const before = snapshot(env);
+  path(tools, [[272, 178], [273, 178]]);
+  path(tools, [[322, 200]]);
+  assert.deepEqual(selection.objects, [shapes[1]]);
+  assert.equal(snapshot(env), before);
+  assert.equal(history.state.undoLabel, 'Create joint');
+  path(tools, [[300, 232], [330, 232], [360, 232], [300, 232]]);
+  assert.equal(history.state.undoLabel, 'Create joint');
+  assert.equal(snapshot(env), before);
+  path(tools, [[300, 232], [330, 232], [360, 232]]);
+  assert.equal(history.undo(), true);
+  assert.equal(snapshot(env), before);
+  history.redo();
+  nearPair(model.prop(bodies[1], 'position'), [1.6, 0]);
+});
+
+test('Esc, Undo, a tool switch and a mode change mid-drag restore every value and keep the latch selection', () => {
+  const aborts = [
+    (env) => env.actions.run('escape'),
+    (env) => env.history.undo(),
+    (env) => env.tools.activate('select-box'),
+    (env) => env.modes.openClip(env.clip),
+  ];
+  for (const abort of aborts) {
+    for (const start of [[400, 230], [322, 200]]) {
+      const env = chain();
+      env.clip = addClipTo(env.history);
+      const { tools, selection, shapes } = env;
+      selection.set([shapes[1]]);
+      const before = snapshot(env);
+      send(tools, 'down', ...start);
+      send(tools, 'move', start[0] + 40, start[1] + 40);
+      assert.notEqual(snapshot(env), before);
+      abort(env);
+      send(tools, 'move', start[0] + 60, start[1]);
+      send(tools, 'up', start[0] + 60, start[1]);
+      const name = `${abort.toString()} ${start}`;
+      assert.equal(snapshot(env), before, name);
+      assert.deepEqual(selection.objects, start[0] === 400 ? [shapes[2]] : [shapes[1]], name);
+      assert.equal(env.history.state.undoLabel, 'Add clip', name);
+    }
+  }
+});
+
+test('handleAt, cursors and the readout', () => {
+  const { model, tools, selection, calls, shapes } = chain();
+  assert.equal(tools.handleAt({ x: 272, y: 178 }), null);
+  selection.set([shapes[1]]);
+  const expected = [
+    [272, 178, 'square', 'move'],
+    [290, 200, 'x', 'ew-resize'],
+    [250, 170, 'y', 'ns-resize'],
+    [322, 200, 'ring', 'pointer'],
+    [252, 200, null, 'move'],
+    [400, 230, null, 'move'],
+    [20, 20, null, 'default'],
+  ];
+  for (const [x, y, handle, cursor] of expected) {
+    assert.equal(tools.handleAt({ x, y }), handle, `${x},${y}`);
+    hover(tools, x, y);
+    assert.equal(calls.cursor.at(-1), cursor, `${x},${y}`);
+  }
+  assert.equal(tools.readout(), null);
+  send(tools, 'down', 272, 178);
+  send(tools, 'move', 274, 178);
+  assert.equal(tools.readout(), null);
+  send(tools, 'move', 302, 168);
+  const ppm = model.prop(ROOT_UID, 'units.pixelsPerMeter');
+  assert.deepEqual(tools.readout(), { text: formatMove({ x: 0.3, y: 0.1 }, ppm), screen: { x: 318, y: 184 } });
+  send(tools, 'up', 302, 168);
+  assert.equal(tools.readout(), null);
+  send(tools, 'down', 352, 190);
+  send(tools, 'move', 280, 118);
+  assert.match(tools.readout().text, /^Δθ: -?\d+\.\d°$/);
+  tools.cancel();
+  assert.equal(tools.readout(), null);
+});
+
+test('Animate and Simulate: no gizmo, object drags draw a box and nothing moves', () => {
+  const env = chain();
+  const { tools, selection, modes, history, calls, shapes } = env;
+  const before = snapshot(env);
+  selection.set([shapes[1]]);
+  modes.openClip(addClipTo(history));
+  for (const mode of ['animate', 'simulate']) {
+    if (mode === 'simulate') modes.startSimulate();
+    assert.deepEqual(overlay(tools), [], mode);
+    assert.equal(tools.handleAt({ x: 322, y: 200 }), null, mode);
+    hover(tools, 300, 232);
+    assert.equal(calls.cursor.at(-1), 'default', mode);
+    selection.set([shapes[1]]);
+    send(tools, 'down', 400, 230);
+    send(tools, 'move', 420, 300);
+    const box = overlay(tools);
+    assert.equal(box.length, 3, mode);
+    assert.equal(box[0][0], 'rect', mode);
+    send(tools, 'up', 420, 300);
+    assert.deepEqual(selection.objects, [], mode);
+    path(tools, [[322, 200], [250, 128]]);
+    assert.equal(snapshot(env), before, mode);
+  }
+});
+
+test('Select Box shows no gizmo and draws a box over the gizmo and objects', () => {
+  const env = chain();
+  const { tools, selection, shapes } = env;
+  const before = snapshot(env);
+  selection.set([shapes[1]]);
+  tools.activate('select-box');
+  assert.deepEqual(overlay(tools), []);
+  assert.equal(tools.handleAt({ x: 272, y: 178 }), null);
+  path(tools, [[272, 178], [290, 120], [360, 245]]);
+  assert.equal(snapshot(env), before);
+  assert.deepEqual(selection.objects, [env.joints[1]]);
+});
+
+test('overlay: the gizmo for the root, one body, one joint without a ring, and several objects with each pivot mark', () => {
+  const env = chain();
+  const { tools, selection, actions, history, shapes, joints } = env;
+  assert.deepEqual(overlay(tools), []);
+  history.execute(setProps([ROOT_UID], { position: [0, 1], angle: Math.PI / 2 }));
+  selection.set([ROOT_UID]);
+  assert.deepEqual(ringAt(overlay(tools)), { x: 200, y: 100 });
+  history.undo();
+  selection.set([shapes[1]]);
+  const body = overlay(tools);
+  assert.deepEqual(ringAt(body), { x: 250, y: 200 });
+  assert.deepEqual(body.at(-1), ['stroke', { width: LINE_WIDTH.outline, color: COLORS.gizmo }]);
+  selection.set([joints[1]]);
+  const joint = overlay(tools);
+  assert.equal(ringAt(joint), null);
+  assert.deepEqual(xArrowStart(joint), { x: 350, y: 200 });
+  selection.set([shapes[2], shapes[1], joints[2]]);
+  near(ringAt(overlay(tools)).x, 200 + (100 * (2 + 1 + 2.5)) / 3);
+  actions.run('pivot-mode');
+  const last = overlay(tools);
+  assert.deepEqual(ringAt(last), { x: 450, y: 200 });
+  assert.deepEqual(last.slice(-4)[0], ['circle', 450, 200, 4]);
+  actions.run('pivot-mode');
+  assert.equal(overlay(tools).at(-5)[0], 'moveTo');
+});
+
+test('overlay: the gizmo follows a move, stays during a rotation, highlights hover and the dragged handle, and gives way to a box', () => {
+  const { tools, selection, shapes } = chain();
+  selection.set([shapes[1]]);
+  hover(tools, 272, 178);
+  const hovered = overlay(tools);
+  const rect = hovered.findIndex(([method]) => method === 'rect');
+  assert.deepEqual(hovered[rect + 1], ['fill', { color: 0xffffff, alpha: 0.4 }]);
+  send(tools, 'down', 272, 178);
+  send(tools, 'move', 302, 168);
+  assert.deepEqual(ringAt(overlay(tools)), { x: 280, y: 190 });
+  send(tools, 'up', 302, 168);
+  hover(tools, 10, 10);
+  assert.deepEqual(ringAt(overlay(tools)), { x: 280, y: 190 });
+  send(tools, 'down', 352, 190);
+  send(tools, 'move', 280, 118);
+  const turning = overlay(tools);
+  assert.deepEqual(ringAt(turning), { x: 280, y: 190 });
+  assert.deepEqual(turning[1], ['stroke', { width: LINE_WIDTH.gizmo + 1, color: 0xffffff }]);
+  send(tools, 'up', 280, 118);
+  send(tools, 'down', 20, 380);
+  send(tools, 'move', 60, 300);
+  const box = overlay(tools);
+  assert.deepEqual(box.map(([method]) => method), ['rect', 'fill', 'stroke']);
+  tools.cancel();
+  assert.deepEqual(ringAt(overlay(tools)), { x: 280, y: 190 });
 });

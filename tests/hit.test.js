@@ -47,8 +47,15 @@ function uids(model, ...ids) {
 }
 
 test('style constants follow DESIGN §5.4', () => {
-  assert.deepEqual(COLORS, { highlight: 0x5b9cf5, invalid: 0xe5484d, gizmo: 0xd8dade });
-  assert.deepEqual(LINE_WIDTH, { outline: 1, selected: 2 });
+  assert.deepEqual(COLORS, {
+    highlight: 0x5b9cf5,
+    invalid: 0xe5484d,
+    gizmo: 0xd8dade,
+    gizmoX: 0xe0524f,
+    gizmoY: 0x58b85c,
+    gizmoFree: 0xf2c94c,
+  });
+  assert.deepEqual(LINE_WIDTH, { outline: 1, selected: 2, gizmo: 2 });
   assert.deepEqual(GIZMO_SIZE, {
     rootCross: 14,
     rootRing: 10,
@@ -57,11 +64,16 @@ test('style constants follow DESIGN §5.4', () => {
     jointNeedle: 20,
     aimArrow: 32,
     centerOfMass: 5,
-    rotateHandle: 40,
-    rotateKnob: 5,
+    arrowStart: 16,
+    arrowTip: 56,
+    arrowHead: 10,
+    arrowWidth: 8,
+    squareOffset: 16,
+    squareSize: 12,
+    rotateRing: 72,
     pivot: 4,
   });
-  assert.deepEqual(HIT_RADIUS, { joint: 8, root: 12, shape: 4, handle: 8 });
+  assert.deepEqual(HIT_RADIUS, { joint: 8, root: 12, shape: 4, handle: 8, gizmo: 6 });
   assert.equal(LABEL_SIZE, 11);
   for (const table of [COLORS, LINE_WIDTH, GIZMO_SIZE, HIT_RADIUS]) assert.ok(Object.isFrozen(table));
 });

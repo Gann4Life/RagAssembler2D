@@ -11,9 +11,10 @@ const entries = TOOL_BUTTONS.flat();
 test('TOOL_BUTTONS groups the TOOL_SPECS in table order', () => {
   assert.deepEqual(
     TOOL_BUTTONS.map((group) => group.map((entry) => entry.id)),
-    [['select', 'select-box'], ['manipulate', 'pose'], ['circle', 'box', 'polygon'], ['hinge']],
+    [['select', 'select-box'], ['pose'], ['circle', 'box', 'polygon'], ['hinge']],
   );
   assert.deepEqual(entries.map((entry) => entry.id), TOOL_SPECS.map((spec) => spec.id));
+  assert.ok(entries.every((entry) => entry.id !== 'manipulate' && entry.shortcut !== 'M'));
   assert.ok(Object.isFrozen(TOOL_BUTTONS));
   assert.ok(TOOL_BUTTONS.every((group) => Object.isFrozen(group) && group.every(Object.isFrozen)));
 });
@@ -24,7 +25,7 @@ test('TOOL_BUTTONS take label and shortcut from TOOL_SPECS', () => {
     assert.equal(entry.label, spec.label);
     assert.equal(entry.shortcut, spec.hotkey);
   }
-  assert.deepEqual(entries.map((entry) => entry.shortcut), ['V', 'B', 'M', 'P', 'C', 'R', 'N', 'H']);
+  assert.deepEqual(entries.map((entry) => entry.shortcut), ['V', 'B', 'P', 'C', 'R', 'N', 'H']);
 });
 
 test('TOOL_BUTTONS icons are bare SVG child markup without scripts or references', () => {
@@ -44,7 +45,7 @@ test('tool tooltips follow the header tooltip format', () => {
 });
 
 test('toolbarSize follows the DESIGN.md 5.5 metrics', () => {
-  assert.deepEqual(toolbarSize(1), { width: 40, height: 299 });
+  assert.deepEqual(toolbarSize(1), { width: 40, height: 265 });
   assert.deepEqual(toolbarSize(2), { width: 76, height: 149 });
   for (const columns of [0, 3, 1.5, '1', null, undefined, NaN]) {
     assert.throws(() => toolbarSize(columns), RangeError);
@@ -53,10 +54,10 @@ test('toolbarSize follows the DESIGN.md 5.5 metrics', () => {
 
 test('toolbarColumns switches to two columns below the one-column height plus both margins', () => {
   assert.equal(TOOLBAR_MARGIN, 8);
-  assert.equal(toolbarSize(1).height + 2 * TOOLBAR_MARGIN, 315);
-  assert.equal(toolbarColumns(315), 1);
-  assert.equal(toolbarColumns(314), 2);
-  assert.equal(toolbarColumns(314.9), 2);
+  assert.equal(toolbarSize(1).height + 2 * TOOLBAR_MARGIN, 281);
+  assert.equal(toolbarColumns(281), 1);
+  assert.equal(toolbarColumns(280), 2);
+  assert.equal(toolbarColumns(280.9), 2);
   assert.equal(toolbarColumns(168), 2);
   assert.equal(toolbarColumns(1000), 1);
   for (const height of [0, -10, NaN, Infinity, -Infinity, undefined, null]) {

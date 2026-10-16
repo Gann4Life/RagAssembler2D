@@ -14,7 +14,6 @@ import { selectBoxTool } from './tools/select-box.js';
 import { circleTool } from './tools/circle.js';
 import { boxTool } from './tools/box.js';
 import { hingeTool } from './tools/hinge.js';
-import { manipulateTool } from './tools/manipulate.js';
 
 /**
  * Editor core, shared by every UI module.
@@ -31,13 +30,14 @@ import { manipulateTool } from './tools/manipulate.js';
 
 const MODE_NAMES = Object.freeze({ edit: 'Edit', animate: 'Animate', simulate: 'Simulate' });
 
-const TOOLS = Object.freeze([selectTool, selectBoxTool, manipulateTool, circleTool, boxTool, hingeTool]);
+const TOOLS = Object.freeze([selectTool, selectBoxTool, circleTool, boxTool, hingeTool]);
 
 /**
  * Builds the editor core without DOM: model, history, selection, modes, settings, camera, tool registry and
  * actions. The tool registry is the first `mode` listener, so a mode change cancels the operation in progress
  * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
- * per registered tool, and the `delete`, `add-shape` and `add-joint` actions.
+ * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
+ * and the `delete`, `add-shape` and `add-joint` actions.
  * @param {{ settings?: Settings }} [options] Restored editor settings; defaults when omitted.
  * @returns {Readonly<Editor>} The editor.
  * @throws {TypeError} When `settings` is given and is not a `Settings` instance.
@@ -81,6 +81,11 @@ export function createEditor({ settings = Settings.restore(undefined).settings }
       reason: () => modeReason(tool.capability),
     });
   }
+
+  actions.register('pivot-mode', {
+    run: () => settings.set('gizmo.pivot', settings.get('gizmo.pivot') === 'center' ? 'last' : 'center'),
+    isEnabled: () => !history.inGesture,
+  });
 
   const canEditRest = () => modes.can('edit.rest') && !history.inGesture;
   actions.register('delete', {
