@@ -1,6 +1,6 @@
 import { createJoint } from '../commands/create.js';
 import { jointBetween, orderJointBodies } from '../model/queries.js';
-import { jointZeroAngle, placement } from '../viewport/placement.js';
+import { placement } from '../viewport/placement.js';
 import { snapAngle } from '../viewport/snap.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../viewport/style.js';
 import { formatLimits } from './joint-limits.js';
@@ -96,7 +96,7 @@ export function hingeTool() {
       const pair = hingePair(ctx.model, ctx.hitTest(e.screen));
       if (!pair) return;
       const anchor = ctx.snapPoint(e.world);
-      const zero = jointZeroAngle(anchor, placement(ctx.model).bodies.get(pair.bodyB));
+      const zero = placement(ctx.model).root.angle + 0;
       press = { screen: e.screen, anchor, pair, zero, dragging: false, last: e, phi: 0 };
       ctx.setCursor(null);
       ctx.invalidateOverlay();

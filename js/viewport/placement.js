@@ -7,11 +7,10 @@ import { ROOT_UID } from '../model/model.js';
  * @property {import('../../lib/geometry.js').Transform} root Root transform.
  * @property {Map<number, import('../../lib/geometry.js').Transform>} bodies Body world transforms by uid.
  * @property {Map<number, import('../../lib/geometry.js').Vec2>} anchors Joint anchors by uid; may be non-finite for malformed data.
- * @property {Map<number, number|null>} zero Joint zero directions by uid, world radians; `null` without a valid `bodyA`, `bodyB` and anchor.
+ * @property {Map<number, number|null>} zero Joint zero directions by uid, world radians (the root's +X at rest,
+ *   turned with `bodyA`); `null` without a valid `bodyA`, `bodyB` and anchor.
  * @property {Map<number, number>} angles Current joint angles by uid, radians, 0 at rest.
  */
-
-const COINCIDENT = 1e-9;
 
 function vec(value) {
   return Array.isArray(value) ? { x: value[0], y: value[1] } : { x: Number.NaN, y: Number.NaN };
@@ -22,20 +21,6 @@ function restTransform(props) {
   return { x: position[0], y: position[1], angle: props.angle ?? 0 };
 }
 
-/**
- * Rest-pose zero direction of a joint: from the anchor to bodyB's origin, or bodyB's +X when they coincide.
- * Both arguments are in the same frame, and so is the result.
- * @param {import('../../lib/geometry.js').Vec2} anchor Joint anchor, meters.
- * @param {import('../../lib/geometry.js').Transform} bodyBTransform BodyB transform.
- * @returns {number} Direction, radians.
- */
-export function jointZeroAngle(anchor, bodyBTransform) {
-  const dx = bodyBTransform.x - anchor.x;
-  const dy = bodyBTransform.y - anchor.y;
-  if (Math.hypot(dx, dy) <= COINCIDENT) return bodyBTransform.angle + 0;
-  return Math.atan2(dy, dx) + 0;
-}
-
 function bodyUidOf(model, id) {
   if (typeof id !== 'string') return null;
   const uid = model.uidOf(id);
@@ -44,8 +29,9 @@ function bodyUidOf(model, id) {
 
 /**
  * Places the root, bodies and joints as displayed: bodies take their pose transform when given, else their
- * rest transform; a joint anchor keeps its rest position relative to `bodyA`. Joint zero directions are the
- * rest zero direction turned with `bodyA`, and joint angles are bodyB's rotation relative to bodyA since rest.
+ * rest transform; a joint anchor keeps its rest position relative to `bodyA`. A joint's zero direction is the
+ * root's +X at rest, turned with `bodyA` since rest, and joint angles are bodyB's rotation relative to bodyA since
+ * rest.
  * @param {import('../model/model.js').Model} model Document model.
  * @param {import('./bounds.js').Pose|null} [pose] Root-local body transforms replacing the rest pose.
  * @returns {Placement} World placement.
@@ -78,7 +64,7 @@ export function placement(model, pose = null) {
       const restB = rest.get(bodyB);
       const shownB = local.get(bodyB);
       const turn = shownA.angle - restA.angle;
-      zero.set(uid, jointZeroAngle(anchor, restB) + turn + root.angle);
+      zero.set(uid, turn + root.angle + 0);
       angles.set(uid, shownB.angle - shownA.angle - (restB.angle - restA.angle) + 0);
     } else {
       zero.set(uid, null);

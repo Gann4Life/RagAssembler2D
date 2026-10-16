@@ -5,6 +5,7 @@ import { ROOT_UID } from '../js/model/model.js';
 import { createJoint, createShapeBody } from '../js/commands/create.js';
 import { setProps } from '../js/commands/props.js';
 import { hingeLimits, hingePair, hingeTool } from '../js/tools/hinge.js';
+import { placement } from '../js/viewport/placement.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../js/viewport/style.js';
 import { defaultsOf } from '../lib/schema.js';
 
@@ -526,16 +527,31 @@ test('overlay: circle and needle after the press, the arc from lower to upper on
   send(registry, 'up', 250, 300);
 });
 
-test('overlay: the needle points toward bodyB origin and cancel clears it', () => {
-  const { registry, view, shapes } = environment();
+test('overlay: the needle points along the root +X, not toward bodyB, and cancel clears it', () => {
+  const { registry, view, history, shapes } = environment();
   view.hits = [shapes[0], shapes[1]];
   send(registry, 'down', px(0.5), py(-0.5));
-  const needle = overlayOf(registry)[2];
-  const half = Math.SQRT1_2 * GIZMO_SIZE.jointNeedle;
-  nearCall(needle, ['lineTo', px(0.5) + half, py(-0.5) - half]);
+  nearCall(overlayOf(registry)[2], ['lineTo', px(0.5) + GIZMO_SIZE.jointNeedle, py(-0.5)]);
   assert.equal(registry.cancel(), true);
   assert.deepEqual(overlayOf(registry), []);
   send(registry, 'up', px(0.5), py(-0.5));
+  history.execute(setProps([ROOT_UID], { angle: Math.PI / 2 }, 'Turn root'));
+  send(registry, 'down', 200, 150);
+  nearCall(overlayOf(registry)[2], ['lineTo', 200, 150 - GIZMO_SIZE.jointNeedle]);
+  registry.cancel();
+  send(registry, 'up', 200, 150);
+});
+
+test('phi is measured from the root +X even when bodyB lies elsewhere: up is upper 90, down is lower -90', () => {
+  for (const [to, lower, upper] of [
+    [[250, 100], 0, 90],
+    [[250, 300], -90, 0],
+  ]) {
+    const { model, registry, view, shapes } = environment({ positions: [[0.5, -1], [0.5, 1]] });
+    view.hits = [shapes[1], shapes[0]];
+    gesture(registry, [[250, 200], to, to]);
+    limitsAre(model, lower, upper);
+  }
 });
 
 test('the created joint gets the gizmo the preview showed', () => {
@@ -544,9 +560,11 @@ test('the created joint gets the gizmo the preview showed', () => {
   send(registry, 'down', px(0.47), py(-0.48));
   const preview = overlayOf(registry);
   send(registry, 'up', px(0.47), py(-0.48));
-  const anchor = lastJoint(model).props.anchor;
+  const { uid, props } = lastJoint(model);
+  const { anchor } = props;
   nearCall(preview[0], ['circle', px(anchor[0]), py(anchor[1]), GIZMO_SIZE.jointCircle]);
-  const zero = Math.atan2(0 - anchor[1], 1 - anchor[0]);
+  const zero = placement(model).zero.get(uid);
+  near(zero, 0);
   nearCall(preview[2], [
     'lineTo',
     px(anchor[0]) + Math.cos(zero) * GIZMO_SIZE.jointNeedle,

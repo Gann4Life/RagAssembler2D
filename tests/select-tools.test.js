@@ -1156,6 +1156,27 @@ test('limits: one joint shows the ring only when its range can rotate', () => {
   assert.equal(env.tools.handleAt({ x, y }), null);
 });
 
+test('limits: handles and the reference line use the root +X as zero, not the direction to bodyB', () => {
+  const env = limitChain();
+  env.history.execute(setProps([env.bodies[2]], { position: [1.5, 1] }));
+  env.history.execute(setProps([env.bodies[3]], { position: [1.5, 2] }));
+  env.selection.set([env.joints[1]]);
+  const [ux, uy] = ringPoint(45);
+  const [lx, ly] = ringPoint(-30);
+  assert.equal(env.tools.handleAt({ x: ux, y: uy }), 'limit-upper');
+  assert.equal(env.tools.handleAt({ x: lx, y: ly }), 'limit-lower');
+  const calls = overlay(env.tools);
+  const line = calls.findIndex(([method, x, y]) => method === 'moveTo' && x === 356 && y === 200);
+  assert.ok(line > 0);
+  assert.deepEqual(calls[line + 1], ['lineTo', 422, 200]);
+  env.history.execute(setProps([ROOT_UID], { angle: Math.PI / 2 }));
+  env.selection.set([env.joints[1]]);
+  const anchor = env.camera.worldToScreen({ x: 0, y: 1.5 });
+  const turned = (Math.PI / 2) + Math.PI / 4;
+  const upper = { x: anchor.x + 72 * Math.cos(turned), y: anchor.y - 72 * Math.sin(turned) };
+  assert.equal(env.tools.handleAt(upper), 'limit-upper');
+});
+
 test('limits: handles win over the ring, the square still wins, and a lower / upper tie goes to lower', () => {
   const { tools } = limitChain();
   const [ux, uy] = ringPoint(45);
