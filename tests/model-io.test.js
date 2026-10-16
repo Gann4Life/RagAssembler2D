@@ -4,7 +4,7 @@ import { createEditor } from '../js/editor.js';
 import { ROOT_UID } from '../js/model/model.js';
 import { createJoint, createShapeBody } from '../js/commands/create.js';
 import { Model } from '../js/model/model.js';
-import { loadJson, newDocument, toJson, uidAtPath } from '../js/model/io.js';
+import { loadJson, newDocument, ragFileName, saveJson, toJson, uidAtPath } from '../js/model/io.js';
 import { serialize } from '../lib/serialize.js';
 import { ragFile } from './helpers/rag-file.js';
 import { FORMAT, FORMAT_VERSION, defaultsOf } from '../lib/schema.js';
@@ -218,4 +218,60 @@ test('uidAtPath maps problem paths to model nodes and gives null otherwise', () 
     ['bodies/0', null],
   ];
   for (const [pointer, uid] of table) assert.equal(uidAtPath(model, pointer), uid, pointer);
+});
+test('saveJson blocks a document with errors and changes nothing', () => {
+  const editor = createEditor();
+  const before = editor.history.dirty;
+  const result = saveJson(editor.model, 'dev');
+  assert.equal(result.ok, false);
+  assert.equal(result.text, null);
+  assert.equal(result.fileName, null);
+  assert.ok(result.errors.length > 0);
+  assert.equal(Object.isFrozen(result.errors), true);
+  assert.equal(editor.history.dirty, before);
+});
+
+test('saveJson gives the canonical text and file name, with warnings allowed', () => {
+  const model = new Model();
+  loadJson(model, serialize({ ...ragFile(), meta: { name: 'sample', editorVersion: '1.2.3' } }));
+  const result = saveJson(model, '1.2.3');
+  assert.equal(result.ok, true);
+  assert.deepEqual([...result.errors], []);
+  assert.ok(result.warnings.length > 0);
+  assert.equal(result.fileName, 'sample.rag.json');
+  assert.equal(result.text, serialize(toJson(model, '1.2.3')));
+  assert.throws(() => saveJson(model, ''), TypeError);
+});
+
+test('ragFileName sanitizes the root name', () => {
+  const table = [
+    ['Humanoid', 'Humanoid.rag.json'],
+    ['a/b: c', 'a_b_ c.rag.json'],
+    [' .. ', 'ragdoll.rag.json'],
+    ['', 'ragdoll.rag.json'],
+    ['con', 'ragdoll.rag.json'],
+    ['CON.txt', 'ragdoll.rag.json'],
+    ['Lpt9.x.y', 'ragdoll.rag.json'],
+    ['com0', 'com0.rag.json'],
+    ['console', 'console.rag.json'],
+    ['a\tb', 'a_b.rag.json'],
+    ['a\u0001b', 'a_b.rag.json'],
+    ['a \u00a0  b', 'a b.rag.json'],['a\n b', 'a_ b.rag.json'],
+    ['  .hidden. ', 'hidden.rag.json'],
+    ['x<>:"/\\|?*y', 'x_________y.rag.json'],
+    [42, 'ragdoll.rag.json'],
+    [undefined, 'ragdoll.rag.json'],
+  ];
+  for (const [name, expected] of table) assert.equal(ragFileName(name), expected, JSON.stringify(name));
+  for (const device of ['PRN', 'aux', 'NUL', 'com1', 'COM9', 'lpt1']) {
+    assert.equal(ragFileName(device), 'ragdoll.rag.json', device);
+    assert.equal(ragFileName(`${device}.v2`), 'ragdoll.rag.json', device);
+  }
+});
+
+test('ragFileName cuts to 100 code points without splitting a surrogate pair', () => {
+  assert.equal(ragFileName('a'.repeat(150)), `${'a'.repeat(100)}.rag.json`);
+  const emoji = '\u{1F600}'.repeat(150);
+  assert.equal(ragFileName(emoji), `${'\u{1F600}'.repeat(100)}.rag.json`);
+  assert.equal(ragFileName(`${'a'.repeat(98)}. b`), `${'a'.repeat(98)}.rag.json`);
 });

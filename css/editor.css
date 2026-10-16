@@ -879,6 +879,8 @@ body.dock-resizing-column * {
 }
 
 .confirm-items {
+  max-height: 40vh;
+  overflow-y: auto;
   margin: 0;
   padding-left: 20px;
   color: var(--text-muted);

@@ -8,7 +8,7 @@ import { Modes } from './modes.js';
 import { ActionRegistry } from './actions.js';
 import { Settings } from './settings.js';
 import { DEV_VERSION } from './version.js';
-import { newDocument } from './model/io.js';
+import { loadJson, newDocument, saveJson } from './model/io.js';
 import { Camera } from './viewport/camera.js';
 import { ToolRegistry } from './tools/registry.js';
 import { selectTool } from './tools/select.js';
@@ -30,12 +30,33 @@ import { hingeTool } from './tools/hinge.js';
  * @property {Camera} camera Viewport camera; not undoable.
  * @property {ToolRegistry} tools Viewport tool registry; not undoable.
  * @property {() => string} editorVersion Version of the running editor; `dev` until known.
+ * @property {(read: () => Promise<string|null>) => Promise<boolean>} loadFrom Loads the text `read` supplies
+ *   (`null`: nothing chosen), confirming first when there are unsaved changes; resolves whether the document was
+ *   replaced and never rejects. `read` is called synchronously. Used by the `load` action and by file drops.
+ */
+
+/**
+ * Browser file I/O injected into the editor.
+ * @typedef {object} FileService
+ * @property {() => Promise<string|null>} openText Shows the file picker; resolves the chosen file's text, `null`
+ *   when cancelled, rejects when the file cannot be read.
+ * @property {(fileName: string, text: string) => void} saveText Starts the download of `text` as `fileName`.
+ */
+
+/**
+ * What a core action tells the user; rendered by the message dialog.
+ * @typedef {object} Notice
+ * @property {'load-error'|'load-notes'|'save-error'} kind What reports.
+ * @property {string} title Dialog heading.
+ * @property {string} message Plain-text sentence or two.
+ * @property {ReadonlyArray<string>} items At most 50 plain-text lines, then `and N more`; may be empty.
+ * @property {string} closeLabel Label of the close button.
  */
 
 /**
  * What a core action asks the user to confirm before a destructive step; rendered by the confirmation dialog.
  * @typedef {object} ConfirmRequest
- * @property {'delete'|'new'} kind What asks.
+ * @property {'delete'|'new'|'load'} kind What asks.
  * @property {string} title Dialog heading.
  * @property {string} message Plain-text sentence or two.
  * @property {ReadonlyArray<string>} items Plain-text list under the message; may be empty.
@@ -92,6 +113,63 @@ function newRequest() {
   });
 }
 
+function loadRequest() {
+  return Object.freeze({
+    kind: 'load',
+    title: 'Discard unsaved changes?',
+    message: 'Loading a file discards the changes made since the last save. This cannot be undone.',
+    items: Object.freeze([]),
+    confirmLabel: 'Discard',
+    cancelLabel: 'Cancel',
+  });
+}
+
+const MAX_NOTICE_ITEMS = 50;
+
+function problemLine({ path, message }) {
+  return path === '' || path === undefined ? message : `${path}: ${message}`;
+}
+
+function cappedItems(lines) {
+  if (lines.length <= MAX_NOTICE_ITEMS) return Object.freeze([...lines]);
+  return Object.freeze([...lines.slice(0, MAX_NOTICE_ITEMS), `and ${lines.length - MAX_NOTICE_ITEMS} more`]);
+}
+
+function notice(kind, title, message, lines) {
+  return Object.freeze({ kind, title, message, items: cappedItems(lines), closeLabel: 'OK' });
+}
+
+function loadErrorNotice(errors) {
+  return notice(
+    'load-error',
+    'Cannot load file',
+    `The file has ${countOf(errors.length, 'error')} and was not loaded. The current ragdoll is unchanged.`,
+    errors.map(problemLine),
+  );
+}
+
+function readErrorNotice() {
+  return notice('load-error', 'Cannot load file', 'The file could not be read. The current ragdoll is unchanged.', []);
+}
+
+function loadNotesNotice(notes, warnings) {
+  return notice(
+    'load-notes',
+    'File loaded with notes',
+    'The file was loaded. Migrations, dropped fields and warnings are listed below.',
+    [...notes, ...warnings.map(problemLine)],
+  );
+}
+
+function saveErrorNotice(errors) {
+  return notice(
+    'save-error',
+    'Cannot save',
+    `The ragdoll has ${countOf(errors.length, 'error')}. Fix them and save again.`,
+    errors.map(problemLine),
+  );
+}
+
 const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, boxTool, hingeTool]);
 
 /**
@@ -99,23 +177,33 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * actions. The tool registry is the first `mode` listener, so a mode change cancels the operation in progress
  * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
  * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
- * and the `delete`, `add-shape` and `add-joint` actions.
+ * and the `delete`, `add-shape`, `add-joint`, `new` actions, plus `load` and `save` when `files` is given.
  * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null,
- *   confirm?: (request: ConfirmRequest) => Promise<boolean>, editorVersion?: () => string }} [options] Restored editor settings, defaults when
+ *   confirm?: (request: ConfirmRequest) => Promise<boolean>, notify?: (notice: Notice) => Promise<void>,
+ *   files?: FileService|null, editorVersion?: () => string }} [options] Restored editor settings, defaults when
  *   omitted; physics service for the Pose tool, `null` when omitted; how actions ask before a destructive step,
- *   always confirming when omitted; getter of the running editor's version, `dev` when omitted.
+ *   always confirming when omitted; how actions report to the user, ignoring notices when omitted; file picker and
+ *   download, `null` when omitted (`load` and `save` are then not registered); getter of the running editor's
+ *   version, `dev` when omitted.
  * @returns {Readonly<Editor>} The editor.
- * @throws {TypeError} When `settings` is given and is not a `Settings` instance, or `confirm` is given and is not
- *   a function, or `editorVersion` is given and is not a function.
+ * @throws {TypeError} When `settings` is given and is not a `Settings` instance, `confirm` or `notify` is given
+ *   and is not a function, `files` is neither `null` nor an object with `openText` and `saveText` functions, or
+ *   `editorVersion` is given and is not a function.
  */
 export function createEditor({
   settings = Settings.restore(undefined).settings,
   physics = null,
   confirm = () => Promise.resolve(true),
+  notify = () => Promise.resolve(),
+  files = null,
   editorVersion = () => DEV_VERSION,
 } = {}) {
   if (!(settings instanceof Settings)) throw new TypeError('settings must be a Settings instance');
   if (typeof confirm !== 'function') throw new TypeError('confirm must be a function');
+  if (typeof notify !== 'function') throw new TypeError('notify must be a function');
+  if (files !== null && (typeof files?.openText !== 'function' || typeof files.saveText !== 'function')) {
+    throw new TypeError('files must be null or provide openText and saveText functions');
+  }
   if (typeof editorVersion !== 'function') throw new TypeError('editorVersion must be a function');
   const model = new Model();
   const history = new History(model);
@@ -209,7 +297,14 @@ export function createEditor({
       return rootOnly && !history.inGesture && !confirming ? 'the ragdoll root cannot be deleted' : null;
     },
   });
-  const canNew = () => canEditRest() && !confirming;
+  const canFile = () => modes.can('file') && !history.inGesture && !confirming;
+  const tell = (message) => {
+    try {
+      Promise.resolve(notify(message)).catch(() => {});
+    } catch {
+      return;
+    }
+  };
   actions.register('new', {
     run: () => {
       if (!history.dirty) {
@@ -217,12 +312,52 @@ export function createEditor({
         return undefined;
       }
       return ask(newRequest()).then((accepted) => {
-        if (accepted && canNew()) newDocument(model);
+        if (accepted && canFile()) newDocument(model);
       });
     },
-    isEnabled: canNew,
-    reason: () => modeReason('edit.rest'),
+    isEnabled: canFile,
+    reason: () => modeReason('file'),
   });
+
+  const loadFrom = async (read) => {
+    if (!canFile()) return false;
+    let text;
+    try {
+      text = await read();
+    } catch {
+      tell(readErrorNotice());
+      return false;
+    }
+    if (text === null || !canFile()) return false;
+    if (history.dirty && !((await ask(loadRequest())) && canFile())) return false;
+    const result = loadJson(model, text);
+    if (!result.ok) {
+      tell(loadErrorNotice(result.errors));
+      return false;
+    }
+    if (result.notes.length > 0 || result.warnings.length > 0) tell(loadNotesNotice(result.notes, result.warnings));
+    return true;
+  };
+  if (files !== null) {
+    actions.register('load', {
+      run: () => loadFrom(files.openText),
+      isEnabled: canFile,
+      reason: () => modeReason('file'),
+    });
+    actions.register('save', {
+      run: () => {
+        const result = saveJson(model, editorVersion());
+        if (!result.ok) {
+          tell(saveErrorNotice(result.errors));
+          return;
+        }
+        files.saveText(result.fileName, result.text);
+        history.markSaved();
+      },
+      isEnabled: canFile,
+      reason: () => modeReason('file'),
+    });
+  }
   actions.register('add-shape', {
     run: () => {
       const { width, height } = defaultsOf('shape', 'box').shape;
@@ -243,5 +378,5 @@ export function createEditor({
     reason: () => modeReason('edit.rest'),
   });
 
-  return Object.freeze({ model, history, selection, modes, actions, settings, camera, tools, editorVersion });
+  return Object.freeze({ model, history, selection, modes, actions, settings, camera, tools, editorVersion, loadFrom });
 }

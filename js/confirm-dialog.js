@@ -46,6 +46,36 @@ export function confirmKey(event, focused) {
  * @returns {Promise<boolean>} `true` when confirmed, `false` when cancelled.
  */
 export function confirmDialog(doc, { title, message, items = [], confirmLabel, cancelLabel }) {
+  return openDialog(doc, { title, message, items, confirmLabel, cancelLabel });
+}
+
+/**
+ * Content of a message dialog.
+ * @typedef {object} NoticeOptions
+ * @property {string} title Dialog heading.
+ * @property {string} message Plain-text message.
+ * @property {ReadonlyArray<string>} [items] Plain-text list under the message; omitted from the dialog when empty.
+ * @property {string} closeLabel Label of the only button.
+ */
+
+/**
+ * Opens the message variant of the shared dialog: same element, roles, focus return and one-dialog-at-a-time
+ * rule as {@link confirmDialog}, with a single close button and no Cancel. Enter, Esc, the button, the native
+ * `cancel` event and a click on the backdrop close it; Tab keeps focus on the button. A call while a dialog is
+ * open resolves at once and logs the title with `console.warn`. Never rejects.
+ * @param {Document} doc The document that hosts the dialog.
+ * @param {NoticeOptions} options Dialog content.
+ * @returns {Promise<void>} Resolves when the dialog closes.
+ */
+export function noticeDialog(doc, { title, message, items = [], closeLabel }) {
+  if (dialogOpen) {
+    console.warn(`Message not shown, another dialog is open: ${title}`);
+    return Promise.resolve();
+  }
+  return openDialog(doc, { title, message, items, confirmLabel: closeLabel, cancelLabel: null }).then(() => undefined);
+}
+
+function openDialog(doc, { title, message, items, confirmLabel, cancelLabel }) {
   if (dialogOpen) return Promise.resolve(false);
   dialogOpen = true;
   const previous = doc.activeElement;
@@ -73,13 +103,19 @@ export function confirmDialog(doc, { title, message, items = [], confirmLabel, c
           items.map((item) => element('li', { textContent: item })),
         )
       : null;
-  const cancelButton = element('button', { type: 'button', className: 'confirm-button', textContent: cancelLabel });
+  const cancelButton =
+    cancelLabel === null
+      ? null
+      : element('button', { type: 'button', className: 'confirm-button', textContent: cancelLabel });
   const confirmButton = element('button', {
     type: 'button',
     className: 'confirm-button confirm-primary',
     textContent: confirmLabel,
   });
-  const actions = element('div', { className: 'confirm-actions' }, [cancelButton, confirmButton]);
+  const actions = element('div', { className: 'confirm-actions' }, [
+    ...(cancelButton ? [cancelButton] : []),
+    confirmButton,
+  ]);
   dialog.append(element('div', { className: 'confirm-content' }, [heading, text, ...(list ? [list] : []), actions]));
 
   return new Promise((resolve) => {
@@ -95,6 +131,7 @@ export function confirmDialog(doc, { title, message, items = [], confirmLabel, c
       event.preventDefault();
       if (outcome === 'confirm') close(true);
       else if (outcome === 'cancel') close(false);
+      else if (cancelButton === null) confirmButton.focus();
       else (focusedPart() === 'confirm' ? cancelButton : confirmButton).focus();
     };
     const close = (result) => {
@@ -108,7 +145,7 @@ export function confirmDialog(doc, { title, message, items = [], confirmLabel, c
     };
     const focusedPart = () => {
       if (doc.activeElement === confirmButton) return 'confirm';
-      if (doc.activeElement === cancelButton) return 'cancel';
+      if (cancelButton !== null && doc.activeElement === cancelButton) return 'cancel';
       return 'other';
     };
 
@@ -119,7 +156,7 @@ export function confirmDialog(doc, { title, message, items = [], confirmLabel, c
     dialog.addEventListener('click', (event) => {
       if (event.target === dialog) close(false);
     });
-    cancelButton.addEventListener('click', () => close(false));
+    cancelButton?.addEventListener('click', () => close(false));
     confirmButton.addEventListener('click', () => close(true));
     doc.addEventListener('keydown', onKeydown, true);
 
