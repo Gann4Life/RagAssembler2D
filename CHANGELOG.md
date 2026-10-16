@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-16
+
+### Added
+- Pose tool (P) in Edit mode: hold a body and drag it to test the rig with physics, without gravity; the rest of the ragdoll is damped and does not collide with itself, and releasing restores the rest pose without changing the document.
+
 ## [0.3.0] - 2026-10-16
 
 ### Added

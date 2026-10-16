@@ -18,6 +18,7 @@ const ESCAPE_KEYS = new Set(['Escape', 'Esc']);
  * @property {import('../modes.js').Modes} modes Modes and policy.
  * @property {import('../settings.js').Settings} settings Editor settings.
  * @property {import('../viewport/camera.js').Camera} camera Viewport camera.
+ * @property {import('./tool.js').PhysicsService|null} [physics] Physics service; `null` when omitted.
  */
 
 /**
@@ -194,6 +195,18 @@ export class ToolRegistry {
   }
 
   /**
+   * Forwards the frame time to the active tool. A tool that throws during a press cancels it and the error is
+   * rethrown.
+   * @param {number} seconds Time since the previous frame, seconds.
+   * @returns {void}
+   */
+  tick(seconds) {
+    const tool = this.#active;
+    if (!tool) return;
+    this.#run(() => tool.tick(seconds));
+  }
+
+  /**
    * Clears the graphics and lets the active tool draw on it, in screen space.
    * @param {{ clear(): unknown }} g `PIXI.Graphics` of the tool overlay.
    * @returns {void}
@@ -264,6 +277,8 @@ export class ToolRegistry {
         this.#applyCursor();
       },
       invalidateOverlay: () => this.#invalidate(),
+      setPose: (pose) => this.#view?.setPose?.(pose ?? null),
+      physics: this.#core.physics ?? null,
     });
   }
 

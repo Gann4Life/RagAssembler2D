@@ -2,6 +2,9 @@
 
 Newest first. See the [index](../decisions.md).
 
+## 2026-10-16
+- **`js/model/io.js` is created by #145 with `toJson(model)` only,** not by #27. It returns plain copies in the file data shape (format, version, `ragdoll` and collections), with no canonical order, rounding, migration or validation; #27 adds Save formatting through `lib/serialize.js` and the load path. Reason: the Pose tool is the first consumer of the model export, and the same function is what Save and Simulate mode need, so nothing is thrown away. Supersedes the `js/model/io.js` part of the earlier "Shared helper modules are created by their first consumer" entry. (DESIGN §5.5, §6; docs/architecture/tools-pose.md)
+
 ## 2026-10-14
 - **`reset` gives every node except the root a fresh uid,** and defaults to cause `new`; `applyOps` defaults to cause `do`. Reason: history and selection are cleared on reset, so no stale uid may alias a new node. (docs/architecture.md, Document model)
 - **`nextId(prefix)` takes `b`, `f`, `j` or `s`** and returns `<prefix>_<n>` above every matching string seen in any prop in the session, references included; counters survive `reset` and never go down. "Never reused" therefore holds within a session, not across save and reload. Reason: a dangling reference in a draft or invalid file must never bind to a new object, and the editor has nowhere to persist a counter without a format change. (DESIGN §1; docs/architecture.md, Document model)

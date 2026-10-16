@@ -147,8 +147,9 @@ test('escape cancels an open gesture, else clears the selection', () => {
 });
 
 const SELECTION_TOOLS = ['select', 'select-box'];
+const MANIPULATION_TOOLS = ['pose'];
 const CREATION_TOOLS = ['circle', 'box', 'hinge'];
-const REGISTERED_TOOLS = [...SELECTION_TOOLS, ...CREATION_TOOLS];
+const REGISTERED_TOOLS = [...SELECTION_TOOLS, ...MANIPULATION_TOOLS, ...CREATION_TOOLS];
 
 test('createEditor builds a tool registry with the built tools, Select active', () => {
   const editor = createEditor();
@@ -173,7 +174,7 @@ test('tool actions of registered tools activate them in Edit mode and follow the
     assert.equal(actions.isEnabled(action), true, action);
     assert.equal(actions.reason(action), null, action);
   }
-  for (const id of CREATION_TOOLS) {
+  for (const id of [...MANIPULATION_TOOLS, ...CREATION_TOOLS]) {
     const action = `tool:${id}`;
     assert.equal(actions.isEnabled(action), false, action);
     assert.equal(actions.reason(action), 'not available in Simulate mode', action);
@@ -439,4 +440,13 @@ test('Del through dispatchKey deletes the selection', () => {
   assert.deepEqual(model.children(ROOT_UID, 'bodies'), []);
   assert.deepEqual(model.children(ROOT_UID, 'joints'), []);
   assert.deepEqual(selection.objects, []);
+});
+
+test('P activates Pose in Edit mode', () => {
+  const { actions, tools } = createEditor({ physics: { startPose: () => null } });
+  const event = { key: 'p', target: { tagName: 'BODY' }, preventDefault() {} };
+  assert.equal(actions.isEnabled('tool:pose'), true);
+  assert.equal(actions.reason('tool:pose'), null);
+  assert.equal(dispatchKey(event, { actions, tools, viewportFocused: true }), true);
+  assert.equal(tools.active?.id, 'pose');
 });
