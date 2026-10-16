@@ -13,12 +13,20 @@ Location: top, full width. One toolbar row with four button groups divided by se
 - **Unavailable actions** use `aria-disabled` and stay focusable, so keyboard users can still reach them. The tooltip adds the reason: "(not available yet)" for an action that is not built, "(not available in *Mode* mode)" for one the mode policy disables ([§5.1](05-1-modes.md#51-editor-modes)), and nothing when only the current state disables it (e.g. Undo with nothing to undo).
 - If the window is narrower than the row, the header scrolls horizontally. Buttons never wrap.
 
+- **Unsaved changes** means the document differs from its state at the last Save, New or Load (Undo back to that state clears it).
+- **Messages** (load errors, load notes, save errors) open in a modal message dialog with a title, a sentence, a list and a single OK button; Enter, Esc or OK close it. The list shows at most 50 lines, then "and *N* more". A problem line reads `<path>: <message>`, or only the message when the path is empty ([§6.4](06-file-format.md#64-validation)).
 - **New**: new empty ragdoll. Asks for confirmation if there are unsaved changes.
-- **Load**: imports a `.rag.json` from disk (file picker, or drag & drop onto the Viewport panel, Tools overlay included).
+- **Load**: imports a `.rag.json` from disk (file picker filtered to `.rag.json` and `.json`, or drag & drop of one file onto the Viewport panel, Tools overlay included; only the first file of a drop is read, and a file dropped anywhere else in the window is ignored instead of being opened by the browser).
+  - Once the file is chosen, Load asks for confirmation if there are unsaved changes, like New. Cancelling keeps the document.
   - Older format versions are migrated.
-  - Invalid files are rejected with a list of errors.
+  - Invalid files (not JSON, unknown format or version, validation **errors**) are rejected: a message lists the errors and the document is unchanged. A file that cannot be read gives the same message without a list.
+  - After a successful load, migration notes and **warnings** (dropped unknown fields included) are listed in a message; they never block the load. No message when there are none.
+  - A loaded document has no unsaved changes, and history is cleared.
   - Sprite images are resolved relative to the file. The browser cannot read sibling files on its own, so the editor asks for the asset folder (directory picker where supported, multi-file picker otherwise). Missing images are drawn as placeholders and listed in Problems.
-- **Save**: exports the `.rag.json`, and optionally the sprite images under their `src` paths (directory save where supported, otherwise a download of each). Blocked while there are validation **errors**. **Warnings** are allowed. The file is written in canonical form, with `meta` derived from the root name and the running editor version ([§6.5](06-file-format.md#65-round-trip-guarantee)).
+- **Save**: exports the `.rag.json`, and optionally the sprite images under their `src` paths (directory save where supported, otherwise a download of each). Blocked while there are validation **errors**: a message lists them and nothing is written. **Warnings** are allowed and shown nowhere by Save. The file is written in canonical form, with `meta` derived from the root name and the running editor version ([§6.5](06-file-format.md#65-round-trip-guarantee)).
+  - The `.rag.json` is downloaded as `<name>.rag.json`, where `<name>` is the root `name` with each control character and each of `< > : " / \ | ? *` replaced by `_`, whitespace runs collapsed to one space, cut to its first 100 code points, then spaces and dots trimmed from both ends. When the result is empty, or its part before the first dot is a reserved Windows device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`, any case), `<name>` is `ragdoll`. Examples: `Humanoid` → `Humanoid.rag.json`; `a/b: c` → `a_b_ c.rag.json`; `" .. "` → `ragdoll.rag.json`; `con` → `ragdoll.rag.json`.
+  - Once the download starts, the document has no unsaved changes. The editor cannot know whether the browser finished writing the file.
+- **New, Load, Save** follow the mode policy ([§5.1](05-1-modes.md#51-editor-modes)) and are disabled while a drag is in progress or a confirmation is open.
 - **Undo / Redo**: step back or forward through the command stack ([§1](01-conventions.md#1-conventions)). Enabled when there is a step to undo or redo, and not in Simulate mode.
 - **Play / Pause / Next frame / Stop**:
   - Next frame advances one fixed step (1/60 s).

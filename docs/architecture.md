@@ -75,7 +75,7 @@ Each topic lives in its own file; read only the one you need.
 ## Data flow
 
 1. **Authoring:** UI action → command → `history.execute` → model ops → one `change` event → views update their own entries (scene, hierarchy, inspector, timeline, Problems after a debounced `validate(toJson(model))`).
-2. **Save:** `toJson(model, editor.editorVersion())` → `validate` (blocked on errors) → `serialize` → `.rag.json` (+ sprite files). **Load:** `loadJson(model, text)`: parse JSON → `migrate` → `validate` (rejected on errors, model untouched) → drop unknown fields → `reset` ([Model I/O](architecture/model-io.md#model-io)).
+2. **Save:** `saveJson(model, editor.editorVersion())`: `toJson` → `validate` (blocked on errors, listed through `notify`) → `serialize` → `files.saveText` downloads `<name>.rag.json` (+ sprite files, #158) → `history.markSaved()`. **Load:** `editor.loadFrom(read)` (picker or drop) → confirm when dirty → `loadJson(model, text)`: parse JSON → `migrate` → `validate` (rejected on errors, model untouched) → drop unknown fields → `reset` ([Model I/O](architecture/model-io.md#model-io), [Editor composition](architecture/editor-composition.md#editor-composition)).
 3. **Animate mode:** model clips → `lib/evaluate.js` at the playhead → FK pose (`scene.setPose`) and sprite channels.
 4. **Simulate mode / runtime:** `toJson(model)` → `RagImporter.parse` → spawn in a LiquidFun world → each step:
 
