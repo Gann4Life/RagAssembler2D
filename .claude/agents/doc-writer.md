@@ -22,7 +22,7 @@ Steps (on the task branch, never on `main`):
    - mark breaking changes (commits with `!` / `BREAKING CHANGE`) with a leading **BREAKING:**;
    - skip `refactor`, `test`, `chore`, `style` and `ci` commits unless they change behavior.
 4. **docs/:**
-   - update the module map in `docs/architecture.md` (one line per module: responsibility and public exports);
+   - update the module map in `docs/architecture/` (`module-map*.md`) (one line per module: responsibility and public exports);
    - update `docs/development.md` when setup, commands or vendored versions change;
    - remove the **(planned)** marker once something exists.
 5. Commit your changes on the branch as `docs: sync docs, todo and changelog`.

@@ -24,7 +24,7 @@ git branch --list
 1. **`type:bug` with `priority:high`**: broken behavior goes first.
 2. **Earliest milestone** (Phase 0 before Phase 1, …): the roadmap order is binding.
 3. **Unblocking power:** how many open issues list this one under "Depends on", directly or transitively.
-4. **Risk reduction:** `type:spike` and items tied to `DESIGN.md` §12 open items.
+4. **Risk reduction:** `type:spike` and items tied to `DESIGN.md` §12 open items (read only that section file, `docs/design/12-open-items.md`).
 5. **Priority label:** high > medium > low.
 6. **Lowest issue number** as the final tie-breaker.
 

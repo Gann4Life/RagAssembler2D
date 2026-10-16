@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Owns the GitHub backlog. It turns roadmap work (DESIGN.md §11) and follow-ups into GitHub issues with the task template format, labels, milestones and dependencies, and keeps them accurate. Use when planning a phase, when new work is discovered, or when the backlog needs grooming.
+description: Owns the GitHub backlog. It turns roadmap work (DESIGN.md §11, in `docs/design/11-roadmap.md`) and follow-ups into GitHub issues with the task template format, labels, milestones and dependencies, and keeps them accurate. Use when planning a phase, when new work is discovered, or when the backlog needs grooming.
 tools: Read, Grep, Glob, PowerShell
 model: opus
 ---
