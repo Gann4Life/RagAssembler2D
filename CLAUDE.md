@@ -48,7 +48,6 @@ If code and `DESIGN.md` disagree, stop and resolve it: either fix the code, or u
 | `feature/` | New functionality, e.g. `feature/issue-12-box-tool` |
 | `bugfix/` | Bug fixes, e.g. `bugfix/issue-31-timeline-scrub-snap` |
 | `hotfix/` | Urgent fix for a released version |
-| `release/` | Release preparation, e.g. `release/v0.1.0` (no issue number) |
 | `chore/` | Spikes, docs, tooling, dependencies, refactors without behavior change, e.g. `chore/issue-4-pin-pixi` |
 
 ### Commits: [Conventional Commits 1.0](https://www.conventionalcommits.org/en/v1.0.0/)
@@ -67,9 +66,19 @@ If code and `DESIGN.md` disagree, stop and resolve it: either fix the code, or u
 - No AI attribution in subject, body or trailers.
 
 ### Changelog: [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/)
-- Every branch with user-visible changes adds entries under `## [Unreleased]`, before merging. Sections: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
+- Every merge to `main` is a release. Entries live under the PR's own `## [x.y.z] - YYYY-MM-DD` heading, never under `## [Unreleased]` on a branch (it stays empty). Sections: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
 - Entries are written for users, one line each. They are not commit messages.
-- Releases rename `[Unreleased]` to `## [x.y.z] - YYYY-MM-DD` on a `release/` branch. Versions follow [SemVer](https://semver.org/) derived from commits: `feat` → minor, `fix` → patch, breaking → major. Before 1.0.0, breaking changes bump the minor.
+- **One version per merged PR**, computed from the latest tag (`git describe --tags --abbrev=0`, `v0.0.0` if none) and the PR's Conventional Commit type:
+
+| PR type | Bump |
+|---|---|
+| `feat` | minor |
+| `fix`, `perf`, `refactor`, `docs`, `chore`, `test`, `ci`, `build`, `style` | patch |
+| breaking (`!`) | major; minor while < 1.0.0 |
+
+- `doc-writer` writes the version heading in each PR. A PR without user-visible entries still gets a heading with a one-line note.
+- On merge, the Pages workflow reads the top heading of `CHANGELOG.md`, fails if the tag exists, tags the merge commit `vX.Y.Z`, creates the GitHub Release with that section as notes and publishes `version.json`. The editor shows it at the bottom-left of the viewport.
+- `release/` branches are no longer used.
 
 ## Workflow
 

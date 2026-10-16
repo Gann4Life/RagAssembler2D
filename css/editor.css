@@ -834,3 +834,15 @@ body.dock-resizing-column * {
   color: var(--focus);
   font-weight: 600;
 }
+
+.version-label {
+  grid-area: 1 / 1;
+  z-index: 1;
+  place-self: end start;
+  margin: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: none;
+}
