@@ -8,7 +8,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 |---|---|
 | Editor model (#9) | `defaultsOf('root')` and `defaultsOf('document')` for the empty document. |
 | Creation commands (#14–#16, #19, #21) | `defaultsOf(type, variant)` for every new object, plus the fields the tool sets. |
-| Validation (#25) | Field types, ranges and enums: one generic error per violation ([`DESIGN.md` §6.4](design/06-file-format.md#64-validation)). Cross-field rules (limits around 0, convex polygons, key order, references) stay hand-written in `lib/validate.js`. |
+| Validation (#25) | Field presence, types, ranges and enums: one generic error per violation (`E_FIELD_MISSING`, `E_FIELD_TYPE`, `E_FIELD_RANGE`, `E_FIELD_ENUM`), and `W_UNKNOWN_FIELD` for keys not listed here ([`DESIGN.md` §6.4](design/06-file-format.md#64-validation)). Ranges apply unconditionally (`limits.lower`/`upper` also when limits are disabled). Rules not expressible as a field spec (ids, references, polygon count and shape, sprite `scale ≠ 0`, clip key pattern and uniqueness, key order and values, `step` for `sprite`, non-empty event names) stay hand-written in `lib/validate.js`. |
 | Serializer (#27) | Key order: the row order below is the canonical order of [`DESIGN.md` §6.5](design/06-file-format.md#65-round-trip-guarantee). Only schema fields are written. |
 | Inspector (#20, #22, #23) | Rows, read-only flags, ranges, enums, and the display unit derived from the data unit. |
 

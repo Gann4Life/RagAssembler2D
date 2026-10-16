@@ -55,8 +55,8 @@ app.ticker.add(() => {
 | `RagImporter.setContactFilter(world, predicate)` | Sets or clears (`null`) the host's predicate `(fixtureA, fixtureB) → boolean` for that world's contact filter, installing the filter if needed ([§7.5](#75-contact-filter-and-host-integration)). Throws in fallback mode. |
 | `RagImporter.releaseWorld(world)` | Destroys the world's remaining instances, uninstalls and destroys its contact filter and forgets the world. Call it right before `Box2D.destroy(world)`. No-op for a world RagImporter never used. |
 | `RagImporter.parse(json) → RagDef` | Validates and builds an immutable definition. Throws `RagFormatError` with the error list. |
-| `RagImporter.validate(json) → { errors, warnings }` | Validation without throwing. |
-| `RagImporter.supportedVersions` | e.g. `[1]`. |
+| `RagImporter.validate(json) → { errors, warnings }` | Validation without throwing: two arrays of problems `{ severity, code, message, path, target }` ([§6.4](06-file-format.md#64-validation)). |
+| `RagImporter.supportedVersions` | Frozen array of the format versions `parse` and `validate` accept, e.g. `[1]`. |
 
 **`RagDef`** (one per file; can spawn many instances)
 
@@ -93,7 +93,7 @@ app.ticker.add(() => {
 | `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors and sprite images. Call it once per physics step, **before** `world.Step`. |
 | `sync()` | Copies body transforms to the sprites. Call it **after** `world.Step`. |
 | `view` | The instance's `PIXI.Container`, with `sortableChildren` on and sprite `zIndex = z`. |
-| `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun (`Box2D.b2Body`, `Box2D.b2RevoluteJoint`, `Box2D.b2Fixture`) / PIXI objects, looked up by name. |
+| `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun (`Box2D.b2Body`, `Box2D.b2RevoluteJoint`, `Box2D.b2Fixture`) / PIXI objects, looked up by name. When names repeat (warning `W_DUPLICATE_NAME`), the first in file order wins. |
 | `bodies` / `joints` | Maps id → native object. |
 | `position`, `angle` | Follow `rootBody`. |
 | `destroy()` | Removes its shapes from the contact filter registry, then joints, then bodies, from the world ([§7.4](#74-native-memory), [§7.5](#75-contact-filter-and-host-integration)), destroys the view and clears listeners and overrides. Native objects obtained from the instance are invalid afterwards. The host never destroys an instance's bodies or joints itself. |
