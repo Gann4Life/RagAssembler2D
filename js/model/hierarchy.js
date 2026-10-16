@@ -18,8 +18,7 @@ export const UNLINKED_KEY = 'unlinked';
  * @property {string} label Name, or id when the name is empty; `'Unlinked'` for the group.
  * @property {'circle'|'box'|'polygon'|null} shapeType Shape type for shapes, else `null`.
  * @property {boolean} loop Joint leaf that closes a cycle.
- * @property {string|null} loopTo For loop leaves, the label of the joint's bodyB; else 
-ull. Never searched.
+ * @property {string|null} loopTo For loop leaves, the label of the joint's bodyB; else `null`. Never searched.
  * @property {boolean} unassigned Joint that does not connect two different existing bodies.
  * @property {ReadonlyArray<HierarchyItem>} children Child items, in display order.
  */
