@@ -22,6 +22,8 @@ const HOT_EXTRA_WIDTH = 1;
 const SQUARE_GROWTH = 2;
 const SQUARE_FILL_ALPHA = 0.4;
 const PIVOT_DOT = 1.5;
+const RING_DASHES = 32;
+const RING_DUTY = 0.5;
 
 function point(x, y) {
   return Object.freeze({ x, y });
@@ -109,6 +111,17 @@ function drawArrow(g, entry, style) {
   g.fill({ color: style.color });
 }
 
+function drawDashedRing(g, pivot, radius) {
+  const step = (2 * Math.PI) / RING_DASHES;
+  const at = (angle) => [pivot.x + radius * Math.cos(angle), pivot.y + radius * Math.sin(angle)];
+  for (let i = 0; i < RING_DASHES; i++) {
+    const start = i * step;
+    g.moveTo(...at(start));
+    g.lineTo(...at(start + step * RING_DUTY * 0.5));
+    g.lineTo(...at(start + step * RING_DUTY));
+  }
+}
+
 function drawPivotMark(g, pivot, mode) {
   const arm = GIZMO_SIZE.pivot;
   if (mode === 'last') {
@@ -126,8 +139,9 @@ function drawPivotMark(g, pivot, mode) {
 }
 
 /**
- * Draws the transform gizmo on a `PIXI.Graphics` in screen space: ring, arrows, square, then the pivot mark (a cross
- * in Center mode, a ring with a dot in Last selected mode). The hovered or active handle is white and 1 px wider.
+ * Draws the transform gizmo on a `PIXI.Graphics` in screen space: dashed ring (32 dashes), arrows, square, then the pivot
+ * mark (a cross in Center mode, a ring with a dot in Last selected mode). The hovered or active handle is white and
+ * 1 px wider.
  * Uses only `moveTo`, `lineTo`, `poly`, `rect`, `circle`, `fill` and `stroke`.
  * @param {object} g `PIXI.Graphics` to draw on.
  * @param {Readonly<GizmoLayout>} layout Gizmo layout.
@@ -139,8 +153,8 @@ export function drawGizmo(g, layout, { hover, active, mode }) {
   const state = { hover, active };
   const { pivot, square } = layout;
   if (layout.ring !== null) {
-    const ring = look('ring', COLORS.highlight, LINE_WIDTH.gizmo, state);
-    g.circle(pivot.x, pivot.y, layout.ring);
+    const ring = look('ring', COLORS.gizmoZ, LINE_WIDTH.gizmo, state);
+    drawDashedRing(g, pivot, layout.ring);
     g.stroke({ width: ring.width, color: ring.color });
   }
   drawArrow(g, layout.x, look('x', COLORS.gizmoX, LINE_WIDTH.gizmo, state));

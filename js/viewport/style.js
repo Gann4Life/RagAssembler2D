@@ -1,10 +1,12 @@
 /**
- * Viewport colors as `0xRRGGBB` integers: hover and selection, invalid feedback, gizmos, and the transform gizmo's
- * X arrow, Y arrow and free-move square.
- * @type {Readonly<{ highlight: number, invalid: number, gizmo: number, gizmoX: number, gizmoY: number, gizmoFree: number }>}
+ * Viewport colors as `0xRRGGBB` integers: hover and selection, invalid feedback, shape outlines, gizmos, and the
+ * transform gizmo's X arrow, Y arrow, rotation ring and free-move square.
+ * @type {Readonly<{ highlight: number, invalid: number, shapeOutline: number, gizmo: number, gizmoX: number, gizmoY: number, gizmoZ: number, gizmoFree: number }>}
  */
 export const COLORS = Object.freeze({
   highlight: 0x5b9cf5,
+  shapeOutline: 0xf08a24,
+  gizmoZ: 0x3d6dff,
   invalid: 0xe5484d,
   gizmo: 0xd8dade,
   gizmoX: 0xe0524f,

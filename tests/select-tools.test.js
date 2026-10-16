@@ -565,8 +565,9 @@ function overlay(tools) {
 }
 
 function ringAt(calls) {
-  const ring = calls.find(([method, , , radius]) => method === 'circle' && radius === 72);
-  return ring ? { x: ring[1], y: ring[2] } : null;
+  const [first, , second] = calls;
+  if (first?.[0] !== 'moveTo' || second?.[0] !== 'lineTo') return null;
+  return { x: first[1] - 72, y: first[2] };
 }
 
 function xArrowStart(calls) {
@@ -908,7 +909,7 @@ test('overlay: the gizmo follows a move, stays during a rotation, highlights hov
   send(tools, 'move', 280, 118);
   const turning = overlay(tools);
   assert.deepEqual(ringAt(turning), { x: 280, y: 190 });
-  assert.deepEqual(turning[1], ['stroke', { width: LINE_WIDTH.gizmo + 1, color: 0xffffff }]);
+  assert.deepEqual(turning[96], ['stroke', { width: LINE_WIDTH.gizmo + 1, color: 0xffffff }]);
   send(tools, 'up', 280, 118);
   send(tools, 'down', 20, 380);
   send(tools, 'move', 60, 300);

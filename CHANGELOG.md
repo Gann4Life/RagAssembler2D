@@ -46,6 +46,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Del deletes the selected bodies, shapes and joints, together with the joints and animation tracks that depend on them, as one undo step.
 
 ### Changed
+- The transform gizmo's rotation ring is now a dashed blue ring, and shape outlines in the viewport are orange, so the ring is no longer confused with circle shapes.
 - Tools is now a floating toolbar over the viewport instead of a dock panel; it no longer appears in the Window menu, and a saved layout that still lists it resets to the default layout.
 - The Viewport panel minimum height is now 168 px (was 160 px).
 - Documentation: `docs/architecture.md` now defines the editor core architecture and module conformance rules, and the new `docs/schema.md` lists the property schema of every `.rag.json` object.

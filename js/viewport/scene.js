@@ -1,6 +1,7 @@
 import { transformPoint } from '../../lib/geometry.js';
 import { defaultsOf } from '../../lib/schema.js';
 import { ROOT_UID } from '../model/model.js';
+import { COLORS } from './style.js';
 
 /**
  * @typedef {object} Scene
@@ -235,7 +236,7 @@ export function createScene(PIXI, { model, camera, settings }) {
     if (outline.circle) graphics.circle(outline.circle.x * ppm, -outline.circle.y * ppm, outline.circle.radius * ppm);
     else graphics.poly(outline.points.flatMap((p) => [p.x * ppm, -p.y * ppm]), true);
     if (style.fill > 0) graphics.fill({ color, alpha: style.fill });
-    if (style.stroke > 0) graphics.stroke({ width: pixelsPerMeter() / camera.scale, color, alpha: style.stroke, alignment: 0.5 });
+    if (style.stroke > 0) graphics.stroke({ width: pixelsPerMeter() / camera.scale, color: COLORS.shapeOutline, alpha: style.stroke, alignment: 0.5 });
   };
 
   const flush = () => {

@@ -110,9 +110,14 @@ test('drawGizmo draws ring, arrows, square, then the center mark, in their color
   const layout = gizmoLayout(PIVOT, { ring: true });
   drawGizmo(g, layout, { hover: null, active: null, mode: 'center' });
   const arm = GIZMO_SIZE.pivot;
-  assert.deepEqual(g.calls, [
-    ['circle', PIVOT.x, PIVOT.y, 72],
-    ['stroke', { width: LINE_WIDTH.gizmo, color: COLORS.highlight }],
+  const dashes = g.calls.slice(0, 96);
+  assert.equal(dashes.filter(([method]) => method === 'moveTo').length, 32);
+  assert.equal(dashes.filter(([method]) => method === 'lineTo').length, 64);
+  assert.deepEqual(dashes[0], ['moveTo', PIVOT.x + 72, PIVOT.y]);
+  for (const [, x, y] of dashes) assert.ok(Math.abs(Math.hypot(x - PIVOT.x, y - PIVOT.y) - 72) < 1e-9);
+  assert.notEqual(COLORS.gizmoZ, COLORS.highlight);
+  assert.deepEqual(g.calls.slice(96), [
+    ['stroke', { width: LINE_WIDTH.gizmo, color: COLORS.gizmoZ }],
     ['moveTo', PIVOT.x + 16, PIVOT.y],
     ['lineTo', PIVOT.x + 46, PIVOT.y],
     ['stroke', { width: LINE_WIDTH.gizmo, color: COLORS.gizmoX }],
