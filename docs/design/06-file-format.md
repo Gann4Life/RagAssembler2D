@@ -202,6 +202,8 @@ Save always writes the **canonical form**:
 - Arrays keep editor order: sprite assets in Assets panel order; bodies, joints and clips in hierarchy/list order; fixtures in body order; keys sorted by `t`; events sorted by `t`.
 - Numbers are rounded to 1e-5 and written without trailing zeros. `-0` is written as `0`. This applies to every number, `json` values (`events[].data`) included; keys inside `json` values keep their order.
 - 2-space indentation, `\n` line endings, final newline.
+- An array whose items are all numbers is written inline as `[x, y]` with `, ` separators; every other array and object stays expanded, and empty arrays are `[]`.
+- An array whose items are all numbers (e.g. a `vec2`) is written on one line as `[x, y]`, with `, ` between items; every other array and every object is expanded, one item or key per line. The §6.1 example is compacted for reading and is not canonical.
 - `meta` is derived on every Save, never copied from the loaded file:
   - `meta.name` is `ragdoll.name`;
   - `meta.editorVersion` is the running editor's version: the `version` of the deployed `version.json` without its leading `v` (`v0.4.0` → `0.4.0`), or `dev` when it is unavailable (local server, failed or pending fetch).

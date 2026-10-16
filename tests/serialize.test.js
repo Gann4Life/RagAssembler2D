@@ -57,7 +57,7 @@ test('serialize rounds numbers to 1e-5 without trailing zeros and writes -0 as 0
   const text = serialize(json);
   assert.equal(/-0(?![.\d])/.test(text), false);
   assert.equal(text.includes('0.30000000000000004'), false);
-  assert.match(text, /"position": \[\n\s+0\.3,\n\s+0\n\s+\]/);
+  assert.match(text, /"position": \[0\.3, 0\]/);
 });
 
 test('serialize uses 2-space indentation, \\n and one final newline, and writes an absent sprite as null', () => {
@@ -69,4 +69,21 @@ test('serialize uses 2-space indentation, \\n and one final newline, and writes 
   assert.equal(text.includes('\r'), false);
   assert.match(text, /^\{\n {2}"format": "ragassembler",\n {2}"version": 1,\n/);
   assert.equal(JSON.parse(text).bodies[3].fixtures[0].sprite, null);
+});
+
+test('arrays of numbers are written inline, every other array and object stays expanded, empty ones stay compact', () => {
+  const json = ragFile();
+  json.bodies[0].fixtures[0].sprite.scale = [1, 1.5];
+  json.clips[0].events[0].data = { list: [1, 2, 3], mixed: [1, 'a'], nested: [[1, 2]], none: [], empty: {}, items: [{ a: 1 }] };
+  const text = serialize(json);
+  assert.match(text, /"gravity": \[0, -10\]/);
+  assert.match(text, /"scale": \[1, 1\.5\]/);
+  assert.match(text, /"list": \[1, 2, 3\]/);
+  assert.match(text, /"mixed": \[\n\s+1,\n\s+"a"\n\s+\]/);
+  assert.match(text, /"nested": \[\n\s+\[1, 2\]\n\s+\]/);
+  assert.match(text, /"vertices": \[\n\s+\[0, -0\.05\],\n/);
+  assert.match(text, /"none": \[\],\n\s+"empty": \{\}/);
+  assert.match(text, /"items": \[\n\s+\{\n\s+"a": 1\n\s+\}\n\s+\]/);
+  assert.deepEqual(JSON.parse(text), JSON.parse(JSON.stringify(JSON.parse(text))));
+  assert.equal(text.includes('\r'), false);
 });
