@@ -24,8 +24,7 @@ function tableAfter(markdown, marker) {
 
 const POLICY_ROW_OF = {
   select: 'Select, Select Box, Hierarchy selection',
-  'tool.manipulate': 'Manipulate, Pose',
-  'tool.pose': 'Manipulate, Pose',
+  'tool.pose': 'Pose',
   'tool.circle': 'Creation tools: Circle, Box, Polygon, Hinge',
   'tool.box': 'Creation tools: Circle, Box, Polygon, Hinge',
   'tool.polygon': 'Creation tools: Circle, Box, Polygon, Hinge',

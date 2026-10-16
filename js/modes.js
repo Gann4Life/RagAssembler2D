@@ -6,7 +6,7 @@ import { Emitter } from '../lib/emitter.js';
 
 /**
  * Capability checked against the mode policy (`DESIGN.md` §5.1).
- * @typedef {'select'|'tool.manipulate'|'tool.pose'|'tool.circle'|'tool.box'|'tool.polygon'|'tool.hinge'
+ * @typedef {'select'|'tool.pose'|'tool.circle'|'tool.box'|'tool.polygon'|'tool.hinge'
  *   |'edit.rest'|'edit.animation'|'assets.import'|'assets.delete'|'clip.open'|'timeline.scrub'
  *   |'preview.stack'|'preview.procedural'|'file'|'history'|'play'|'simulate.control'
  *   |'settings.editor'|'layout'|'camera'} Capability
@@ -22,7 +22,6 @@ function allowed(edit, animate, simulate) {
  */
 export const MODE_POLICY = Object.freeze({
   select: allowed(true, true, true),
-  'tool.manipulate': allowed(true, true, false),
   'tool.pose': allowed(true, true, false),
   'tool.circle': allowed(true, false, false),
   'tool.box': allowed(true, false, false),

@@ -204,6 +204,26 @@ export class ToolRegistry {
   }
 
   /**
+   * The active tool's handle under a screen point; the viewport hides object hover over it.
+   * @param {{ x: number, y: number }} screen Screen point, CSS px from the host's top-left.
+   * @returns {string|null} Handle id, or `null` with no active tool, no bound view or no handle there.
+   */
+  handleAt(screen) {
+    if (!this.#active || !this.#view) return null;
+    return this.#active.handleAt(screen) ?? null;
+  }
+
+  /**
+   * The active tool's drag readout, drawn by the viewport as text in the tool overlay.
+   * @returns {{ text: string, screen: { x: number, y: number } }|null} Text and its top-left corner, CSS px, or
+   *   `null` with no active tool, no bound view or no drag readout.
+   */
+  readout() {
+    if (!this.#active || !this.#view) return null;
+    return this.#active.readout() ?? null;
+  }
+
+  /**
    * Subscribes to `tool`.
    * @param {'tool'} type Event type.
    * @param {(payload: { id: string|null, previous: string|null }) => void} fn Listener.

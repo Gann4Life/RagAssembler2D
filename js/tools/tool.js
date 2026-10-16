@@ -1,5 +1,5 @@
 /**
- * @typedef {'select'|'select-box'|'manipulate'|'pose'|'circle'|'box'|'polygon'|'hinge'} ToolId
+ * @typedef {'select'|'select-box'|'pose'|'circle'|'box'|'polygon'|'hinge'} ToolId
  */
 
 /**
@@ -87,6 +87,10 @@
  * @property {(e: ToolKeyEvent) => boolean} keyDown Key press; `true` when consumed.
  * @property {() => boolean} cancel Aborts the local operation; `true` when there was one.
  * @property {(g: object) => void} drawOverlay Draws on a cleared `PIXI.Graphics` in screen space, CSS px.
+ * @property {(screen: { x: number, y: number }) => string|null} handleAt Id of the tool handle under a screen point,
+ *   CSS px, or `null`.
+ * @property {() => { text: string, screen: { x: number, y: number } }|null} readout Drag readout text and the
+ *   screen point of its top-left corner, CSS px, or `null`.
  */
 
 function spec(id, label, hotkey, capability, group) {
@@ -101,7 +105,6 @@ function spec(id, label, hotkey, capability, group) {
 export const TOOL_SPECS = Object.freeze([
   spec('select', 'Select', 'V', 'select', 'selection'),
   spec('select-box', 'Select Box', 'B', 'select', 'selection'),
-  spec('manipulate', 'Manipulate', 'M', 'tool.manipulate', 'manipulation'),
   spec('pose', 'Pose', 'P', 'tool.pose', 'manipulation'),
   spec('circle', 'Circle', 'C', 'tool.circle', 'creation'),
   spec('box', 'Box', 'R', 'tool.box', 'creation'),
@@ -124,11 +127,14 @@ const HANDLERS = Object.freeze({
   keyDown: () => false,
   cancel: () => false,
   drawOverlay: () => {},
+  handleAt: () => null,
+  readout: () => null,
 });
 
 /**
  * Builds a frozen tool. `label`, `hotkey` and `capability` always come from `TOOL_SPECS`; missing handlers
- * are no-ops (`keyDown` and `cancel` return `false`), `cursor` defaults to `'default'` and `hover` to `true`.
+ * are no-ops (`keyDown` and `cancel` return `false`, `handleAt` and `readout` return `null`), `cursor` defaults to
+ * `'default'` and `hover` to `true`.
  * @param {{ id: ToolId } & Partial<Tool>} definition Tool id and members.
  * @returns {Readonly<Tool>} The tool.
  * @throws {Error} When the id is not in `TOOL_SPECS`.

@@ -148,8 +148,7 @@ test('escape cancels an open gesture, else clears the selection', () => {
 
 const SELECTION_TOOLS = ['select', 'select-box'];
 const CREATION_TOOLS = ['circle', 'box', 'hinge'];
-const MANIPULATION_TOOLS = ['manipulate'];
-const REGISTERED_TOOLS = [...SELECTION_TOOLS, ...MANIPULATION_TOOLS, ...CREATION_TOOLS];
+const REGISTERED_TOOLS = [...SELECTION_TOOLS, ...CREATION_TOOLS];
 
 test('createEditor builds a tool registry with the built tools, Select active', () => {
   const editor = createEditor();
@@ -230,20 +229,38 @@ test('tool:hinge is enabled in Edit mode and refused in Animate mode', () => {
   assert.notEqual(tools.active?.id, 'hinge');
 });
 
-test('tool:manipulate is enabled in Edit and Animate mode and refused in Simulate mode', () => {
+test('manipulate is not registered and M is no tool hotkey', () => {
+  const { actions, tools } = createEditor();
+  assert.equal(tools.has('manipulate'), false);
+  assert.equal(actions.has('tool:manipulate'), false);
+  assert.equal(TOOL_SPECS.some((row) => row.id === 'manipulate' || row.hotkey === 'M'), false);
+});
+
+test('pivot-mode toggles gizmo.pivot in every mode and is disabled during a gesture', () => {
   const editor = createEditor();
-  const { actions, tools, modes } = editor;
-  assert.equal(actions.isEnabled('tool:manipulate'), true);
-  assert.equal(actions.run('tool:manipulate'), true);
-  assert.equal(tools.active?.id, 'manipulate');
+  const { actions, settings, modes, history } = editor;
+  assert.equal(settings.get('gizmo.pivot'), 'center');
+  assert.equal(actions.isEnabled('pivot-mode'), true);
+  assert.equal(actions.reason('pivot-mode'), null);
+  assert.equal(actions.run('pivot-mode'), true);
+  assert.equal(settings.get('gizmo.pivot'), 'last');
   modes.openClip(addClip(editor));
-  assert.equal(actions.isEnabled('tool:manipulate'), true);
-  assert.equal(actions.reason('tool:manipulate'), null);
-  assert.equal(tools.active?.id, 'manipulate');
+  assert.equal(actions.run('pivot-mode'), true);
+  assert.equal(settings.get('gizmo.pivot'), 'center');
   modes.startSimulate();
-  assert.equal(actions.isEnabled('tool:manipulate'), false);
-  assert.equal(actions.reason('tool:manipulate'), 'not available in Simulate mode');
-  assert.equal(tools.active?.id, 'select');
+  assert.equal(actions.run('pivot-mode'), true);
+  assert.equal(settings.get('gizmo.pivot'), 'last');
+  modes.stopSimulate();
+  history.beginGesture();
+  assert.equal(actions.isEnabled('pivot-mode'), false);
+  assert.equal(actions.reason('pivot-mode'), null);
+  assert.equal(actions.run('pivot-mode'), false);
+  assert.equal(settings.get('gizmo.pivot'), 'last');
+  history.cancelGesture();
+  assert.equal(actions.isEnabled('pivot-mode'), true);
+  const event = { key: 'z', target: { tagName: 'BODY' }, preventDefault() {} };
+  assert.equal(dispatchKey(event, { actions, tools: editor.tools, viewportFocused: true }), true);
+  assert.equal(settings.get('gizmo.pivot'), 'center');
 });
 
 test('undo through the action during a gesture only cancels it', () => {

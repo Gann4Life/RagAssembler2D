@@ -2,14 +2,15 @@ import { Emitter } from '../lib/emitter.js';
 
 /**
  * @typedef {'grid.visible'|'grid.size'|'grid.subdivisions'|'snap.grid'|'display.mode'
- *   |'overlay.names'|'overlay.centers'|'overlay.contacts'} SettingKey
+ *   |'overlay.names'|'overlay.centers'|'overlay.contacts'|'gizmo.pivot'} SettingKey
  */
 
 /** Version of the stored settings record. */
 export const SETTINGS_VERSION = 1;
 
 /**
- * Editor settings: type, default and range per key. `grid.size` is in meters.
+ * Editor settings: type, default and range per key. `grid.size` is in meters; `gizmo.pivot` is the Select tool's
+ * pivot mode for several objects (`'center'` or `'last'` selected).
  * @type {Readonly<Record<SettingKey, Readonly<{ type: 'boolean'|'number'|'integer'|'enum', default: *, min?: number, max?: number, enum?: ReadonlyArray<string>, unit?: string }>>>}
  */
 export const SETTING_SPECS = Object.freeze({
@@ -21,6 +22,7 @@ export const SETTING_SPECS = Object.freeze({
   'overlay.names': Object.freeze({ type: 'boolean', default: false }),
   'overlay.centers': Object.freeze({ type: 'boolean', default: false }),
   'overlay.contacts': Object.freeze({ type: 'boolean', default: false }),
+  'gizmo.pivot': Object.freeze({ type: 'enum', default: 'center', enum: Object.freeze(['center', 'last']) }),
 });
 
 const KEYS = Object.keys(SETTING_SPECS);
@@ -94,7 +96,7 @@ export class Settings {
 
   /**
    * Builds the record to store: `{ version, grid: { visible, size, subdivisions }, snap: { grid }, display: { mode },
-   * overlay: { names, centers, contacts } }`.
+   * overlay: { names, centers, contacts }, gizmo: { pivot } }`.
    * @returns {object} Plain JSON record.
    */
   toJSON() {

@@ -26,9 +26,6 @@ const ICONS = Object.freeze({
   'select-box':
     '<rect x="3" y="4" width="14" height="11" stroke-dasharray="3 2"/>'
     + '<path d="M12 12v9l2.4-2 1.8 3.2 1.4-.8-1.8-3.1 3-.3z" fill="currentColor"/>',
-  manipulate:
-    '<path d="M7.5 12h9M12 7.5v9M10.5 9l1.5-1.5L13.5 9M10.5 15l1.5 1.5 1.5-1.5M9 10.5 7.5 12 9 13.5M15 10.5l1.5 1.5-1.5 1.5"/>'
-    + '<path d="M12 3a9 9 0 1 1-9 9M3 12l-1.8 2M3 12l1.9 2"/>',
   pose:
     '<path d="M6 5l5 7-4 7"/>'
     + '<circle cx="6" cy="5" r="1.8" fill="currentColor"/><circle cx="11" cy="12" r="1.8" fill="currentColor"/>'

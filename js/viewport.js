@@ -4,6 +4,7 @@ import { createGrid } from './viewport/grid.js';
 import { boxTest, hitTest } from './viewport/hit.js';
 import { attachInput } from './viewport/input.js';
 import { createScene } from './viewport/scene.js';
+import { COLORS, LABEL_SIZE } from './viewport/style.js';
 
 /**
  * @typedef {object} Viewport
@@ -36,15 +37,19 @@ const NO_INSETS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 const KEY_SUMMARY_ID = 'viewport-keys';
 const KEY_SUMMARY =
   'Space and drag, or middle drag, pans. Wheel, plus and minus zoom. F frames the selection, Home frames everything. ' +
-  'Escape cancels the current tool operation, or clears the selection.';
+  'Escape cancels the current tool operation, or clears the selection. ' +
+  'Z switches the transform pivot between the selection center and the last selected object.';
 const TOOL_CURSOR_PROPERTY = '--tool-cursor';
+const READOUT_OUTLINE = 0x111214;
+const READOUT_OUTLINE_WIDTH = 3;
 
 /**
  * Creates the PIXI viewport inside a host element: grid, scene, gizmo layer and tool overlay, in that order, with
  * navigation over the camera and tool input. The renderer follows the host size (CSS px, reported to the camera)
  * and `devicePixelRatio`, also when only the ratio changes. Frames everything on start and after every model
  * `reset`. Binds the tool registry (hit testing in the displayed pose, the host cursor, overlay redraws at most once
- * per frame) and shows hover feedback unless the active tool disables it. Makes the host `role="application"` with
+ * per frame, the active tool's drag readout as text kept inside the host) and shows hover feedback unless the
+ * active tool disables it or the pointer is over one of its handles. Makes the host `role="application"` with
  * `aria-roledescription="viewport"` and a visually hidden key summary.
  * @param {object} PIXI The PIXI.js v8 namespace.
  * @param {HTMLElement} host Element that receives the canvas.
@@ -73,11 +78,37 @@ export async function createViewport(
   const grid = createGrid(PIXI, { camera, settings });
   const scene = createScene(PIXI, { model, camera, settings });
   const gizmos = createGizmos(PIXI, { model, camera, selection, modes, settings, scene });
-  const toolOverlay = new PIXI.Graphics();
+  const toolOverlay = new PIXI.Container();
   toolOverlay.label = 'tool-overlay';
+  const toolGraphics = new PIXI.Graphics();
+  const readoutText = new PIXI.Text({
+    text: '',
+    style: {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: LABEL_SIZE,
+      fill: COLORS.gizmo,
+      stroke: { color: READOUT_OUTLINE, width: READOUT_OUTLINE_WIDTH, join: 'round' },
+    },
+  });
+  readoutText.label = 'readout';
+  readoutText.visible = false;
+  toolOverlay.addChild(toolGraphics, readoutText);
   app.stage.addChild(grid.view, scene.view, gizmos.view, toolOverlay);
 
   const hitTestAt = (screen) => hitTest(model, camera, screen, { pose: scene.pose() });
+
+  const placeReadout = () => {
+    const readout = tools.readout();
+    if (readout === null) {
+      readoutText.visible = false;
+      return;
+    }
+    if (readoutText.text !== readout.text) readoutText.text = readout.text;
+    const x = Math.min(readout.screen.x, camera.width - readoutText.width);
+    const y = Math.min(readout.screen.y, camera.height - readoutText.height);
+    readoutText.position.set(Math.round(Math.max(0, x)), Math.round(Math.max(0, y)));
+    readoutText.visible = true;
+  };
 
   let overlayDirty = true;
   const invalidateOverlay = () => {
@@ -86,7 +117,8 @@ export async function createViewport(
   const drawOverlay = () => {
     if (!overlayDirty) return;
     overlayDirty = false;
-    tools.drawOverlay(toolOverlay);
+    tools.drawOverlay(toolGraphics);
+    placeReadout();
   };
   PIXI.Ticker.shared.add(drawOverlay);
   const offCamera = camera.on('camera', invalidateOverlay);
@@ -95,11 +127,13 @@ export async function createViewport(
     modes.on('mode', invalidateOverlay),
     model.on('change', invalidateOverlay),
     model.on('reset', invalidateOverlay),
+    settings.on('settings', invalidateOverlay),
   ];
 
   const hoverAllowed = () => tools.active === null || tools.active.hover;
   const onHover = (screen) => {
-    gizmos.setHover(screen && hoverAllowed() ? (hitTestAt(screen)[0] ?? null) : null);
+    const shown = screen && hoverAllowed() && tools.handleAt(screen) === null;
+    gizmos.setHover(shown ? (hitTestAt(screen)[0] ?? null) : null);
   };
   const onTool = () => {
     invalidateOverlay();

@@ -8,6 +8,7 @@ const DEFAULTS = {
   snap: { grid: false },
   display: { mode: 'both' },
   overlay: { names: false, centers: false, contacts: false },
+  gizmo: { pivot: 'center' },
 };
 
 test('defaults follow DESIGN §5.3', () => {
@@ -21,6 +22,7 @@ test('defaults follow DESIGN §5.3', () => {
     'overlay.names',
     'overlay.centers',
     'overlay.contacts',
+    'gizmo.pivot',
   ]);
   assert.deepEqual(new Settings().toJSON(), DEFAULTS);
 });
@@ -105,6 +107,7 @@ test('toJSON round trips through restore', () => {
   settings.set('display.mode', 'sprites');
   settings.set('overlay.names', true);
   settings.set('overlay.contacts', true);
+  settings.set('gizmo.pivot', 'last');
   const record = JSON.parse(JSON.stringify(settings.toJSON()));
   const { settings: restored, warnings } = Settings.restore(record);
   assert.deepEqual(warnings, []);
@@ -151,4 +154,26 @@ test('restore ignores records that are not objects or have another version', () 
     assert.equal(warnings.length, 1, JSON.stringify(record));
     assert.deepEqual(settings.toJSON(), DEFAULTS);
   }
+});
+
+test('gizmo.pivot is center or last, center by default', () => {
+  const settings = new Settings();
+  assert.equal(settings.get('gizmo.pivot'), 'center');
+  assert.throws(() => settings.set('gizmo.pivot', 'average'), RangeError);
+  assert.throws(() => settings.set('gizmo.pivot', true), RangeError);
+  settings.set('gizmo.pivot', 'last');
+  assert.equal(settings.get('gizmo.pivot'), 'last');
+  assert.deepEqual(settings.toJSON().gizmo, { pivot: 'last' });
+});
+
+test('a version 1 record without gizmo restores the pivot mode to center without warnings', () => {
+  const { gizmo, ...record } = { ...DEFAULTS, display: { mode: 'shapes' } };
+  const { settings, warnings } = Settings.restore(record);
+  assert.deepEqual(warnings, []);
+  assert.equal(settings.get('gizmo.pivot'), 'center');
+  assert.equal(settings.get('display.mode'), 'shapes');
+  const invalid = Settings.restore({ ...DEFAULTS, gizmo: { pivot: 'first' } });
+  assert.equal(invalid.settings.get('gizmo.pivot'), 'center');
+  assert.equal(invalid.warnings.length, 1);
+  assert.match(invalid.warnings[0], /"gizmo\.pivot"/);
 });
