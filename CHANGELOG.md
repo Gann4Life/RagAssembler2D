@@ -44,6 +44,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Manipulate tool (M): drag the root, or a body with everything hanging from it (ALT moves only that body), and drag joint anchors. A rotation knob turns the selected body around its parent joint anchor (CTRL: its center) or the root around its position, with SHIFT snapping to 15°. Moves snap to the grid when snapping is on, and each drag is one undo step. Available in Edit mode; in Animate mode it only selects.
 - Hierarchy panel: a tree of the root, bodies, shapes and joints that stays in sync with the viewport selection, with search by name or id, an Add menu (shape, joint) and a Delete button; unlinked bodies and unassigned joints are grouped and marked.
 - Del deletes the selected bodies, shapes and joints, together with the joints and animation tracks that depend on them, as one undo step.
+- Select resizes shapes with handles: box corners and sides, and a radius handle on circles. SHIFT keeps the aspect ratio, ALT or CTRL resizes from the center, the handles follow the shape's rotation, sizes snap to the grid, and each drag is one undo step.
 
 ### Changed
 - The transform gizmo's rotation ring is now a dashed blue ring, and shape outlines in the viewport are orange, so the ring is no longer confused with circle shapes.
