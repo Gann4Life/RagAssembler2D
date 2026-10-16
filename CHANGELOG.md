@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-16
+
+### Changed
+- The Pose tool shortcut is now D (was P).
+
 ## [0.6.0] - 2026-10-16
 
 ### Added
