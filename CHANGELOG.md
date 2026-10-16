@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-16
+
+### Added
+- Load button, Ctrl+O and drag and drop onto the viewport open a ragdoll file; files with errors are rejected and reported, and warnings are shown after loading.
+- Save button and Ctrl+S write the ragdoll file; the browser's save dialog lets you pick the name when available, otherwise the file downloads.
+- Loading with unsaved changes asks for confirmation first.
+- A notice dialog lists file errors and warnings.
+
+### Changed
+- New, Load and Save are also available in Animate mode.
+- Loading a file keeps the current camera.
+- Dropping a file outside the viewport no longer makes the browser open it and lose your work.
+
 ## [0.7.0] - 2026-10-16
 
 ### Changed

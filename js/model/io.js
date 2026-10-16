@@ -1,6 +1,7 @@
 import { FORMAT, FORMAT_VERSION } from '../../lib/schema.js';
 import { migrate } from '../../lib/migrate.js';
 import { validate } from '../../lib/validate.js';
+import { serialize } from '../../lib/serialize.js';
 import { ROOT_UID, emptyRootSnapshot } from './model.js';
 
 const NESTED = Object.freeze({
@@ -159,6 +160,65 @@ export function loadJson(model, text) {
   fillAbsentSprites(copy);
   model.reset(rootSnapshot(copy), 'load');
   return Object.freeze({ ok: true, errors: Object.freeze([]), warnings: Object.freeze([...warnings]), notes: frozenNotes });
+}
+
+/**
+ * Result of {@link saveJson}.
+ * @typedef {object} SaveResult
+ * @property {boolean} ok Whether the document can be written (no validation errors).
+ * @property {ReadonlyArray<object>} errors Validation errors; the file is blocked when not empty.
+ * @property {ReadonlyArray<object>} warnings Validation warnings; they never block.
+ * @property {string|null} text Canonical `.rag.json` text, `null` when not ok.
+ * @property {string|null} fileName Download name, `null` when not ok.
+ */
+
+const FILE_NAME_FALLBACK = 'ragdoll';
+const FILE_NAME_MAX_CODE_POINTS = 100;
+const FILE_NAME_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f<>:"/\\|?*]/g;
+const RESERVED_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+/**
+ * The download name of a document: the sanitized `name` plus `.rag.json`. Forbidden and control characters become
+ * `_`, whitespace runs one space, the name is cut to 100 code points and trimmed of spaces and dots. An empty
+ * result, a non-string `name` or a reserved Windows device name before the first dot gives `ragdoll.rag.json`.
+ * @param {*} name Root name.
+ * @returns {string} File name.
+ */
+export function ragFileName(name) {
+  const cleaned =
+    typeof name === 'string'
+      ? Array.from(name.replace(FILE_NAME_FORBIDDEN, '_').replace(/\s+/g, ' '))
+          .slice(0, FILE_NAME_MAX_CODE_POINTS)
+          .join('')
+          .replace(/^[ .]+|[ .]+$/g, '')
+      : '';
+  const stem = cleaned.split('.', 1)[0];
+  const usable = cleaned !== '' && !RESERVED_DEVICE_NAME.test(stem);
+  return `${usable ? cleaned : FILE_NAME_FALLBACK}.rag.json`;
+}
+
+/**
+ * Exports, validates and serializes the document for saving. Never changes the model or its history.
+ * @param {import('./model.js').Model} model Document model.
+ * @param {string} editorVersion Version of the running editor.
+ * @returns {Readonly<SaveResult>} `ok: false` with the errors and no text when validation finds errors.
+ * @throws {TypeError} When `editorVersion` is not a non-empty string.
+ */
+export function saveJson(model, editorVersion) {
+  const json = toJson(model, editorVersion);
+  const { errors, warnings } = validate(json);
+  const frozenErrors = Object.freeze([...errors]);
+  const frozenWarnings = Object.freeze([...warnings]);
+  if (errors.length > 0) {
+    return Object.freeze({ ok: false, errors: frozenErrors, warnings: frozenWarnings, text: null, fileName: null });
+  }
+  return Object.freeze({
+    ok: true,
+    errors: frozenErrors,
+    warnings: frozenWarnings,
+    text: serialize(json),
+    fileName: ragFileName(json.ragdoll.name),
+  });
 }
 
 /**

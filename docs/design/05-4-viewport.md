@@ -9,7 +9,7 @@
   - `scale` is clamped to 2–10 000 px/m, and each coordinate of `center` to ±10 000 m.
   - Changing `pixelsPerMeter` keeps the camera: shapes stay in place on screen and sprites change size ([§1](01-conventions.md#1-conventions)).
   - Resizing the viewport keeps `center` and `scale`.
-  - The camera is not saved and not undoable. After New, Load and draft recovery, and when the editor starts, the view frames everything.
+  - The camera is not saved and not undoable. After New and draft recovery, and when the editor starts, the view frames everything; Load leaves the camera as it was.
 - **Navigation** works in every mode and never reaches the active tool. A press on the canvas focuses the viewport host.
   - **Pan:** middle-button drag, or Space + left drag while the viewport has focus. The world point under the pointer follows it. The cursor is `grab`, and `grabbing` while dragging. Panning or zooming during a tool gesture does not end the gesture; a middle press during a left drag pans too. Known limitation, pending [§12](12-open-items.md#12-open-items--to-verify): if the browser takes pointer capture away on that middle press, the drag is aborted like any other lost capture ([§5.5](05-5-tools.md#55-tools)) and the document is left as it was.
   - **Zoom:** the mouse wheel zooms around the pointer, keeping the world point under it fixed: `scale · 2^(−Δy / 400)`, with Δy in px (line deltas × 16, page deltas × the viewport height). A wheel with Ctrl (trackpad pinch) uses `2^(−Δy / 100)`. A wheel over the viewport never scrolls or zooms the page. With the viewport focused, `+` (or `=`) and `-` zoom by √2 around the viewport center, and keep zooming while held (they are navigation keys, not [§5.9](05-9-hotkeys.md#59-hotkeys-defaults) hotkeys).

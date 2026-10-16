@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { confirmDialog, confirmKey } from '../js/confirm-dialog.js';
+import { confirmDialog, confirmKey, noticeDialog } from '../js/confirm-dialog.js';
 
 const press = (key, extra = {}) => ({ key, ...extra });
 
@@ -229,4 +229,82 @@ test('confirmDialog: a failure while opening resolves false and does not leave t
   const next = open();
   next.confirm.fire('click');
   assert.equal(await next.promise, true);
+});
+function openNotice(options = { title: 'Cannot save', message: 'Errors.', items: ['a', 'b'], closeLabel: 'OK' }) {
+  const { doc, opener } = fakeDocument();
+  const promise = noticeDialog(doc, options);
+  const dialog = doc.body.children[0];
+  const buttons = dialog.find((node) => node.tag === 'button');
+  return { doc, opener, promise, dialog, buttons };
+}
+
+test('noticeDialog renders one button, the items, and focuses the button', async () => {
+  const { doc, dialog, buttons, promise } = openNotice();
+  assert.equal(dialog.attributes.role, 'alertdialog');
+  assert.equal(buttons.length, 1);
+  assert.equal(buttons[0].textContent, 'OK');
+  assert.equal(doc.activeElement, buttons[0]);
+  assert.equal(dialog.find((node) => node.tag === 'li').length, 2);
+  buttons[0].fire('click');
+  assert.equal(await promise, undefined);
+});
+
+test('noticeDialog closes with Enter, Esc, the button, the native cancel and a backdrop click, and restores focus', async () => {
+  const ways = [
+    (parts) => parts.doc.fire('keydown', { key: 'Enter' }),
+    (parts) => parts.doc.fire('keydown', { key: 'Escape' }),
+    (parts) => parts.buttons[0].fire('click'),
+    (parts) => parts.dialog.fire('cancel'),
+    (parts) => parts.dialog.fire('click', { target: parts.dialog }),
+  ];
+  for (const way of ways) {
+    const parts = openNotice();
+    way(parts);
+    await parts.promise;
+    assert.equal(parts.doc.body.children.length, 0);
+    assert.equal(parts.doc.activeElement, parts.opener);
+    assert.equal(parts.doc.listeners.has('keydown'), false);
+  }
+});
+
+test('noticeDialog: Tab keeps focus on the button and the dialog omits an empty list', async () => {
+  const parts = openNotice({ title: 't', message: 'm', closeLabel: 'OK' });
+  assert.equal(parts.dialog.find((node) => node.tag === 'ul').length, 0);
+  const tab = parts.doc.fire('keydown', { key: 'Tab' });
+  assert.equal(tab.prevented, true);
+  assert.equal(parts.doc.activeElement, parts.buttons[0]);
+  parts.buttons[0].fire('click');
+  await parts.promise;
+});
+
+test('noticeDialog while another dialog is open resolves at once and warns with the title', async () => {
+  const parts = open();
+  const warnings = [];
+  const original = console.warn;
+  console.warn = (message) => warnings.push(message);
+  try {
+    await noticeDialog(parts.doc, { title: 'Hidden title', message: 'm', closeLabel: 'OK' });
+  } finally {
+    console.warn = original;
+  }
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /Hidden title/);
+  assert.equal(parts.doc.body.children.length, 1);
+  parts.confirm.fire('click');
+  await parts.promise;
+});
+
+test('noticeDialog: a failure while opening resolves and does not leave the dialog locked', async () => {
+  const { doc } = fakeDocument();
+  const create = doc.createElement;
+  doc.createElement = (tag) => {
+    const node = create(tag);
+    if (tag === 'dialog') node.showModal = () => { throw new Error('boom'); };
+    return node;
+  };
+  await noticeDialog(doc, { title: 't', message: 'm', closeLabel: 'OK' });
+  assert.equal(doc.body.children.length, 0);
+  const next = openNotice();
+  next.buttons[0].fire('click');
+  await next.promise;
 });
