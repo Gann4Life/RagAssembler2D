@@ -28,26 +28,30 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function place(element, anchor) {
+function place(element, anchor, placement) {
   const view = anchor.ownerDocument.defaultView;
   const target = anchor.getBoundingClientRect();
   const size = element.getBoundingClientRect();
-  const left = clamp(target.right + GAP, WINDOW_PADDING, view.innerWidth - size.width - WINDOW_PADDING);
-  const top = clamp(target.top + target.height / 2 - size.height / 2, WINDOW_PADDING, view.innerHeight - size.height - WINDOW_PADDING);
+  const below = placement === 'below';
+  const preferredLeft = below ? target.left + target.width / 2 - size.width / 2 : target.right + GAP;
+  const preferredTop = below ? target.bottom + GAP : target.top + target.height / 2 - size.height / 2;
+  const left = clamp(preferredLeft, WINDOW_PADDING, view.innerWidth - size.width - WINDOW_PADDING);
+  const top = clamp(preferredTop, WINDOW_PADDING, view.innerHeight - size.height - WINDOW_PADDING);
   element.style.left = `${Math.max(WINDOW_PADDING, left)}px`;
   element.style.top = `${Math.max(WINDOW_PADDING, top)}px`;
 }
 
 /**
  * Attaches the shared custom tooltip to an element. It shows after 400 ms of mouse or pen hover, or at once when
- * the element gets `:focus-visible` focus, 8 px right of the element and inside the window, and hides on pointer
- * leave, blur, press and Esc. One tooltip shows at a time. The element's `title` is never set.
- * The tooltip element is created on the first show.
+ * the element gets `:focus-visible` focus, 8 px right of the element and vertically centered, or 8 px below it and
+ * horizontally centered, kept inside the window, and hides on pointer leave, blur, press and Esc. One tooltip shows
+ * at a time. The element's `title` is never set. The tooltip element is created on the first show.
  * @param {HTMLElement} element Element the tooltip describes.
  * @param {() => string} text Tooltip text; read on show and on `update`.
+ * @param {{ placement?: 'right' | 'below' }} [options] Side of the element the tooltip sits on; `'right'` by default.
  * @returns {TooltipHandle}
  */
-export function attachTooltip(element, text) {
+export function attachTooltip(element, text, { placement = 'right' } = {}) {
   let timer = null;
   const owner = {};
 
@@ -71,14 +75,14 @@ export function attachTooltip(element, text) {
     visible = owner;
     tooltip.textContent = text();
     tooltip.hidden = false;
-    place(tooltip, element);
+    place(tooltip, element, placement);
   }
 
   function update() {
     if (visible !== owner) return;
     const tooltip = tooltipElement(element.ownerDocument);
     tooltip.textContent = text();
-    place(tooltip, element);
+    place(tooltip, element, placement);
   }
 
   owner.hide = hide;
