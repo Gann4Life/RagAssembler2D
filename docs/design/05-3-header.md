@@ -18,7 +18,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - Older format versions are migrated.
   - Invalid files are rejected with a list of errors.
   - Sprite images are resolved relative to the file. The browser cannot read sibling files on its own, so the editor asks for the asset folder (directory picker where supported, multi-file picker otherwise). Missing images are drawn as placeholders and listed in Problems.
-- **Save**: exports the `.rag.json`, and optionally the sprite images under their `src` paths (directory save where supported, otherwise a download of each). Blocked while there are validation **errors**. **Warnings** are allowed.
+- **Save**: exports the `.rag.json`, and optionally the sprite images under their `src` paths (directory save where supported, otherwise a download of each). Blocked while there are validation **errors**. **Warnings** are allowed. The file is written in canonical form, with `meta` derived from the root name and the running editor version ([§6.5](06-file-format.md#65-round-trip-guarantee)).
 - **Undo / Redo**: step back or forward through the command stack ([§1](01-conventions.md#1-conventions)). Enabled when there is a step to undo or redo, and not in Simulate mode.
 - **Play / Pause / Next frame / Stop**:
   - Next frame advances one fixed step (1/60 s).

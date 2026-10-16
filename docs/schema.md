@@ -27,8 +27,8 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 |---|---|---|---|---|---|
 | `format` | string | `"ragassembler"` | constant | — | R |
 | `version` | integer | `FORMAT_VERSION` (1) | supported versions | — | R |
-| `meta.name` | string | `"ragdoll"` | — | — | E, R |
-| `meta.editorVersion` | string | running editor version | — | — | E, R |
+| `meta.name` | string | `"ragdoll"` (Save writes `ragdoll.name`) | — | — | E, R |
+| `meta.editorVersion` | string | set by Save (running editor version) | — | — | E, R |
 | `units.pixelsPerMeter` | number | `32` | >0 | px/m | |
 | `preview.gravity` | vec2 | `[0, -10]` | — | m/s² | E |
 | `ragdoll` | root | — | — | — | |
@@ -37,7 +37,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | `joints` | list:joint | `[]` | — | — | |
 | `clips` | list:clip | `[]` | — | — | |
 
-`meta.name` and `meta.editorVersion` are not shown as editable fields; how Save updates them is an open item (see the end of this document).
+`meta.name` and `meta.editorVersion` are not shown in the inspector. Save derives both, ignoring the values in the model: `meta.name` is `ragdoll.name` and `meta.editorVersion` is the running editor's version, `dev` when unknown ([`DESIGN.md` §6.5](design/06-file-format.md#65-round-trip-guarantee)). `toJson(model, editorVersion)` (#27) applies the rule, so validation and the serializer see the derived values.
 
 ## root (`ragdoll`)
 
@@ -231,7 +231,3 @@ Code form: `CHANNELS[target][channel] = { kind, unit, min?, max?, default, baseP
 | `fieldsOf(type, variant?)` | Fields of a type, filtered by shape variant, in canonical order. |
 | `defaultsOf(type, variant?)` | Fresh, mutable nested object with every defined default, in canonical order. Fields with an `undefined` default are left out, except `shape.type`, which is the variant when one is given. List fields are `[]`: callers building a model snapshot move them to `children`, since the model rejects collection names in props. |
 | `autoClipKey(name, takenKeys)` | Rule above. |
-
-## Open items
-
-- **`meta.name` vs `ragdoll.name`, and `meta.editorVersion` on Save:** [`DESIGN.md` §6](design/06-file-format.md#6-file-format-ragjson) does not say whether Save rewrites them, which affects byte-identical round-trip across editor versions. Until decided, the serializer writes the model's values unchanged. A new document has no `meta.editorVersion` in the model (its default is `undefined`), so `toJson` (#27) must supply it.

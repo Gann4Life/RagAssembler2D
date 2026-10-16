@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-16
+
+### Changed
+- Documented how Save fills in the file's name (from the ragdoll name) and editor version.
+
 ## [0.4.0] - 2026-10-16
 
 ### Added
