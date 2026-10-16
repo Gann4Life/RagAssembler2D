@@ -27,7 +27,7 @@
 - [x] #14 Circle and Box tools with SHIFT/ALT/CTRL modifiers
 - [ ] #15 Spike: assess feasibility of the Convex Polygon tool
 - [x] #16 Hinge Joint tool with pin and drag-limits
-- [ ] #17 Manipulate tool: move and rotate root and body subtrees
+- [x] #17 Manipulate tool: move and rotate root and body subtrees
 - [ ] #18 Group and Ungroup bodies
 - [ ] #19 Hierarchy panel with tree, search, delete and add
 - [ ] #20 Inspector framework with root and body properties
