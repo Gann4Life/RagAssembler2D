@@ -2,7 +2,7 @@
 
 | Key | Action | Key | Action |
 |---|---|---|---|
-| V / B / P | Select / Select box / Pose | C / R / N / H | Circle / Box / Polygon / Hinge |
+| V / B / D | Select / Select box / Pose | C / R / N / H | Circle / Box / Polygon / Hinge |
 | S | Toggle sprite edit (Select) | Del | Delete |
 | Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | Undo / Redo | Ctrl+S / Ctrl+O | Save / Load |
 | Ctrl+G / Ctrl+Shift+G | Group / Ungroup | Ctrl+D | Duplicate selection |

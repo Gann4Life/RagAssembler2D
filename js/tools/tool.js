@@ -138,7 +138,7 @@ function spec(id, label, hotkey, capability, group) {
 export const TOOL_SPECS = Object.freeze([
   spec('select', 'Select', 'V', 'select', 'selection'),
   spec('select-box', 'Select Box', 'B', 'select', 'selection'),
-  spec('pose', 'Pose', 'P', 'tool.pose', 'manipulation'),
+  spec('pose', 'Pose', 'D', 'tool.pose', 'manipulation'),
   spec('circle', 'Circle', 'C', 'tool.circle', 'creation'),
   spec('box', 'Box', 'R', 'tool.box', 'creation'),
   spec('polygon', 'Polygon', 'N', 'tool.polygon', 'creation'),

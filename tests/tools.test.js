@@ -131,7 +131,7 @@ test('TOOL_SPECS lists the seven tools of DESIGN §5.5 with policy capabilities'
     [
       ['select', 'Select', 'V', 'select', 'selection'],
       ['select-box', 'Select Box', 'B', 'select', 'selection'],
-      ['pose', 'Pose', 'P', 'tool.pose', 'manipulation'],
+      ['pose', 'Pose', 'D', 'tool.pose', 'manipulation'],
       ['circle', 'Circle', 'C', 'tool.circle', 'creation'],
       ['box', 'Box', 'R', 'tool.box', 'creation'],
       ['polygon', 'Polygon', 'N', 'tool.polygon', 'creation'],
