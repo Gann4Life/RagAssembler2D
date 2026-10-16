@@ -27,9 +27,48 @@ jobs:
   build:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read version
+        id: version
+        run: |
+          version=$(sed -n 's/^## \[\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)\].*/\1/p' CHANGELOG.md | head -n 1)
+          if [ -z "$version" ]; then
+            echo "No version heading found in CHANGELOG.md" >&2
+            exit 1
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+      - name: Tag and release
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
+            git fetch --tags --force origin
+            if [ "$(git rev-list -n 1 "$TAG")" = "$(git rev-parse HEAD)" ]; then
+              echo "Tag $TAG already points at HEAD, skipping release"
+              exit 0
+            fi
+            echo "Tag $TAG already exists on another commit; bump the version in CHANGELOG.md" >&2
+            exit 1
+          fi
+          awk -v heading="## [${TAG#v}]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          git tag "$TAG"
+          git push origin "refs/tags/$TAG"
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
       - name: Stage site files
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           mkdir _site
           cp index.html _site/
@@ -37,6 +76,7 @@ jobs:
             if [ -d "$dir" ]; then cp -r "$dir" _site/; fi
           done
           touch _site/.nojekyll
+          printf '{"version":"%s","commit":"%s"}\n' "$TAG" "$(git rev-parse --short HEAD)" > _site/version.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
