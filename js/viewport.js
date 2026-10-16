@@ -49,7 +49,8 @@ const READOUT_OUTLINE_WIDTH = 3;
  * and `devicePixelRatio`, also when only the ratio changes. Frames everything on start and after every model
  * `reset`. Binds the tool registry (hit testing in the displayed pose, the host cursor, overlay redraws at most once
  * per frame, the active tool's drag readout as text kept inside the host) and shows hover feedback unless the
- * active tool disables it or the pointer is over one of its handles. Makes the host `role="application"` with
+ * active tool disables it or the pointer is over one of its handles. Ticks the tools once per frame before the
+ * scene and gizmo redraws, and shows the pose they set with `ToolContext.setPose`. Makes the host `role="application"` with
  * `aria-roledescription="viewport"` and a visually hidden key summary.
  * @param {object} PIXI The PIXI.js v8 namespace.
  * @param {HTMLElement} host Element that receives the canvas.
@@ -146,7 +147,13 @@ export async function createViewport(
     boxTest: (box) => boxTest(model, box, { pose: scene.pose() }),
     setCursor: (css) => host.style.setProperty(TOOL_CURSOR_PROPERTY, css),
     invalidateOverlay,
+    setPose: (pose) => {
+      scene.setPose(pose);
+      gizmos.invalidate();
+    },
   });
+  const tickTools = (ticker) => tools.tick(ticker.deltaMS / 1000);
+  PIXI.Ticker.shared.add(tickTools, undefined, PIXI.UPDATE_PRIORITY.HIGH);
 
   const frame = (uids) => {
     const pose = scene.pose();
@@ -177,6 +184,7 @@ export async function createViewport(
     frame,
     destroy() {
       detachInput();
+      PIXI.Ticker.shared.remove(tickTools);
       unbindTools();
       offTool();
       offCamera();

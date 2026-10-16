@@ -355,6 +355,70 @@ test('the context box test forwards to the bound view and is empty unbound', () 
   assert.equal(calls.boxes.length, 1);
 });
 
+test('the context setPose forwards to the bound view and does nothing unbound', () => {
+  const services = core();
+  const { tool, context } = dragTool('select');
+  const registry = new ToolRegistry(services, [tool]);
+  const ctx = context();
+  const pose = new Map([[5, { x: 1, y: 2, angle: 0.5 }]]);
+  ctx.setPose(pose);
+  const { view } = fakeView();
+  const poses = [];
+  const unbind = registry.bindView({ ...view, setPose: (value) => poses.push(value) });
+  ctx.setPose(pose);
+  ctx.setPose(null);
+  ctx.setPose(undefined);
+  assert.deepEqual(poses, [pose, null, null]);
+  unbind();
+  ctx.setPose(pose);
+  assert.equal(poses.length, 3);
+});
+
+test('the context physics is the core service, or null when omitted', () => {
+  const physics = { startPose: () => null };
+  const withPhysics = dragTool('select');
+  new ToolRegistry({ ...core(), physics }, [withPhysics.tool]);
+  assert.equal(withPhysics.context().physics, physics);
+  const without = dragTool('select');
+  new ToolRegistry(core(), [without.tool]);
+  assert.equal(without.context().physics, null);
+});
+
+test('tick forwards the frame time to the active tool only', () => {
+  const ticks = [];
+  const registry = new ToolRegistry(core(), [
+    defineTool({ id: 'select', tick: (seconds) => ticks.push(['select', seconds]) }),
+    defineTool({ id: 'circle', tick: (seconds) => ticks.push(['circle', seconds]) }),
+  ]);
+  registry.tick(0.016);
+  registry.activate('circle');
+  registry.tick(0.032);
+  assert.deepEqual(ticks, [['select', 0.016], ['circle', 0.032]]);
+  assert.doesNotThrow(() => new ToolRegistry(core(), []).tick(1));
+  assert.doesNotThrow(() => defineTool({ id: 'box' }).tick(1));
+});
+
+test('a tick that throws during a press cancels it and rethrows', () => {
+  const services = core();
+  let cancels = 0;
+  const registry = new ToolRegistry(services, [
+    defineTool({
+      id: 'select',
+      tick: () => {
+        throw new Error('tick');
+      },
+      cancel: () => {
+        cancels++;
+        return true;
+      },
+    }),
+  ]);
+  registry.pointer(input('down', 0));
+  assert.throws(() => registry.tick(0.016), { message: 'tick' });
+  assert.equal(cancels, 1);
+  assert.equal(services.history.inGesture, false);
+});
+
 test('activation applies the tool cursor and invalidates the overlay', () => {
   const registry = new ToolRegistry(core(), [
     defineTool({ id: 'select' }),

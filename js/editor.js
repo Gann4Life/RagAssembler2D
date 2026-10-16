@@ -11,6 +11,7 @@ import { Camera } from './viewport/camera.js';
 import { ToolRegistry } from './tools/registry.js';
 import { selectTool } from './tools/select.js';
 import { selectBoxTool } from './tools/select-box.js';
+import { poseTool } from './tools/pose.js';
 import { circleTool } from './tools/circle.js';
 import { boxTool } from './tools/box.js';
 import { hingeTool } from './tools/hinge.js';
@@ -30,7 +31,7 @@ import { hingeTool } from './tools/hinge.js';
 
 const MODE_NAMES = Object.freeze({ edit: 'Edit', animate: 'Animate', simulate: 'Simulate' });
 
-const TOOLS = Object.freeze([selectTool, selectBoxTool, circleTool, boxTool, hingeTool]);
+const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, boxTool, hingeTool]);
 
 /**
  * Builds the editor core without DOM: model, history, selection, modes, settings, camera, tool registry and
@@ -38,11 +39,12 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, circleTool, boxTool, hin
  * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
  * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
  * and the `delete`, `add-shape` and `add-joint` actions.
- * @param {{ settings?: Settings }} [options] Restored editor settings; defaults when omitted.
+ * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null }} [options] Restored editor
+ *   settings, defaults when omitted; physics service for the Pose tool, `null` when omitted.
  * @returns {Readonly<Editor>} The editor.
  * @throws {TypeError} When `settings` is given and is not a `Settings` instance.
  */
-export function createEditor({ settings = Settings.restore(undefined).settings } = {}) {
+export function createEditor({ settings = Settings.restore(undefined).settings, physics = null } = {}) {
   if (!(settings instanceof Settings)) throw new TypeError('settings must be a Settings instance');
   const model = new Model();
   const history = new History(model);
@@ -50,7 +52,7 @@ export function createEditor({ settings = Settings.restore(undefined).settings }
   const modes = new Modes(model);
   const camera = new Camera();
   const tools = new ToolRegistry(
-    { model, history, selection, modes, settings, camera },
+    { model, history, selection, modes, settings, camera, physics },
     TOOLS.map((createTool) => createTool()),
   );
   const actions = new ActionRegistry();

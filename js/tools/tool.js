@@ -48,6 +48,34 @@
  * @property {(box: import('../../lib/geometry.js').Aabb) => number[]} boxTest Uids inside a world box, meters.
  * @property {(css: string) => void} setCursor Sets the viewport cursor.
  * @property {() => void} invalidateOverlay Requests a tool overlay redraw.
+ * @property {(pose: import('../viewport/bounds.js').Pose|null) => void} setPose Shows body transforms (root-local)
+ *   instead of the rest pose; `null` returns to the rest pose.
+ */
+
+/**
+ * Where a pose test starts.
+ * @typedef {object} PoseSessionOptions
+ * @property {import('../../lib/geometry.js').Transform} root Ragdoll position and angle, world, meters and radians.
+ * @property {string} bodyId File id of the grabbed body.
+ * @property {import('../../lib/geometry.js').Vec2} point Grabbed point, world meters.
+ */
+
+/**
+ * One running pose test, owned by the tool that started it until `destroy`.
+ * @typedef {object} PoseSession
+ * @property {(point: import('../../lib/geometry.js').Vec2) => void} drag Moves the pull target, world meters.
+ * @property {(seconds: number) => void} advance Runs the fixed steps due after `seconds` more.
+ * @property {() => Map<string, import('../../lib/geometry.js').Transform>} pose Body id → root-local transform.
+ * @property {() => { anchor: import('../../lib/geometry.js').Vec2, target: import('../../lib/geometry.js').Vec2 }} grab
+ *   Grabbed point on the body and pull target, world meters.
+ * @property {() => void} destroy Releases every native object; idempotent. Other calls throw afterwards.
+ */
+
+/**
+ * Physics service injected into the editor.
+ * @typedef {object} PhysicsService
+ * @property {(json: object, options: PoseSessionOptions) => PoseSession} startPose Starts a pose test on a
+ *   `.rag.json` document; throws when it cannot start.
  */
 
 /**
@@ -68,6 +96,9 @@
  * @property {(box: import('../../lib/geometry.js').Aabb) => number[]} boxTest Uids inside a world box, meters; `[]` without a view.
  * @property {(css: string|null) => void} setCursor Overrides the cursor; `null` restores the tool's cursor.
  * @property {() => void} invalidateOverlay Requests a tool overlay redraw.
+ * @property {(pose: import('../viewport/bounds.js').Pose|null) => void} setPose Shows body transforms (root-local)
+ *   instead of the rest pose, `null` for the rest pose; does nothing without a view.
+ * @property {PhysicsService|null} physics Physics service, or `null` when the editor has none.
  */
 
 /**
@@ -86,6 +117,7 @@
  * @property {(e: ToolPointerEvent) => void} pointerUp Left or right release.
  * @property {(e: ToolKeyEvent) => boolean} keyDown Key press; `true` when consumed.
  * @property {() => boolean} cancel Aborts the local operation; `true` when there was one.
+ * @property {(seconds: number) => void} tick Called once per frame while active, with the frame time in seconds.
  * @property {(g: object) => void} drawOverlay Draws on a cleared `PIXI.Graphics` in screen space, CSS px.
  * @property {(screen: { x: number, y: number }) => string|null} handleAt Id of the tool handle under a screen point,
  *   CSS px, or `null`.
@@ -126,6 +158,7 @@ const HANDLERS = Object.freeze({
   pointerUp: () => {},
   keyDown: () => false,
   cancel: () => false,
+  tick: () => {},
   drawOverlay: () => {},
   handleAt: () => null,
   readout: () => null,
