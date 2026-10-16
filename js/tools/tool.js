@@ -99,6 +99,7 @@
  * @property {(pose: import('../viewport/bounds.js').Pose|null) => void} setPose Shows body transforms (root-local)
  *   instead of the rest pose, `null` for the rest pose; does nothing without a view.
  * @property {PhysicsService|null} physics Physics service, or `null` when the editor has none.
+ * @property {() => string} editorVersion Version of the running editor, read when needed; dev until known.
  */
 
 /**

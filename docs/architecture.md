@@ -38,7 +38,7 @@ RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `
 
 | Layer | Modules | Rules |
 |---|---|---|
-| Core | `js/editor.js`, `js/model/*`, `js/commands/*`, `js/modes.js`, `js/hotkeys.js`, `js/actions.js`, `js/units.js`, `js/settings.js`, `js/roving-focus.js`, `js/tree-nav.js`, `js/tools/*`, `js/viewport/camera.js`, `js/viewport/bounds.js`, `js/viewport/grid-lines.js`, `js/viewport/snap.js`, `js/viewport/hit.js`, `js/viewport/placement.js`, `js/viewport/style.js`, `js/panels/layout.js` | No DOM, no PIXI import, no globals. Load and run under `node --test`. Import only `lib/` and other core modules. Tools draw only through the `PIXI.Graphics` they are handed. |
+| Core | `js/editor.js`, `js/model/*`, `js/commands/*`, `js/modes.js`, `js/hotkeys.js`, `js/actions.js`, `js/units.js`, `js/settings.js`, `js/version.js`, `js/roving-focus.js`, `js/tree-nav.js`, `js/tools/*`, `js/viewport/camera.js`, `js/viewport/bounds.js`, `js/viewport/grid-lines.js`, `js/viewport/snap.js`, `js/viewport/hit.js`, `js/viewport/placement.js`, `js/viewport/style.js`, `js/panels/layout.js` | No DOM, no PIXI import, no globals. Load and run under `node --test`. Import only `lib/` and other core modules. Tools draw only through the `PIXI.Graphics` they are handed. |
 | UI | `js/main.js`, `js/header.js`, `js/menu.js`, `js/viewport.js`, `js/viewport/*` (other than camera, bounds, grid-lines, snap, hit, placement, style), `js/panels/*` (other than layout), `js/settings-dialog.js`, `js/confirm-dialog.js`, `js/tooltip.js`, `js/storage.js`, `js/files.js`, `js/asset-store.js`, `js/physics/*` | May import core and `lib/`. Receive the editor object, `PIXI` and `Box2D` as parameters. `js/physics/*` touch LiquidFun only, never the DOM or PIXI, and reach the core only through the `ToolContext.physics` service that `js/main.js` builds. Panel content modules (`hierarchy`, `assets`, `problems`, `inspector`, `timeline`) never import each other or the dock modules (`js/panels/dock.js`, `js/panels/layout.js`); `js/main.js` mounts them into the element the dock gives for their panel. Never mutate the model directly. |
 
 Pure modules (`lib/` pure set and the `js/` core) must not touch the DOM, PIXI or LiquidFun.
@@ -70,11 +70,12 @@ Each topic lives in its own file; read only the one you need.
 | Emitter | [emitter.md](architecture/emitter.md) | Shared `Emitter` class. |
 | Schema | [schema.md](architecture/schema.md) | Property schema pointer. |
 | Validation | [validation.md](architecture/validation.md) | `lib/validate.js`, its geometry helpers and how the editor consumes problems. |
+| Model I/O | [model-io.md](architecture/model-io.md) | Load, save, New, migration, canonical serializer and the editor version (#27). |
 
 ## Data flow
 
 1. **Authoring:** UI action → command → `history.execute` → model ops → one `change` event → views update their own entries (scene, hierarchy, inspector, timeline, Problems after a debounced `validate(toJson(model))`).
-2. **Save:** `toJson(model)` → `validate` (blocked on errors) → `serialize` → `.rag.json` (+ sprite files). **Load:** parse JSON → `migrate` → `validate` → `loadJson` → `reset`.
+2. **Save:** `toJson(model, editor.editorVersion())` → `validate` (blocked on errors) → `serialize` → `.rag.json` (+ sprite files). **Load:** `loadJson(model, text)`: parse JSON → `migrate` → `validate` (rejected on errors, model untouched) → drop unknown fields → `reset` ([Model I/O](architecture/model-io.md#model-io)).
 3. **Animate mode:** model clips → `lib/evaluate.js` at the playhead → FK pose (`scene.setPose`) and sprite channels.
 4. **Simulate mode / runtime:** `toJson(model)` → `RagImporter.parse` → spawn in a LiquidFun world → each step:
 

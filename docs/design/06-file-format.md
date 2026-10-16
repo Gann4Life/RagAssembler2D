@@ -119,7 +119,7 @@
 
 ## 6.3 Versioning
 - `version` is an integer and increases on any breaking change.
-- The editor migrates older versions on load and always saves the latest one.
+- The editor migrates older versions on load and always saves the latest one. Migration is an ordered chain of pure steps, one per version (N → N+1), each tested on its own; a breaking change adds its step. A file with errors after migration is rejected ([§5.3](05-3-header.md#53-header)).
 - RagImporter declares the versions it supports (`RagImporter.supportedVersions`) and **throws** on any other version, with a clear message; `validate` reports it as `E_VERSION_UNSUPPORTED` ([§6.4](#64-validation)).
 - Unknown fields:
   - RagImporter ignores them;
@@ -146,7 +146,7 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 
 | Code | Condition | Path |
 |---|---|---|
-| `E_FORMAT` | The input is not an object, or `format` is not `"ragassembler"`. | `""` or `/format` |
+| `E_FORMAT` | The input is not an object, or `format` is not `"ragassembler"`. The editor's loader also uses it for text that is not valid JSON. | `""` or `/format` |
 | `E_VERSION_UNSUPPORTED` | `version` is missing or not one of `RagImporter.supportedVersions` ([§6.3](#63-versioning)). | `/version` |
 | `E_FIELD_MISSING` | A field of `docs/schema.md` is absent (only `fixtures[].sprite` is optional). | the field |
 | `E_FIELD_TYPE` | Wrong type: numbers must be finite, `integer` whole, `vec2` two finite numbers, `color` `#rrggbb`, references a string (or `null` where allowed), lists arrays of objects. | the field |
@@ -200,8 +200,9 @@ Joint edges, unlinked bodies and loop joints follow one rule, shared with the ed
 Save always writes the **canonical form**:
 - Key order follows the example above.
 - Arrays keep editor order: sprite assets in Assets panel order; bodies, joints and clips in hierarchy/list order; fixtures in body order; keys sorted by `t`; events sorted by `t`.
-- Numbers are rounded to 1e-5 and written without trailing zeros. `-0` is written as `0`.
+- Numbers are rounded to 1e-5 and written without trailing zeros. `-0` is written as `0`. This applies to every number, `json` values (`events[].data`) included; keys inside `json` values keep their order.
 - 2-space indentation, `\n` line endings, final newline.
+- An array whose items are all numbers (e.g. a `vec2`) is written on one line as `[x, y]`, with `, ` between items; every other array and every object is expanded, one item or key per line; empty arrays and objects are `[]` and `{}`. The §6.1 example is compacted for reading and is not canonical.
 - `meta` is derived on every Save, never copied from the loaded file:
   - `meta.name` is `ragdoll.name`;
   - `meta.editorVersion` is the running editor's version: the `version` of the deployed `version.json` without its leading `v` (`v0.4.0` → `0.4.0`), or `dev` when it is unavailable (local server, failed or pending fetch).

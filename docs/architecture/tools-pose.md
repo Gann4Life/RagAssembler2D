@@ -4,7 +4,7 @@ Behavior in [`DESIGN.md` §5.5](../design/05-5-tools.md#55-tools) (Pose). Built 
 
 | Module | Layer | Role |
 |---|---|---|
-| `js/model/io.js` | Core | `toJson(model) → object`: the document in the `.rag.json` data shape. Created by #145 with only this function; #27 adds the load and reset paths. |
+| `js/model/io.js` | Core | `toJson(model) → object`: the document in the `.rag.json` data shape. Created by #145 with only this function; #27 makes it `toJson(model, editorVersion)` and adds the load and reset paths ([Model I/O](model-io.md#model-io)). |
 | `js/tools/pose.js` | Core | `poseTool() → Tool`: press, drag, release and cancel; owns no native object. |
 | `js/physics/pose-session.js` | UI | `createPoseSession(Box2D, json, options) → PoseSession`: one LiquidFun world per press. No DOM, no PIXI import; receives `Box2D` as a parameter, so it is not a pure module. Loaded by `tests/liquidfun-pose-session.test.js`. |
 
@@ -21,6 +21,8 @@ toJson(model) → object
 
 poseTestJson(json) → object                       exported by js/physics/pose-session.js; pure, never mutates json
   copy of json with sprites [], clips [], every shape's sprite null, selfCollide false, filter.maskBits 0
+  (until #27 it also fills a missing meta.editorVersion with '0.0.0'; #27 removes that, since toJson then
+  always writes meta with the real version)
 
 PoseSessionOptions { root: Transform (ragdoll position and angle, world), bodyId: string, point: Vec2 (world, m) }
 createPoseSession(Box2D, json, options) → PoseSession
@@ -55,7 +57,7 @@ The session never calls `rag.update()`, so joint motors stay off and joints are 
 ## `poseTool()`
 
 - `cursor` `'default'`, `hover` `true`.
-- **pointerDown** (left, Edit mode, `ctx.physics` not `null`, `ctx.modes.can('edit.rest')`): the first `shape` uid of `ctx.hitTest(e.screen)` gives the body uid (its parent) and file id. None: nothing. Otherwise `ctx.physics.startPose(toJson(ctx.model), { root, bodyId, point: e.world })`; on a throw the press is refused (cursor `not-allowed` until the release, no session). In Animate mode a press does nothing until the keying issue.
+- **pointerDown** (left, Edit mode, `ctx.physics` not `null`, `ctx.modes.can('edit.rest')`): the first `shape` uid of `ctx.hitTest(e.screen)` gives the body uid (its parent) and file id. None: nothing. Otherwise `ctx.physics.startPose(toJson(ctx.model), { root, bodyId, point: e.world })` (`toJson(ctx.model, ctx.editorVersion())` from #27); on a throw the press is refused (cursor `not-allowed` until the release, no session). In Animate mode a press does nothing until the keying issue.
 - **pointerMove** during a session: `session.drag(e.world)`, `invalidateOverlay()`. Idle: cursor `grab` over a shape hit, else `null`.
 - **tick(seconds)** during a session: `session.advance(seconds)`, then `ctx.setPose` with `session.pose()` mapped from body ids to uids through `model.uidOf`, then `invalidateOverlay()`.
 - **pointerUp**, **cancel()** and **deactivate()**: `session.destroy()`, `ctx.setPose(null)`, cursor back. `cancel()` returns `true` only when a session or a refused press was in progress. The registry's Esc, tool switch, mode change, reset, closed gesture and throwing handler paths all reach `cancel()`.

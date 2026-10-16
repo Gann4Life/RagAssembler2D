@@ -82,7 +82,7 @@ function environment({ physics = fakePhysics(), withPhysics = true } = {}) {
   });
   assert.equal(tools.activate('pose'), true);
   const snapshot = () => ({
-    json: JSON.stringify(toJson(model)),
+    json: JSON.stringify(toJson(model, 'dev')),
     selection: [...selection.objects],
     history: JSON.stringify(history.state),
   });
@@ -119,7 +119,7 @@ test('a press on a shape starts a session with the body id, root transform and w
   assert.equal(physics.starts.length, 1);
   const { json, options } = physics.starts[0];
   assert.equal(json.format, 'ragassembler');
-  assert.deepEqual(json, toJson(model));
+  assert.deepEqual(json, toJson(model, 'dev'));
   assert.equal(options.bodyId, model.get(bodies[1]).props.id);
   assert.deepEqual(options.root, { x: 0.5, y: -0.25, angle: 0.3 });
   assert.deepEqual(options.point, camera.screenToWorld({ x: 260, y: 190 }));

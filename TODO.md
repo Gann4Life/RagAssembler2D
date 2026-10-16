@@ -37,7 +37,7 @@
 - [ ] #24 Select tool: aimAxis handle and sprite edit mode
 - [x] #25 Implement RagImporter.validate with all errors and warnings
 - [ ] #26 Problems panel with live validation
-- [ ] #27 Canonical .rag.json serializer and loader with migration
+- [x] #27 Canonical .rag.json serializer and loader with migration
 - [ ] #28 Header Save/Load with sprite folder resolution
 - [ ] #29 Autosave draft and recovery on startup
 - [ ] #63 Duplicate selection with Ctrl+D
@@ -75,6 +75,7 @@
 - [x] #147 Version every deploy as a release and show the version in the editor
 - [ ] #152 Edit hinge joint limits with angle handles
 - [ ] #153 Lock the root transform and name it root
+- [ ] #156 Change the Pose tool hotkey from P to D
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults

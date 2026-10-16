@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-16
+
+### Added
+- New action: starts an empty ragdoll, asking for confirmation first when there are unsaved changes.
+- Files saved by the editor use a fixed canonical layout (stable key order, inline number arrays), so saving the same ragdoll twice gives identical files.
+
 ## [0.5.0] - 2026-10-16
 
 ### Added
