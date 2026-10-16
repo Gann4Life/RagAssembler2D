@@ -42,7 +42,6 @@ import { hingeTool } from './tools/hinge.js';
 
 const MODE_NAMES = Object.freeze({ edit: 'Edit', animate: 'Animate', simulate: 'Simulate' });
 
-
 function countOf(count, word) {
   return `${count} ${count === 1 ? word : word === 'body' ? 'bodies' : `${word}s`}`;
 }
@@ -79,7 +78,7 @@ function deleteRequest(model, plan) {
   });
 }
 
-const TOOLS =Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, boxTool, hingeTool]);
+const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, boxTool, hingeTool]);
 
 /**
  * Builds the editor core without DOM: model, history, selection, modes, settings, camera, tool registry and

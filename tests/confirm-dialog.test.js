@@ -78,8 +78,19 @@ class FakeNode {
 }
 
 function fakeDocument() {
+  const listeners = new Map();
   const doc = {
     createElement: (tag) => new FakeNode(doc, tag),
+    addEventListener: (type, fn) => listeners.set(type, fn),
+    removeEventListener: (type, fn) => {
+      if (listeners.get(type) === fn) listeners.delete(type);
+    },
+    listeners,
+    fire(type, event = {}) {
+      const full = { preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; }, ...event };
+      listeners.get(type)?.(full);
+      return full;
+    },
   };
   doc.body = new FakeNode(doc, 'body');
   doc.body.isConnected = true;
@@ -122,7 +133,7 @@ test('confirmDialog omits the list when there are no items', async () => {
 });
 
 test('confirmDialog: Enter and the confirm button resolve true and restore focus', async () => {
-  for (const choose of [(parts) => parts.dialog.fire('keydown', { key: 'Enter' }), (parts) => parts.confirm.fire('click')]) {
+  for (const choose of [(parts) => parts.doc.fire('keydown', { key: 'Enter' }), (parts) => parts.confirm.fire('click')]) {
     const parts = open();
     choose(parts);
     assert.equal(await parts.promise, true);
@@ -131,12 +142,12 @@ test('confirmDialog: Enter and the confirm button resolve true and restore focus
   }
 });
 
-test('confirmDialog: Esc, Cancel, the native cancel event and a backdrop press resolve false and restore focus', async () => {
+test('confirmDialog: Esc, Cancel, the native cancel event and a backdrop click resolve false and restore focus', async () => {
   const ways = [
-    (parts) => parts.dialog.fire('keydown', { key: 'Escape' }),
+    (parts) => parts.doc.fire('keydown', { key: 'Escape' }),
     (parts) => parts.cancel.fire('click'),
     (parts) => parts.dialog.fire('cancel'),
-    (parts) => parts.dialog.fire('pointerdown', { target: parts.dialog }),
+    (parts) => parts.dialog.fire('click', { target: parts.dialog }),
   ];
   for (const way of ways) {
     const parts = open();
@@ -149,15 +160,15 @@ test('confirmDialog: Esc, Cancel, the native cancel event and a backdrop press r
 
 test('confirmDialog: a press inside the content does not cancel, Enter on Cancel cancels, Tab swaps the two buttons', async () => {
   const parts = open();
-  parts.dialog.fire('pointerdown', { target: parts.confirm });
+  parts.dialog.fire('click', { target: parts.confirm });
   assert.equal(parts.doc.body.children.length, 1);
-  const tab = parts.dialog.fire('keydown', { key: 'Tab' });
+  const tab = parts.doc.fire('keydown', { key: 'Tab' });
   assert.equal(tab.prevented, true);
   assert.equal(parts.doc.activeElement, parts.cancel);
-  parts.dialog.fire('keydown', { key: 'Tab', shiftKey: true });
+  parts.doc.fire('keydown', { key: 'Tab', shiftKey: true });
   assert.equal(parts.doc.activeElement, parts.confirm);
-  parts.dialog.fire('keydown', { key: 'Tab' });
-  const enter = parts.dialog.fire('keydown', { key: 'Enter' });
+  parts.doc.fire('keydown', { key: 'Tab' });
+  const enter = parts.doc.fire('keydown', { key: 'Enter' });
   assert.equal(enter.stopped, true);
   assert.equal(await parts.promise, false);
 });
@@ -180,4 +191,42 @@ test('confirmDialog: focus is not restored to an element that left the document'
   parts.confirm.fire('click');
   await parts.promise;
   assert.equal(parts.opener.focusCalls, calls);
+});
+
+test('confirmDialog: key presses are handled on the document in the capture phase and stop there; closing removes the listener', async () => {
+  const parts = open();
+  parts.doc.activeElement = parts.doc.body;
+  const other = parts.doc.fire('keydown', { key: 'z', ctrlKey: true });
+  assert.equal(other.stopped, true);
+  assert.equal(parts.doc.body.children.length, 1);
+  parts.doc.fire('keydown', { key: 'Enter' });
+  assert.equal(await parts.promise, true);
+  assert.equal(parts.doc.listeners.has('keydown'), false);
+  assert.equal(parts.dialog.attributes.tabindex, '-1');
+});
+
+test('confirmDialog: a repeated key press is swallowed and does not confirm', async () => {
+  const parts = open();
+  const held = parts.doc.fire('keydown', { key: 'Enter', repeat: true });
+  assert.equal(held.stopped, true);
+  assert.equal(held.prevented, true);
+  assert.equal(parts.doc.body.children.length, 1);
+  parts.cancel.fire('click');
+  assert.equal(await parts.promise, false);
+});
+
+test('confirmDialog: a failure while opening resolves false and does not leave the dialog locked', async () => {
+  const { doc } = fakeDocument();
+  const create = doc.createElement;
+  doc.createElement = (tag) => {
+    const node = create(tag);
+    if (tag === 'dialog') node.showModal = () => { throw new Error('boom'); };
+    return node;
+  };
+  assert.equal(await confirmDialog(doc, OPTIONS), false);
+  assert.equal(doc.body.children.length, 0);
+  assert.equal(doc.listeners.has('keydown'), false);
+  const next = open();
+  next.confirm.fire('click');
+  assert.equal(await next.promise, true);
 });

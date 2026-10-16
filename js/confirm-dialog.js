@@ -40,7 +40,7 @@ export function confirmKey(event, focused) {
  * Opens the shared modal confirmation dialog: a native `<dialog role="alertdialog">` with a title, a message, an
  * optional list of items, and Cancel and confirm buttons. Focus starts on the confirm button, Tab stays inside, Enter
  * confirms, Esc, Cancel or a click on the backdrop cancel, and focus returns to the previously focused element.
- * Only one dialog is open at a time: a call while one is open resolves `false` at once. Never rejects.
+ * While open it handles every key press itself in the capture phase, so no other handler hears one. Only one dialog is open at a time: a call while one is open resolves `false` at once. Never rejects.
  * @param {Document} doc The document that hosts the dialog.
  * @param {ConfirmOptions} options Dialog content.
  * @returns {Promise<boolean>} `true` when confirmed, `false` when cancelled.
@@ -60,6 +60,7 @@ export function confirmDialog(doc, { title, message, items = [], confirmLabel, c
   const dialog = element('dialog', { className: 'confirm-dialog' });
   dialog.setAttribute('role', 'alertdialog');
   dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('tabindex', '-1');
   const heading = element('h2', { className: 'confirm-title', textContent: title, id: 'confirm-dialog-title' });
   const text = element('p', { className: 'confirm-message', textContent: message, id: 'confirm-dialog-message' });
   dialog.setAttribute('aria-labelledby', heading.id);
@@ -83,9 +84,23 @@ export function confirmDialog(doc, { title, message, items = [], confirmLabel, c
 
   return new Promise((resolve) => {
     let settled = false;
+    const onKeydown = (event) => {
+      event.stopPropagation();
+      if (event.repeat) {
+        event.preventDefault();
+        return;
+      }
+      const outcome = confirmKey(event, focusedPart());
+      if (outcome === null) return;
+      event.preventDefault();
+      if (outcome === 'confirm') close(true);
+      else if (outcome === 'cancel') close(false);
+      else (focusedPart() === 'confirm' ? cancelButton : confirmButton).focus();
+    };
     const close = (result) => {
       if (settled) return;
       settled = true;
+      doc.removeEventListener('keydown', onKeydown, true);
       dialog.remove();
       dialogOpen = false;
       if (previous?.isConnected && typeof previous.focus === 'function') previous.focus({ preventScroll: true });
@@ -97,27 +112,23 @@ export function confirmDialog(doc, { title, message, items = [], confirmLabel, c
       return 'other';
     };
 
-    dialog.addEventListener('keydown', (event) => {
-      event.stopPropagation();
-      const outcome = confirmKey(event, focusedPart());
-      if (outcome === null) return;
-      event.preventDefault();
-      if (outcome === 'confirm') close(true);
-      else if (outcome === 'cancel') close(false);
-      else (focusedPart() === 'confirm' ? cancelButton : confirmButton).focus();
-    });
     dialog.addEventListener('cancel', (event) => {
       event.preventDefault();
       close(false);
     });
-    dialog.addEventListener('pointerdown', (event) => {
+    dialog.addEventListener('click', (event) => {
       if (event.target === dialog) close(false);
     });
     cancelButton.addEventListener('click', () => close(false));
     confirmButton.addEventListener('click', () => close(true));
+    doc.addEventListener('keydown', onKeydown, true);
 
-    doc.body.append(dialog);
-    dialog.showModal();
-    confirmButton.focus();
+    try {
+      doc.body.append(dialog);
+      dialog.showModal();
+      confirmButton.focus();
+    } catch {
+      close(false);
+    }
   });
 }
