@@ -9,7 +9,7 @@
 
   ```
   ConfirmRequest {
-    kind:         'delete' | 'new' | 'load'  what asks ('load' from #28). The dialog ignores it
+    kind:         'delete' | 'new' | 'load' | 'group'  what asks ('load' from #28, 'group' from #18). The dialog ignores it
     title:        string            dialog heading
     message:      string            one sentence or two, plain text
     items:        string[]          plain-text list under the message, may be empty
@@ -18,7 +18,7 @@
   }
   ```
 
-  The wording is built in core (the `delete` request: [Hierarchy and deletion](hierarchy-and-deletion.md#hierarchy-and-deletion)), so it is tested under Node; the dialog only renders it.
+  The wording is built in core (the `delete` request: [Hierarchy and deletion](hierarchy-and-deletion.md#hierarchy-and-deletion); the `group` request: [Group, Ungroup and Split](grouping.md#actions-jseditorjs)), so it is tested under Node; the dialog only renders it.
 - **New (#27):** `new` asks through `confirm` with a `ConfirmRequest` of kind `'new'` (confirm label `Discard`) when `history.dirty`, then `newDocument(model)` (which resets history and selection); a clean document resets without asking. Enabled by `canFile` (below; #28 replaces the `edit.rest` check, which wrongly disabled New in Animate mode, [`DESIGN.md` §5.1](../design/05-1-modes.md#51-editor-modes)).
 - **`canFile` (#28):** `modes.can('file') && !history.inGesture && !confirming && !loading && !saving`, where `saving` is held while a save is pending, and `loading` is held from the moment `read` resolves with text until the load ends, so overlapping loads (two drops, a drop and Ctrl+O) cannot interleave; `reason` is the mode reason for `file`, else `null`. Shared by `new`, `load`, `save` and `loadFrom`.
 - **Notices (#28):** `notify: (notice: Notice) => Promise<void>` is how core actions report what the user must read, with no Problems panel involved. Omitted, it is `() => Promise.resolve()`; anything else that is not a function throws `TypeError`, checked with `settings`. Not exposed on `Editor`. `js/main.js` passes `(notice) => noticeDialog(document, notice)` ([Module map](module-map.md), `js/confirm-dialog.js`). Actions call it and do not wait for it; a rejection is ignored. Typedef `Notice`, exported by `js/editor.js` (the dialog's own `NoticeOptions` has the same shape without `kind`):
