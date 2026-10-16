@@ -1,6 +1,6 @@
 # Model I/O
 
-> Status: built (#27). `toJson` appeared in #145 ([Tools: Pose](tools-pose.md#tools-pose)). `saveJson`, `ragFileName` and the Load and Save wiring are **(planned)** for #28.
+> Status: built (#27). `toJson` appeared in #145 ([Tools: Pose](tools-pose.md#tools-pose)). `saveJson`, `ragFileName` and the Load and Save wiring were added in #28.
 
 Behavior in [`DESIGN.md` §6.3–6.5](../design/06-file-format.md#63-versioning). Modules:
 
