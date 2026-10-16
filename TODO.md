@@ -45,7 +45,7 @@
 - [ ] #71 Keep header controls reachable on narrow windows
 - [ ] #72 Show a visible error when vendored libraries are missing
 - [x] #73 Clarify header alignment and viewport ARIA role in the spec
-- [ ] #77 Decide how Save writes meta.name and meta.editorVersion
+- [x] #77 Decide how Save writes meta.name and meta.editorVersion
 - [x] #78 Warn about duplicate body, joint and shape names
 - [ ] #83 Drag a whole panel stack by its tab bar
 - [ ] #84 Maximize a panel by double-clicking its tab
@@ -73,6 +73,8 @@
 - [x] #143 Show the swept angle as a circle slice while rotating
 - [ ] #144 Move a shape to another body by dragging it in the Hierarchy
 - [x] #147 Version every deploy as a release and show the version in the editor
+- [ ] #152 Edit hinge joint limits with angle handles
+- [ ] #153 Lock the root transform and name it root
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
@@ -110,7 +112,7 @@
 - [ ] #56 Spike: verify determinism between editor and host page
 - [ ] #100 Native-memory regression test for ragdoll spawn, update and destroy
 - [ ] #120 Fixed ground setting for physics preview
-- [ ] #145 Pose tool in Edit mode (physics test, discarded on release)
+- [x] #145 Pose tool in Edit mode (physics test, discarded on release)
 
 ## Phase 5 – Demo
 - [ ] #57 Author the demo humanoid with sprites and clips in the editor
