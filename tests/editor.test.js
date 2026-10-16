@@ -147,7 +147,8 @@ test('escape cancels an open gesture, else clears the selection', () => {
 
 const SELECTION_TOOLS = ['select', 'select-box'];
 const CREATION_TOOLS = ['circle', 'box', 'hinge'];
-const REGISTERED_TOOLS = [...SELECTION_TOOLS, ...CREATION_TOOLS];
+const MANIPULATION_TOOLS = ['manipulate'];
+const REGISTERED_TOOLS = [...SELECTION_TOOLS, ...MANIPULATION_TOOLS, ...CREATION_TOOLS];
 
 test('createEditor builds a tool registry with the built tools, Select active', () => {
   const editor = createEditor();
@@ -226,6 +227,22 @@ test('tool:hinge is enabled in Edit mode and refused in Animate mode', () => {
   assert.equal(actions.isEnabled('tool:hinge'), false);
   assert.equal(actions.reason('tool:hinge'), 'not available in Animate mode');
   assert.notEqual(tools.active?.id, 'hinge');
+});
+
+test('tool:manipulate is enabled in Edit and Animate mode and refused in Simulate mode', () => {
+  const editor = createEditor();
+  const { actions, tools, modes } = editor;
+  assert.equal(actions.isEnabled('tool:manipulate'), true);
+  assert.equal(actions.run('tool:manipulate'), true);
+  assert.equal(tools.active?.id, 'manipulate');
+  modes.openClip(addClip(editor));
+  assert.equal(actions.isEnabled('tool:manipulate'), true);
+  assert.equal(actions.reason('tool:manipulate'), null);
+  assert.equal(tools.active?.id, 'manipulate');
+  modes.startSimulate();
+  assert.equal(actions.isEnabled('tool:manipulate'), false);
+  assert.equal(actions.reason('tool:manipulate'), 'not available in Simulate mode');
+  assert.equal(tools.active?.id, 'select');
 });
 
 test('undo through the action during a gesture only cancels it', () => {

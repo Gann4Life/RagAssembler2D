@@ -100,3 +100,65 @@ export function orderJointBodies(model, bodyUid1, bodyUid2) {
   }
   return firstIsA ? { bodyA: bodyUid1, bodyB: bodyUid2 } : { bodyA: bodyUid2, bodyB: bodyUid1 };
 }
+
+/**
+ * Parent joint of every body that has one: a linked body's tree joint from `rootBody`, and for an unlinked
+ * body the first joint in `joints` order that has it as bodyB. `rootBody` has none; loop joints never appear.
+ * @param {import('./model.js').Model} model Document model.
+ * @returns {Map<number, number>} A new map, joint uid by body uid, in `bodies` order.
+ */
+export function parentJoints(model) {
+  const tree = jointTree(model);
+  const unlinked = new Map();
+  for (const edge of jointEdges(model)) {
+    if (!tree.depth.has(edge.b) && !unlinked.has(edge.b)) unlinked.set(edge.b, edge.uid);
+  }
+  const parents = new Map();
+  for (const body of model.children(ROOT_UID, 'bodies')) {
+    const joint = tree.depth.has(body) ? tree.parent.get(body) : unlinked.get(body);
+    if (joint !== undefined) parents.set(body, joint);
+  }
+  return parents;
+}
+
+function parentBodies(model, parents) {
+  const result = new Map();
+  for (const [body, joint] of parents) {
+    const props = model.get(joint)?.props;
+    if (!props) continue;
+    const a = bodyUidOf(model, props.bodyA);
+    const b = bodyUidOf(model, props.bodyB);
+    const other = a === body ? b : a;
+    if (other !== null) result.set(body, other);
+  }
+  return result;
+}
+
+/**
+ * A body and every body whose chain of parent joints leads to it. Chains stop at a body without a parent
+ * joint or at a body already seen on the chain, so cycles terminate.
+ * @param {import('./model.js').Model} model Document model.
+ * @param {number} bodyUid Body uid.
+ * @param {Map<number, number>} [parents] Result of `parentJoints(model)`, to reuse across calls.
+ * @returns {Set<number>} A new set: `bodyUid` first, then the other bodies in `bodies` order.
+ * @throws {Error} When `bodyUid` is not a body.
+ */
+export function bodySubtree(model, bodyUid, parents = parentJoints(model)) {
+  if (!isBody(model, bodyUid)) throw new Error('bodySubtree needs a body uid');
+  const parentOf = parentBodies(model, parents);
+  const subtree = new Set([bodyUid]);
+  for (const body of model.children(ROOT_UID, 'bodies')) {
+    if (body === bodyUid) continue;
+    const seen = new Set([body]);
+    let current = parentOf.get(body);
+    while (current !== undefined && !seen.has(current)) {
+      if (current === bodyUid) {
+        subtree.add(body);
+        break;
+      }
+      seen.add(current);
+      current = parentOf.get(current);
+    }
+  }
+  return subtree;
+}

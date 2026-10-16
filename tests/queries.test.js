@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Model, ROOT_UID } from '../js/model/model.js';
 import { History } from '../js/commands/history.js';
-import { jointBetween, jointTree, orderJointBodies } from '../js/model/queries.js';
+import { bodySubtree, jointBetween, jointTree, orderJointBodies, parentJoints } from '../js/model/queries.js';
 import { defaultsOf } from '../lib/schema.js';
 
 function build({ bodies = [], joints = [], rootBody = null, shapes = [] }) {
@@ -226,4 +226,116 @@ test('orderJointBodies throws for non-bodies and equal uids', () => {
   assert.throws(() => orderJointBodies(model, uids.j_1, uids.b_2), Error);
   assert.throws(() => orderJointBodies(model, ROOT_UID, uids.b_2), Error);
   assert.throws(() => orderJointBodies(model, uids.b_1, 999), Error);
+});
+
+function named(uids) {
+  const names = new Map(Object.entries(uids).map(([name, uid]) => [uid, name]));
+  return (uid) => names.get(uid);
+}
+
+function parentNames(model, uids) {
+  const name = named(uids);
+  return [...parentJoints(model)].map(([body, joint]) => [name(body), name(joint)]);
+}
+
+function subtreeNames(model, uids, body, parents) {
+  return [...bodySubtree(model, uids[body], parents)].map(named(uids));
+}
+
+test('parentJoints: tree joints of a chain and a branch, none for rootBody', () => {
+  const chain = build({ bodies: ['b_1', 'b_2', 'b_3'], joints: [['b_1', 'b_2'], ['b_2', 'b_3']], rootBody: 'b_1' });
+  assert.deepEqual(parentNames(chain.model, chain.uids), [['b_2', 'j_1'], ['b_3', 'j_2']]);
+  const branch = build({
+    bodies: ['b_1', 'b_2', 'b_3', 'b_4'],
+    joints: [['b_1', 'b_2'], ['b_1', 'b_3'], ['b_3', 'b_4']],
+    rootBody: 'b_1',
+  });
+  assert.deepEqual(parentNames(branch.model, branch.uids), [['b_2', 'j_1'], ['b_3', 'j_2'], ['b_4', 'j_3']]);
+});
+
+test('parentJoints: a loop joint is never a parent, and a reversed tree joint still is', () => {
+  const loop = build({ bodies: ['b_1', 'b_2', 'b_3'], joints: [['b_1', 'b_2'], ['b_2', 'b_3'], ['b_3', 'b_1']], rootBody: 'b_1' });
+  assert.deepEqual(parentNames(loop.model, loop.uids), [['b_2', 'j_1'], ['b_3', 'j_3']]);
+  const reversed = build({ bodies: ['b_1', 'b_2', 'b_3'], joints: [['b_2', 'b_1'], ['b_3', 'b_2']], rootBody: 'b_1' });
+  assert.deepEqual(parentNames(reversed.model, reversed.uids), [['b_2', 'j_1'], ['b_3', 'j_2']]);
+});
+
+test('parentJoints: unlinked bodies take the first joint that has them as bodyB', () => {
+  const { model, uids } = build({
+    bodies: ['b_1', 'b_2', 'b_3', 'b_4', 'b_5'],
+    joints: [['b_1', 'b_2'], ['b_3', 'b_4'], ['b_5', 'b_4'], ['b_4', 'b_5']],
+    rootBody: 'b_1',
+  });
+  assert.deepEqual(parentNames(model, uids), [['b_2', 'j_1'], ['b_4', 'j_2'], ['b_5', 'j_4']]);
+});
+
+test('parentJoints: with rootBody null every body follows the unlinked rule', () => {
+  const { model, uids } = build({ bodies: ['b_1', 'b_2', 'b_3'], joints: [['b_1', 'b_2'], ['b_2', 'b_3']] });
+  assert.deepEqual(parentNames(model, uids), [['b_2', 'j_1'], ['b_3', 'j_2']]);
+});
+
+test('parentJoints: ignored joints are never parents', () => {
+  const { model, uids } = build({
+    bodies: ['b_1', 'b_2', 'b_3'],
+    shapes: ['b_1'],
+    joints: [[null, 'b_2'], ['b_9', 'b_3'], ['f_b_1', 'b_2'], ['b_3', 'b_3'], ['b_1', null]],
+  });
+  assert.deepEqual(parentNames(model, uids), []);
+});
+
+test('bodySubtree of rootBody holds every linked body and no unlinked one', () => {
+  const { model, uids } = build({
+    bodies: ['b_1', 'b_2', 'b_3', 'b_4', 'b_5'],
+    joints: [['b_1', 'b_2'], ['b_2', 'b_3'], ['b_4', 'b_5']],
+    rootBody: 'b_1',
+  });
+  assert.deepEqual(subtreeNames(model, uids, 'b_1'), ['b_1', 'b_2', 'b_3']);
+});
+
+test('bodySubtree of a mid-chain body, a leaf and a branch', () => {
+  const { model, uids } = build({
+    bodies: ['b_1', 'b_2', 'b_3', 'b_4', 'b_5'],
+    joints: [['b_1', 'b_2'], ['b_2', 'b_3'], ['b_2', 'b_4'], ['b_4', 'b_5']],
+    rootBody: 'b_1',
+  });
+  assert.deepEqual(subtreeNames(model, uids, 'b_2'), ['b_2', 'b_3', 'b_4', 'b_5']);
+  assert.deepEqual(subtreeNames(model, uids, 'b_4'), ['b_4', 'b_5']);
+  assert.deepEqual(subtreeNames(model, uids, 'b_5'), ['b_5']);
+});
+
+test('bodySubtree does not follow a loop joint', () => {
+  const { model, uids } = build({
+    bodies: ['b_1', 'b_2', 'b_3', 'b_4'],
+    joints: [['b_1', 'b_2'], ['b_1', 'b_3'], ['b_3', 'b_4'], ['b_2', 'b_4']],
+    rootBody: 'b_1',
+  });
+  assert.deepEqual(subtreeNames(model, uids, 'b_2'), ['b_2', 'b_4']);
+  assert.deepEqual(subtreeNames(model, uids, 'b_3'), ['b_3']);
+});
+
+test('bodySubtree follows an unlinked chain from bodyA to bodyB and ends a directed cycle', () => {
+  const chain = build({ bodies: ['b_3', 'b_1', 'b_2'], joints: [['b_1', 'b_2'], ['b_2', 'b_3']] });
+  assert.deepEqual(subtreeNames(chain.model, chain.uids, 'b_1'), ['b_1', 'b_3', 'b_2']);
+  assert.deepEqual(subtreeNames(chain.model, chain.uids, 'b_2'), ['b_2', 'b_3']);
+  const cycle = build({ bodies: ['b_1', 'b_2', 'b_3', 'b_4'], joints: [['b_1', 'b_2'], ['b_2', 'b_3'], ['b_3', 'b_1'], ['b_3', 'b_4']] });
+  assert.deepEqual(subtreeNames(cycle.model, cycle.uids, 'b_2'), ['b_2', 'b_1', 'b_3', 'b_4']);
+  assert.deepEqual(subtreeNames(cycle.model, cycle.uids, 'b_4'), ['b_4']);
+});
+
+test('bodySubtree gives the same result with a shared parents map', () => {
+  const { model, uids } = build({
+    bodies: ['b_1', 'b_2', 'b_3'],
+    joints: [['b_1', 'b_2'], ['b_2', 'b_3']],
+    rootBody: 'b_1',
+  });
+  const parents = parentJoints(model);
+  for (const body of ['b_1', 'b_2', 'b_3']) {
+    assert.deepEqual(subtreeNames(model, uids, body, parents), subtreeNames(model, uids, body));
+  }
+});
+
+test('bodySubtree throws for a uid that is not a body', () => {
+  const { model, uids } = build({ bodies: ['b_1', 'b_2'], shapes: ['b_1'], joints: [['b_1', 'b_2']], rootBody: 'b_1' });
+  const shapeUid = model.children(uids.b_1, 'fixtures')[0];
+  for (const uid of [shapeUid, uids.j_1, ROOT_UID, 999]) assert.throws(() => bodySubtree(model, uid), Error);
 });

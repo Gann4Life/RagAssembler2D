@@ -12,8 +12,9 @@ export const LINE_WIDTH = Object.freeze({ outline: 1, selected: 2 });
 
 /**
  * Gizmo sizes, CSS px: root cross arm and ring radius, joint circle radius, limit arc radius, needle and
- * `aimAxis` arrow lengths, center-of-mass marker radius.
- * @type {Readonly<{ rootCross: number, rootRing: number, jointCircle: number, jointArc: number, jointNeedle: number, aimArrow: number, centerOfMass: number }>}
+ * `aimAxis` arrow lengths, center-of-mass marker radius, and the Manipulate rotate knob distance from the pivot,
+ * knob radius and pivot cross arm.
+ * @type {Readonly<{ rootCross: number, rootRing: number, jointCircle: number, jointArc: number, jointNeedle: number, aimArrow: number, centerOfMass: number, rotateHandle: number, rotateKnob: number, pivot: number }>}
  */
 export const GIZMO_SIZE = Object.freeze({
   rootCross: 14,
@@ -23,13 +24,16 @@ export const GIZMO_SIZE = Object.freeze({
   jointNeedle: 20,
   aimArrow: 32,
   centerOfMass: 5,
+  rotateHandle: 40,
+  rotateKnob: 5,
+  pivot: 4,
 });
 
 /**
- * Hit radii, CSS px: joint anchors, the root position and the distance around shapes.
- * @type {Readonly<{ joint: number, root: number, shape: number }>}
+ * Hit radii, CSS px: joint anchors, the root position, the distance around shapes and tool handles.
+ * @type {Readonly<{ joint: number, root: number, shape: number, handle: number }>}
  */
-export const HIT_RADIUS = Object.freeze({ joint: 8, root: 12, shape: 4 });
+export const HIT_RADIUS = Object.freeze({ joint: 8, root: 12, shape: 4, handle: 8 });
 
 /** Overlay label font size, CSS px. */
 export const LABEL_SIZE = 11;

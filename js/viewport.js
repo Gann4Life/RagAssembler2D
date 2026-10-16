@@ -90,6 +90,12 @@ export async function createViewport(
   };
   PIXI.Ticker.shared.add(drawOverlay);
   const offCamera = camera.on('camera', invalidateOverlay);
+  const overlayTriggers = [
+    selection.on('selection', invalidateOverlay),
+    modes.on('mode', invalidateOverlay),
+    model.on('change', invalidateOverlay),
+    model.on('reset', invalidateOverlay),
+  ];
 
   const hoverAllowed = () => tools.active === null || tools.active.hover;
   const onHover = (screen) => {
@@ -140,6 +146,7 @@ export async function createViewport(
       unbindTools();
       offTool();
       offCamera();
+      for (const off of overlayTriggers) off();
       offReset();
       PIXI.Ticker.shared.remove(drawOverlay);
       stopResolutionWatch();

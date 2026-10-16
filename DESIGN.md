@@ -99,6 +99,11 @@ v1 supports **revolute (hinge) joints** only.
 - Limits are relative to rest and must satisfy `lower ≤ 0 ≤ upper`, so the rest pose is always valid.
 - `aimAxis` (radians, local to bodyB, default 0 = bodyB's +X) is the direction that counts as "forward" for that limb, e.g. where the head's face or the arm points. It is used by procedural aiming ([§4.8](#48-procedural-joint-control)).
 - If the joint graph has cycles, joints outside the spanning tree from `rootBody` are flagged as **loop joints**. They are simulated normally but ignored by FK preview.
+- **Parent joint and subtree.** A body's **parent joint** links it toward `rootBody`:
+  - for a body connected to `rootBody`, it is the joint through which the spanning tree from `rootBody` reaches it; `rootBody` has none, and loop joints are never parent joints;
+  - for a body not connected to `rootBody`, it is the first joint in `joints` order that has it as bodyB and another body as bodyA, or none.
+
+  A body's **subtree** is the body itself plus every body whose chain of parent joints leads to it. The Manipulate tool moves and rotates subtrees and pivots around parent joint anchors ([§5.5](#55-tools)).
 
 ### 2.5 Collision rules
 - **Self-collision:** two shapes of the *same* ragdoll instance collide only if **both** have `selfCollide = true` (default `false`).
@@ -296,7 +301,7 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 | Select, Select Box, Hierarchy selection | ✓ | ✓ | ✓ |
 | Manipulate, Pose | ✓ | ✓ (into keys, below) | — |
 | Creation tools: Circle, Box, Polygon, Hinge | ✓ | — | — |
-| Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add/delete; Group, Ungroup, Duplicate; Manipulate move, joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
+| Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add/delete; Group, Ungroup, Duplicate; Manipulate move and rest-pose rotate, joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
 | Animation edits: clip properties, tracks, keys, events, key buttons ◆, autokey, Key selected (K), Manipulate rotate → parent joint `angle`, Pose → keys | — | ✓ | — |
 | Asset import | ✓ | ✓ | — |
 | Asset delete | ✓ | — | — |
@@ -411,7 +416,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - Lines are 1 CSS px wide at every zoom, aligned to device pixels.
 - **Snapping:**
   - **Grid snap** (*Snap to grid*, default off) rounds the points that tools place or drag to the nearest multiple of the minor spacing, in world coordinates, whether the grid is shown or not: creation points and polygon vertices, the Hinge anchor, and the position a Manipulate move reaches (root position, body position with its subtree following, joint anchor). Sizes follow from snapped points, and a circle's radius is rounded to the minor spacing, never below it. Sprite edit, Pose, inspector fields and Hierarchy additions do not snap.
-  - **Angle snap:** SHIFT while rotating (Manipulate rotate handle, `aimAxis` handle, sprite edit ring) or while dragging Hinge Joint limits rounds the resulting angle to a multiple of 15°: the body's root-local `angle` in Edit mode, the parent joint's `angle` channel in Animate mode, `aimAxis` and the sprite `angle` in their own frames, and the Hinge limit θ ([§5.5](#55-tools)).
+  - **Angle snap:** SHIFT while rotating (Manipulate rotate handle, `aimAxis` handle, sprite edit ring) or while dragging Hinge Joint limits rounds the resulting angle to a multiple of 15°: the root's `angle` or the body's root-local `angle` in Edit mode, the parent joint's `angle` channel in Animate mode, `aimAxis` and the sprite `angle` in their own frames, and the Hinge limit θ ([§5.5](#55-tools)).
 - **Display modes** (Settings, default Both), in every editor mode:
 
   | Mode | Sprites | Shapes |
@@ -425,7 +430,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
 - **Gizmos** are drawn above the shapes and sprites, at a constant size in CSS px at every zoom, joints above the root:
   - root: a pivot cross (14 px arms, turned by the root's angle) and a ring (10 px radius) at the root position;
   - joints: a circle (6 px radius) at the anchor; when limits are enabled, an arc (20 px radius) from `lower` to `upper`; a needle (20 px) at the current joint angle (0 in Edit mode); the strength fill in Animate mode; and, when the joint is selected, an `aimAxis` arrow (32 px) along bodyB's angle plus `aimAxis`. Arc and needle angles are measured from the joint's **zero direction**: the direction from the anchor to bodyB's origin in the rest pose (bodyB's +X when they coincide), turned with bodyA. At rest the needle therefore lies along the child limb, and the arc shows how far it may swing each way. A joint without a valid `bodyA` or `bodyB` draws only its circle, and one whose `anchor` is missing or not finite draws nothing, is never hit and is left out of framing;
-  - sprite handles in sprite-edit mode ([§5.5](#55-tools)).
+  - the Manipulate rotate knob, and sprite handles in sprite-edit mode ([§5.5](#55-tools)), drawn by the active tool.
 
   Gizmos are drawn in `#d8dade`, except as the feedback below says.
 - **Hit testing** decides what the pointer is over, for hover, the tools and drops onto the viewport. At a screen point the hits are, topmost first: joints whose anchor is within 8 px (later joints in `joints` order first), the root when its position is within 12 px, then shapes that contain the point or lie within 4 px of it (later bodies first, and later shapes of a body first). Bodies, sprite images and sprite assets are never hit: a click on a shape selects the shape, and its body is selected from the Hierarchy. Shapes with invalid geometry (a non-positive size, fewer than 3 vertices) are skipped; concave and self-intersecting polygon drafts are hit as drawn (even-odd rule).
@@ -487,7 +492,7 @@ The tools live in a **floating toolbar overlay inside the Viewport panel**, not 
 - **Aborting.** Esc, choosing another tool, Undo, a mode change, New or Load during a drag aborts it and leaves the document as it was ([§1](#1-conventions)); so does the pointer being lost (window switch, pointer capture lost). Esc, choosing another tool, a mode change, New and Load also abort an operation that spans several clicks (a polygon being drawn); Undo between those clicks undoes the previous step and keeps the operation. Choosing the active tool again does nothing.
 - **Coordinates and snapping.** Tools work in world meters and store root-local data. Points and lengths they place snap as [§5.4](#54-viewport) says.
 - **Creation tools** (Circle, Box, Polygon, Hinge Joint) show what they will create while drawing, change the document only when the operation completes (one undo step), then select what they created (the new shape, or the new joint) and stay active. An operation that is aborted or refused changes neither the document nor the selection.
-- **Cursor:** the active tool's cursor (crosshair for creation tools and Select Box, the default arrow for Select), except while navigating.
+- **Cursor:** the active tool's cursor (crosshair for creation tools and Select Box, the default arrow for Select; Manipulate's follows what is under the pointer, below), except while navigating.
 
 **Tools.**
 
@@ -504,13 +509,29 @@ The tools live in a **floating toolbar overlay inside the Viewport panel**, not 
   - A click on empty space clears the selection when no modifier is held (as Esc does), and does nothing with SHIFT or CTRL.
   - Hover keeps showing the topmost hit, also while ALT is held. A double click is two clicks. Right presses do nothing.
 - **Select Box** (`B`): drag for a selection box. A press that never becomes a drag acts as an empty box: without modifiers it clears the selection, with them it does nothing. With multiple shapes selected, they can be grouped (Ctrl+G) into one body.
-- **Manipulate** (`M`): move and rotate.
-  - **Root:** dragging moves the whole ragdoll.
-  - **Body:** dragging moves the body **and its joint subtree** (child bodies and the connecting joints), so moving an upper arm carries the forearm and hand. ALT + drag moves only the selected body.
-  - **Rotate handle:** rotates around the body's parent joint anchor if it has one, otherwise around its center. CTRL forces the center.
-  - **Joint:** dragging moves only its anchor. A warning is raised if the anchor ends outside both bodies' shapes. A second handle rotates `aimAxis`.
+- **Manipulate** (`M`): move and rotate the selection, in the displayed pose ([§5.4](#54-viewport)).
+  - **Target.** The selection decides what the tool acts on. When the root is selected, the target is the root alone: it carries everything, so other selected objects are ignored. Otherwise the target is every selected body, the body of every selected shape, and every selected joint. Sprite assets and clips are ignored.
+  - **Press.** A left press is resolved in this order:
+    1. within 8 px of a handle of the target (rotate knob, `aimAxis` tip): drags that handle;
+    2. on the topmost hit ([§5.4](#54-viewport), Hit testing), when it belongs to the target (it is selected, or it is a shape whose body is in the target): drags the whole target;
+    3. on any other hit: selects only that object, then drags it as the new target;
+    4. on empty space: drags nothing; released as a click, it clears the selection.
+
+    Modifiers never change what is selected; the Select tool does that. Selecting at the press is not part of the operation, so an aborted drag keeps the new selection. Once the pointer has moved 4 px from the press point on screen, the press is a drag until its release; a click only selects.
+  - **Move** (dragging the target):
+    - **Root:** moves the whole ragdoll (the root's `position`).
+    - **Bodies:** each target body moves with its **subtree** ([§2.4](#24-joints)), so moving an upper arm carries the forearm and the hand. ALT + drag moves only the target bodies. Each body moves once, also when subtrees overlap.
+    - **Joint anchors** move with the bodies when the body they are the parent joint of moves, or when both their bodies move; the others stay. Selected joints move their anchor too, so with only joints selected a drag moves just their anchors. Example: moving an upper arm carries the shoulder, elbow and wrist anchors; ALT + dragging the forearm carries the elbow anchor and leaves the wrist anchor with the hand. Validation warns when an anchor ends outside both bodies' shapes ([§6.4](#64-validation)).
+    - Everything moves by one vector: the pointer's displacement since the press, adjusted so that the pressed object's point (the root position, the origin of the pressed shape's body, the pressed joint's anchor) lands on the grid when grid snap is on ([§5.4](#54-viewport)).
+  - **Rotate knob:** shown when the target is the root, or exactly one body and no joints (any number of that body's shapes may be selected). It is a 5 px knob 40 px from the **pivot** along the root's or the body's +X axis, so it turns with it, joined to the pivot by a 1 px line, with a 4 px cross at the pivot, all in `#5b9cf5`. Dragging it rotates by the angle the pointer sweeps around the pivot since the press, following it past half a turn.
+    - **Root:** rotates the whole ragdoll around the root position (the root's `angle`).
+    - **Body:** the pivot is the anchor of the body's parent joint ([§2.4](#24-joints)) when it has one and that anchor is placed, otherwise the body origin; CTRL forces the origin. The body rotates with its subtree and with the anchors that Move would carry; ALT rotates only the body.
+    - SHIFT rounds the resulting angle to 15° ([§5.4](#54-viewport)). CTRL, ALT and SHIFT are read live; when CTRL changes the pivot during a drag, the swept angle is measured again from the press point around the new pivot.
+  - **`aimAxis` handle:** when the target is exactly one joint, the tip of its `aimAxis` arrow ([§5.4](#54-viewport)) is a handle. Dragging it points `aimAxis` from the anchor toward the pointer, relative to bodyB's angle; SHIFT rounds `aimAxis` to 15°.
   - **Sprite edit** (toggle `S` while a shape with a sprite is selected): the handles edit the sprite instead of the shape. Dragging changes `offset`, the ring changes `angle`, the corners change `scale` (SHIFT keeps proportions). Physics is untouched.
-  - **In Animate mode:** rotating a body sets the `angle` of its parent joint at the playhead (keyed if autokey is on).
+  - **Cursor:** the default arrow over empty space, `move` over an object, `pointer` over a handle; during a drag, `move` while moving and `pointer` while rotating.
+  - **Undo:** each drag is one undo step, and a drag that ends where it started leaves none ([§1](#1-conventions)).
+  - **In Animate mode** only rotation is offered, into keys. The rotate knob is shown when the target is exactly one body that has a parent joint, whose anchor is the pivot; CTRL and ALT do nothing, and the root has no knob. Rotating sets the `angle` of that parent joint at the playhead (keyed if autokey is on), and the subtree follows by FK. Presses select as in Edit mode, and nothing moves.
 - **Pose** (`P`): simulates physics while the mouse is held, with **no gravity**. The grabbed body is pulled by a mouse joint, and the other joints hold their current pose at moderate strength.
   - In **Edit mode** the result is discarded on release (testing only). It never overrides the rest pose.
   - In **Animate mode** the result becomes the FK pose at the playhead. With **autokey** on, `angle` keys are created for every joint whose angle changed by more than 0.1°.
