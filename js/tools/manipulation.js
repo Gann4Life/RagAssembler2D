@@ -22,6 +22,8 @@ import { formatMove, formatRotation } from './transform-gizmo.js';
  * @property {() => import('../../lib/geometry.js').Vec2|null} pivot Current gizmo pivot, world meters; `null` when it
  *   is not placed.
  * @property {() => string} readout Readout text of the last applied step.
+ * @property {() => { start: number, angle: number }|null} [sweep] Rotation only: world direction of the press from the
+ *   pivot and the applied angle, radians, counter-clockwise positive.
  */
 
 const PIVOT_DEAD_ZONE = 1;
@@ -311,6 +313,9 @@ export function startRotation(ctx, { target, press, mode }) {
     },
     pivot() {
       return current && Object.freeze({ x: current.x, y: current.y });
+    },
+    sweep() {
+      return { start: direction(current, press.world), angle: applied };
     },
     readout() {
       return formatRotation(applied);

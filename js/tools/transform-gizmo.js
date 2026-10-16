@@ -21,6 +21,8 @@ const WHITE = 0xffffff;
 const HOT_EXTRA_WIDTH = 1;
 const SQUARE_GROWTH = 2;
 const SQUARE_FILL_ALPHA = 0.4;
+const SLICE_FILL_ALPHA = 0.25;
+const SLICE_STEP = Math.PI / 36;
 const PIVOT_DOT = 1.5;
 const RING_DASHES = 32;
 const RING_DUTY = 0.5;
@@ -139,19 +141,61 @@ function drawPivotMark(g, pivot, mode) {
 }
 
 /**
+ * Geometry of the swept-angle slice on screen. Angles in are world radians, counter-clockwise positive; angles out are
+ * screen radians (Y down, clockwise positive), so the slice matches the on-screen turn.
+ * @typedef {object} RotationSlice
+ * @property {number} start Screen angle of the press direction.
+ * @property {number} end Screen angle of the current direction.
+ * @property {boolean} anticlockwise Whether the slice runs counter-clockwise on screen.
+ * @property {boolean} full Whether the sweep is a whole turn or more, so the slice is the full disc.
+ * @property {{ x: number, y: number }[]} points Polygon of the slice, the pivot first; the full circle when `full`.
+ */
+
+/**
+ * The slice of the rotation ring from the press angle to the applied angle.
+ * @param {{ x: number, y: number }} pivot Pivot on screen, CSS px.
+ * @param {number} radius Ring radius, CSS px.
+ * @param {number} startAngle World angle of the press direction from the pivot, radians.
+ * @param {number} sweep Applied rotation, radians, counter-clockwise positive; past 2π draws the full disc.
+ * @returns {RotationSlice} The slice.
+ */
+export function rotationSlice(pivot, radius, startAngle, sweep) {
+  const start = -startAngle;
+  const end = start - sweep;
+  const full = Math.abs(sweep) >= 2 * Math.PI;
+  const span = full ? 2 * Math.PI : Math.abs(sweep);
+  const sign = sweep < 0 ? 1 : -1;
+  const steps = Math.max(1, Math.ceil(span / SLICE_STEP));
+  const arc = Array.from({ length: steps + 1 }, (_, i) => {
+    const angle = start + (sign * span * i) / steps;
+    return { x: pivot.x + radius * Math.cos(angle), y: pivot.y + radius * Math.sin(angle) };
+  });
+  return { start, end, anticlockwise: sweep > 0, full, points: full ? arc.slice(0, -1) : [{ x: pivot.x, y: pivot.y }, ...arc] };
+}
+
+function drawSlice(g, pivot, radius, sweep) {
+  const slice = rotationSlice(pivot, radius, sweep.start, sweep.angle);
+  g.poly(slice.points.flatMap(({ x, y }) => [x, y]));
+  g.fill({ color: COLORS.gizmoZ, alpha: SLICE_FILL_ALPHA });
+  g.stroke({ width: LINE_WIDTH.outline, color: COLORS.gizmoZ });
+}
+/**
  * Draws the transform gizmo on a `PIXI.Graphics` in screen space: dashed ring (32 dashes), arrows, square, then the pivot
  * mark (a cross in Center mode, a ring with a dot in Last selected mode). The hovered or active handle is white and
- * 1 px wider. `points`, when given, draws point handles between the arrows and the square. Uses only `moveTo`,
+ * 1 px wider. `sweep`, when given with a ring, first fills the swept-angle slice (see `rotationSlice`).
+ * `points`, when given, draws point handles between the arrows and the square. Uses only `moveTo`,
  * `lineTo`, `poly`, `rect`, `circle`, `fill` and `stroke`.
  * @param {object} g `PIXI.Graphics` to draw on.
  * @param {Readonly<GizmoLayout>} layout Gizmo layout.
  * @param {{ hover: GizmoHandle|null, active: GizmoHandle|null, mode: 'center'|'last',
- *   points?: (g: object) => void }} state Hovered and dragged handles, the pivot mode and the point handle drawer.
+ *   sweep?: { start: number, angle: number }|null, points?: (g: object) => void }} state Hovered and dragged handles,
+ *   the pivot mode, the rotation in progress (world press direction and applied angle) and the point handle drawer.
  * @returns {void}
  */
-export function drawGizmo(g, layout, { hover, active, mode, points }) {
+export function drawGizmo(g, layout, { hover, active, mode, points, sweep }) {
   const state = { hover, active };
   const { pivot, square } = layout;
+  if (layout.ring !== null && sweep) drawSlice(g, pivot, layout.ring, sweep);
   if (layout.ring !== null) {
     const ring = look('ring', COLORS.gizmoZ, LINE_WIDTH.gizmo, state);
     drawDashedRing(g, pivot, layout.ring);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { drawGizmo, formatMove, formatRotation, gizmoHandleAt, gizmoLayout } from '../js/tools/transform-gizmo.js';
+import { drawGizmo, formatMove, formatRotation, gizmoHandleAt, gizmoLayout, rotationSlice } from '../js/tools/transform-gizmo.js';
 import { COLORS, GIZMO_SIZE, HIT_RADIUS, LINE_WIDTH } from '../js/viewport/style.js';
 
 const PIVOT = { x: 200, y: 150 };
@@ -176,4 +176,39 @@ test('drawGizmo calls points after the arrows and before the square', () => {
   const marker = g.calls.findIndex(([method, x, y, r]) => method === 'circle' && x === 0 && y === 0 && r === 1);
   assert.ok(marker > methods.lastIndexOf('poly'));
   assert.ok(marker < methods.indexOf('rect'));
+});
+
+test('rotationSlice: counter-clockwise sweep turns counter-clockwise on screen', () => {
+  const slice = rotationSlice({ x: 100, y: 100 }, 72, 0, Math.PI / 2);
+  assert.equal(slice.full, false);
+  assert.equal(slice.anticlockwise, true);
+  assert.equal(slice.start, -0);
+  assert.ok(Math.abs(slice.end + Math.PI / 2) < 1e-12);
+  assert.deepEqual(slice.points[0], { x: 100, y: 100 });
+  const last = slice.points.at(-1);
+  assert.ok(Math.abs(last.x - 100) < 1e-9 && Math.abs(last.y - 28) < 1e-9);
+});
+
+test('rotationSlice: negative sweep is clockwise and ends below the press on screen', () => {
+  const slice = rotationSlice({ x: 0, y: 0 }, 10, 0, -Math.PI / 3);
+  assert.equal(slice.anticlockwise, false);
+  const last = slice.points.at(-1);
+  assert.ok(last.y > 0 && Math.abs(last.x - 5) < 1e-9);
+});
+
+test('rotationSlice: 360 degrees or more is the full disc without the pivot', () => {
+  const full = rotationSlice({ x: 0, y: 0 }, 10, 1, 3 * Math.PI);
+  assert.equal(full.full, true);
+  assert.notDeepEqual(full.points[0], { x: 0, y: 0 });
+  assert.equal(full.points.length, 72);
+  assert.equal(rotationSlice({ x: 0, y: 0 }, 10, 0, -2 * Math.PI).full, true);
+  assert.equal(rotationSlice({ x: 0, y: 0 }, 10, 0, 2 * Math.PI - 0.01).full, false);
+});
+
+test('rotationSlice: a SHIFT-snapped 15 degree sweep ends exactly 15 degrees from the press', () => {
+  const sweep = (15 * Math.PI) / 180;
+  const slice = rotationSlice({ x: 0, y: 0 }, 72, 0.3, sweep);
+  assert.ok(Math.abs(slice.start - slice.end - sweep) < 1e-12);
+  const last = slice.points.at(-1);
+  assert.ok(Math.abs(Math.atan2(last.y, last.x) - slice.end) < 1e-9);
 });

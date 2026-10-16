@@ -69,6 +69,9 @@
 - [x] #134 Dashed blue rotation ring and orange shape outlines
 - [x] #138 Shapes render without their translucent fill
 - [ ] #139 Body focus mode: isolate a body to edit and add its shapes
+- [ ] #142 Group resize for multi-shape selections
+- [x] #143 Show the swept angle as a circle slice while rotating
+- [ ] #144 Move a shape to another body by dragging it in the Hierarchy
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
@@ -106,6 +109,7 @@
 - [ ] #56 Spike: verify determinism between editor and host page
 - [ ] #100 Native-memory regression test for ragdoll spawn, update and destroy
 - [ ] #120 Fixed ground setting for physics preview
+- [ ] #145 Pose tool in Edit mode (physics test, discarded on release)
 
 ## Phase 5 – Demo
 - [ ] #57 Author the demo humanoid with sprites and clips in the editor
