@@ -7,6 +7,8 @@
   --text: #d8dade;
   --text-muted: #8b8f97;
   --focus: #5b9cf5;
+  --error: #e5484d;
+  --warning: #f5a524;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -461,8 +463,8 @@ body.dock-resizing-column * {
 }
 
 .settings-row input[aria-invalid="true"] {
-  border-color: #e0524f;
-  outline-color: #e0524f;
+  border-color: var(--error);
+  outline-color: var(--error);
 }
 
 .settings-unit {
@@ -624,4 +626,211 @@ body.dock-resizing-column * {
 
 .tooltip[hidden] {
   display: none;
+}
+
+.dock-panel.hierarchy-panel {
+  place-items: stretch;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.hierarchy-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hierarchy-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.hierarchy-search:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.hierarchy-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hierarchy-button.is-icon {
+  justify-content: center;
+  width: 24px;
+  padding: 0;
+}
+
+.hierarchy-button:hover:not([aria-disabled="true"]) {
+  background: var(--surface-hover);
+}
+
+.hierarchy-button[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.hierarchy-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.hierarchy-button-chevron,
+.hierarchy-button-icon,
+.hierarchy-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+}
+
+.hierarchy-button-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+.hierarchy-button-icon svg,
+.hierarchy-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.hierarchy-toolbar svg,
+.hierarchy-tree svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.hierarchy-tree {
+  grid-area: 2 / 1;
+  min-height: 0;
+  margin: 0;
+  padding: 2px 0;
+  list-style: none;
+  overflow: auto;
+  user-select: none;
+}
+
+.hierarchy-empty {
+  grid-area: 2 / 1;
+  align-self: start;
+  margin: 0;
+  padding: 8px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.hierarchy-empty[hidden] {
+  display: none;
+}
+
+.hierarchy-row {
+  --level: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px 0 calc(4px + (var(--level) - 1) * 14px);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.hierarchy-row:hover {
+  background: var(--surface-hover);
+}
+
+.hierarchy-row[aria-selected="true"] {
+  background: color-mix(in srgb, var(--focus) 35%, transparent);
+}
+
+.hierarchy-row:focus {
+  outline: none;
+}
+
+.hierarchy-row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.hierarchy-row.is-dimmed {
+  color: var(--text-muted);
+}
+
+.hierarchy-arrow {
+  flex: none;
+  width: 14px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.hierarchy-row[aria-expanded] .hierarchy-arrow {
+  cursor: pointer;
+}
+
+.hierarchy-icon.is-warning {
+  color: var(--warning);
+}
+
+.hierarchy-label,
+.hierarchy-id {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hierarchy-id,
+.hierarchy-loop-to,
+.hierarchy-label.is-muted {
+  color: var(--text-muted);
+}
+
+.hierarchy-loop-to {
+  flex: none;
+}
+
+.hierarchy-badge {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.hierarchy-badge.is-error {
+  color: var(--error);
+}
+
+.hierarchy-row mark {
+  background: none;
+  color: var(--focus);
+  font-weight: 600;
 }
