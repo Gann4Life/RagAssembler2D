@@ -141,15 +141,15 @@ function drawPivotMark(g, pivot, mode) {
 /**
  * Draws the transform gizmo on a `PIXI.Graphics` in screen space: dashed ring (32 dashes), arrows, square, then the pivot
  * mark (a cross in Center mode, a ring with a dot in Last selected mode). The hovered or active handle is white and
- * 1 px wider.
- * Uses only `moveTo`, `lineTo`, `poly`, `rect`, `circle`, `fill` and `stroke`.
+ * 1 px wider. `points`, when given, draws point handles between the arrows and the square. Uses only `moveTo`,
+ * `lineTo`, `poly`, `rect`, `circle`, `fill` and `stroke`.
  * @param {object} g `PIXI.Graphics` to draw on.
  * @param {Readonly<GizmoLayout>} layout Gizmo layout.
- * @param {{ hover: GizmoHandle|null, active: GizmoHandle|null, mode: 'center'|'last' }} state Hovered and dragged
- *   handles, and the pivot mode.
+ * @param {{ hover: GizmoHandle|null, active: GizmoHandle|null, mode: 'center'|'last',
+ *   points?: (g: object) => void }} state Hovered and dragged handles, the pivot mode and the point handle drawer.
  * @returns {void}
  */
-export function drawGizmo(g, layout, { hover, active, mode }) {
+export function drawGizmo(g, layout, { hover, active, mode, points }) {
   const state = { hover, active };
   const { pivot, square } = layout;
   if (layout.ring !== null) {
@@ -159,6 +159,7 @@ export function drawGizmo(g, layout, { hover, active, mode }) {
   }
   drawArrow(g, layout.x, look('x', COLORS.gizmoX, LINE_WIDTH.gizmo, state));
   drawArrow(g, layout.y, look('y', COLORS.gizmoY, LINE_WIDTH.gizmo, state));
+  points?.(g);
   const free = look('square', COLORS.gizmoFree, LINE_WIDTH.outline, state);
   g.rect(square.x, square.y, square.size, square.size);
   g.fill({ color: free.color, alpha: SQUARE_FILL_ALPHA });

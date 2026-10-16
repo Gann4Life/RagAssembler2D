@@ -160,3 +160,20 @@ test('drawGizmo: hover and active handles are white and 1 px wider; no ring with
   assert.deepEqual(square.calls[rect + 1], ['fill', { color: 0xffffff, alpha: 0.4 }]);
   assert.deepEqual(square.calls[rect + 2], ['stroke', { width: LINE_WIDTH.outline + 1, color: 0xffffff }]);
 });
+
+test('drawGizmo calls points after the arrows and before the square', () => {
+  const g = fakeGraphics();
+  drawGizmo(g, gizmoLayout(PIVOT, { ring: true }), {
+    hover: null,
+    active: null,
+    mode: 'center',
+    points: (graphics) => {
+      assert.equal(graphics, g);
+      graphics.circle(0, 0, 1);
+    },
+  });
+  const methods = g.calls.map(([method]) => method);
+  const marker = g.calls.findIndex(([method, x, y, r]) => method === 'circle' && x === 0 && y === 0 && r === 1);
+  assert.ok(marker > methods.lastIndexOf('poly'));
+  assert.ok(marker < methods.indexOf('rect'));
+});

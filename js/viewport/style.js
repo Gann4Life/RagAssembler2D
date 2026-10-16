@@ -1,7 +1,7 @@
 /**
- * Viewport colors as `0xRRGGBB` integers: hover and selection, invalid feedback, shape outlines, gizmos, and the
- * transform gizmo's X arrow, Y arrow, rotation ring and free-move square.
- * @type {Readonly<{ highlight: number, invalid: number, shapeOutline: number, gizmo: number, gizmoX: number, gizmoY: number, gizmoZ: number, gizmoFree: number }>}
+ * Viewport colors as `0xRRGGBB` integers: hover and selection, invalid feedback, shape outlines, gizmos, the
+ * transform gizmo's X arrow, Y arrow, rotation ring and free-move square, and the outline of point handles.
+ * @type {Readonly<{ highlight: number, invalid: number, shapeOutline: number, gizmo: number, gizmoX: number, gizmoY: number, gizmoZ: number, gizmoFree: number, handleOutline: number }>}
  */
 export const COLORS = Object.freeze({
   highlight: 0x5b9cf5,
@@ -12,6 +12,7 @@ export const COLORS = Object.freeze({
   gizmoX: 0xe0524f,
   gizmoY: 0x58b85c,
   gizmoFree: 0xf2c94c,
+  handleOutline: 0x1b1d21,
 });
 
 /**
@@ -24,8 +25,8 @@ export const LINE_WIDTH = Object.freeze({ outline: 1, selected: 2, gizmo: 2 });
  * Gizmo sizes, CSS px: root cross arm and ring radius, joint circle radius, limit arc radius, needle and
  * `aimAxis` arrow lengths, center-of-mass marker radius, and the transform gizmo: arrow start and tip distances
  * from the pivot, arrow head length and width, free-move square offset and side, rotation ring radius and pivot
- * mark size.
- * @type {Readonly<{ rootCross: number, rootRing: number, jointCircle: number, jointArc: number, jointNeedle: number, aimArrow: number, centerOfMass: number, arrowStart: number, arrowTip: number, arrowHead: number, arrowWidth: number, squareOffset: number, squareSize: number, rotateRing: number, pivot: number }>}
+ * mark size; resize handle side, and its side when hovered or dragged.
+ * @type {Readonly<{ rootCross: number, rootRing: number, jointCircle: number, jointArc: number, jointNeedle: number, aimArrow: number, centerOfMass: number, arrowStart: number, arrowTip: number, arrowHead: number, arrowWidth: number, squareOffset: number, squareSize: number, rotateRing: number, pivot: number, resizeHandle: number, resizeHandleActive: number }>}
  */
 export const GIZMO_SIZE = Object.freeze({
   rootCross: 14,
@@ -43,6 +44,8 @@ export const GIZMO_SIZE = Object.freeze({
   squareSize: 12,
   rotateRing: 72,
   pivot: 4,
+  resizeHandle: 8,
+  resizeHandleActive: 10,
 });
 
 /**
