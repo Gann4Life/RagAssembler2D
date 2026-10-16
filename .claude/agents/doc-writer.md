@@ -17,11 +17,14 @@ Steps (on the task branch, never on `main`):
    - The issue this branch closes is listed as `[x]`, because merging the PR closes it.
    - Keep the header that says the file is generated.
    - Follow-up work found during the task is reported for `planner` to file as issues; never add it to `TODO.md`.
-3. **CHANGELOG.md** ([Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/)):
-   - add user-visible changes under `## [Unreleased]`, in `Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security`, one line each, written for users;
+3. **CHANGELOG.md** ([Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/)); every merge is a release:
+   - compute the next version from `git describe --tags --abbrev=0` (`v0.0.0` if there is no tag) and the PR's Conventional Commit type: `feat` → minor; `fix`, `perf`, `refactor`, `docs`, `chore`, `test`, `ci`, `build`, `style` → patch; breaking → major (minor while < 1.0.0);
+   - write the heading `## [x.y.z] - YYYY-MM-DD` directly below an empty `## [Unreleased]`; never leave entries under `[Unreleased]` on a branch;
+   - under it, add user-visible changes in `Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security`, one line each, written for users;
+   - a PR without user-visible entries still gets the heading with a one-line note;
    - mark breaking changes (commits with `!` / `BREAKING CHANGE`) with a leading **BREAKING:**;
    - skip `refactor`, `test`, `chore`, `style` and `ci` commits unless they change behavior.
-4. **docs/:**
+   - CI tags and releases the version on merge and fails if the tag already exists.4. **docs/:**
    - update the module map in `docs/architecture/` (`module-map*.md`) (one line per module: responsibility and public exports);
    - update `docs/development.md` when setup, commands or vendored versions change;
    - remove the **(planned)** marker once something exists.

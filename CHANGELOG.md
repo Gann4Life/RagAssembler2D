@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-16
+
 ### Added
 - Rotating with the gizmo ring shows the swept angle as a filled circle slice, signed and full past 360°.
 - `DESIGN.md`: complete spec for the editor, the animation model, the `.rag.json` format (v1), the RagImporter API and the demo.

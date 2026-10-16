@@ -2,6 +2,8 @@
 
 Newest first. See the [index](../decisions.md).
 
+## 2026-10-16
+- **Every merge to `main` is a release:** the PR carries its `## [x.y.z]` changelog heading, and the Pages workflow tags the merge commit, creates the GitHub Release and publishes `version.json`; `release/` branches are no longer used. Reason: deploys are continuous, so the running build must be identifiable and traceable to a tag. The workflow fails on an existing tag to catch a forgotten version bump. The editor shows the version from `version.json` and `dev` when it is absent. (CLAUDE.md, docs/development.md)
 ## 2026-10-15
 - **The conformance tests read the layer classification from `docs/architecture.md`** (Core row of the layers table, `Pure` line of the components diagram, `js/` modules of the `tests/` dependency row) instead of a copy in code, and pure modules are checked by a static scan for `document`, `window`, `PIXI`, `Box2D` and `b2*` references rather than by loading them. Reason: one source for the layers, so editing the document changes what is enforced; a static scan reports file and line and needs no module to be importable yet. (docs/architecture.md, Conformance, Module map)
 - **Model mutation calls are detected only when the receiver identifier ends in `model`;** aliases and destructured methods are not detected and are left to review. Reason: `reset` and `batch` are common method names (`dock.reset()`), and resolving aliases needs data-flow analysis a token scan cannot do; the receiver convention covers every call site the architecture describes with no false positives. (docs/architecture.md, Document model, Conformance)

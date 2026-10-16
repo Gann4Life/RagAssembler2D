@@ -23,6 +23,8 @@ What the editor shows now (see [Editor boot](architecture/editor-boot.md#editor-
 
 Every push to `main` runs `.github/workflows/pages.yml`: it runs `node --test tests/` and, only if the tests pass, publishes `index.html`, `css/`, `js/`, `lib/`, `vendor/` and `demo/` (when present) to GitHub Pages at `https://gann4life.github.io/RagAssembler2D/`. There is no build step; the files are served as they are in the repository. The workflow uses the built-in `GITHUB_TOKEN` with Pages permissions, so no secrets are stored. It can also be started by hand from the Actions tab (`workflow_dispatch`). Pages must be set to the "GitHub Actions" source in the repository settings.
 
+Every deploy is also a release. After the tests pass, the uild job (the only one with contents: write) reads the top ## [x.y.z] heading of CHANGELOG.md, fails if tag X.Y.Z already exists on another commit, tags the merge commit, creates a GitHub Release whose notes are that changelog section, and writes ersion.json ({"version":"vX.Y.Z","commit":"<short sha>"}) into the published site. A manual run on a commit whose tag already points at it skips tagging. The editor fetches ersion.json and shows X.Y.Z · <short sha> at the bottom-left of the viewport, or dev when the file is missing (local server). Versions are chosen per PR by doc-writer (see CLAUDE.md, Changelog).
+
 ## Tests
 
 ```powershell

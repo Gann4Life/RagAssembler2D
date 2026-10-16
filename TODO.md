@@ -72,6 +72,7 @@
 - [ ] #142 Group resize for multi-shape selections
 - [x] #143 Show the swept angle as a circle slice while rotating
 - [ ] #144 Move a shape to another body by dragging it in the Hierarchy
+- [x] #147 Version every deploy as a release and show the version in the editor
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
@@ -82,7 +83,7 @@
 - [ ] #35 Timeline key editing: select, move, copy/paste, delete and snap
 - [ ] #36 FK preview in Animate mode with strength fill on joint gizmos
 - [ ] #37 Preview stack for evaluating several clips together
-- [ ] #38 Pose tool with mouse-joint posing
+- [ ] #38 Pose tool in Animate mode (result becomes the FK pose at the playhead)
 - [ ] #39 Autokey, Key selected (K) and inspector key buttons
 - [ ] #93 Show the mode and clip summary in the folded Timeline bar
 - [ ] #125 Select: rotation in Animate mode sets the parent joint angle at the playhead
@@ -121,5 +122,5 @@
 ## No milestone
 - [x] #80 Assign models to project agents by role
 - [x] #95 Keep commit messages and descriptions concise
-- [ ] #97 Document version tags and release branches in CLAUDE.md
+- [x] #97 Document version tags and release branches in CLAUDE.md
 - [x] #98 Extend read-only PowerShell permission allowlist
