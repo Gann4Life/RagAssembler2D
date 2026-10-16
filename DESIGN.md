@@ -49,7 +49,7 @@ ragdoll (root)            world object: transform + global animation channels
 ### 2.1 Root (the ragdoll itself)
 The root is a **parent object in the world**, not a physics body.
 
-- It has its own transform (`position`, `angle`). It is drawn in the viewport as a pivot gizmo and can be selected and moved/rotated with the Manipulate tool. Moving it moves all its children.
+- It has its own transform (`position`, `angle`). It is drawn in the viewport as a pivot gizmo and can be selected and moved/rotated with the Select tool ([§5.5](#55-tools)). Moving it moves all its children.
 - Body positions, body angles and joint anchors are stored **local to the root**.
 - It has its own inspector and is always the first node in the Hierarchy.
 - It owns the **global animation channels** `strength`, `gain` and `damping` ([§4.2](#42-channels)). They are **multipliers in 0–1, default 1**, and they never replace joint values. This is how a whole ragdoll can go limp from a single track, without keying every joint.
@@ -104,7 +104,7 @@ v1 supports **revolute (hinge) joints** only.
   - for a body connected to `rootBody`, it is the joint through which the spanning tree from `rootBody` reaches it; `rootBody` has none, and loop joints are never parent joints;
   - for a body not connected to `rootBody`, it is the first joint in `joints` order that has it as bodyB and another body as bodyA, or none.
 
-  A body's **subtree** is the body itself plus every body whose chain of parent joints leads to it. The Manipulate tool moves and rotates subtrees and pivots around parent joint anchors ([§5.5](#55-tools)).
+  A body's **subtree** is the body itself plus every body whose chain of parent joints leads to it. The Select tool moves and rotates subtrees and pivots around parent joint anchors ([§5.5](#55-tools)).
 
 ### 2.5 Collision rules
 - **Self-collision:** two shapes of the *same* ragdoll instance collide only if **both** have `selfCollide = true` (default `false`).
@@ -300,10 +300,10 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 | Capability | Edit | Animate | Simulate |
 |---|---|---|---|
 | Select, Select Box, Hierarchy selection | ✓ | ✓ | ✓ |
-| Manipulate, Pose | ✓ | ✓ (into keys, below) | — |
+| Pose | ✓ | ✓ (into keys, below) | — |
 | Creation tools: Circle, Box, Polygon, Hinge | ✓ | — | — |
-| Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add/delete; Group, Ungroup, Duplicate; Manipulate move and rest-pose rotate, joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
-| Animation edits: clip properties, tracks, keys, events, key buttons ◆, autokey, Key selected (K), Manipulate rotate → parent joint `angle`, Pose → keys | — | ✓ | — |
+| Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add/delete; Group, Ungroup, Duplicate; Select move and rest-pose rotate (objects and transform gizmo), joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
+| Animation edits: clip properties, tracks, keys, events, key buttons ◆, autokey, Key selected (K), Select rotation ring → parent joint `angle`, Pose → keys | — | ✓ | — |
 | Asset import | ✓ | ✓ | — |
 | Asset delete | ✓ | — | — |
 | Clip selector, New clip | ✓ | ✓ | — |
@@ -315,7 +315,7 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 | Pause, Next frame, Stop | — | — | ✓ |
 | Editor settings (grid, snapping, display), panels, navigation | ✓ | ✓ | ✓ |
 
-- In Animate mode, inspector fields that are not animatable are shown read-only, and animatable ones show the evaluated value with their key button. Manipulate only rotates (no move handles).
+- In Animate mode, inspector fields that are not animatable are shown read-only, and animatable ones show the evaluated value with their key button. The Select tool only rotates: its transform gizmo shows the rotation ring alone, and dragging objects never moves them ([§5.5](#55-tools)).
 - Changing mode cancels the tool operation in progress (as Esc). If the active tool is disabled in the new mode, the Select tool becomes active.
 - **Playhead and open clip.** Opening a different clip puts the playhead at 0; the playhead always stays within `[0, length]` of the open clip, also when `length` changes. When the open clip stops existing (deleted, or its creation undone) the editor returns to Edit mode. New and Load return to Edit mode with the playhead at 0. Stop restores the mode, clip and playhead that were active before Play.
 
@@ -394,7 +394,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - **Overlays:** Names, Centers of mass, Contacts (checkboxes, default off; Contacts only draws in Simulate mode) ([§5.4](#54-viewport));
   - **Document:** Pixels per meter (the root's `units.pixelsPerMeter`, [§5.7](#57-inspector--properties-panel)).
 
-  Grid size is shown in px at the current `pixelsPerMeter` and stored in meters. Checkboxes and radios apply at once; number fields apply on commit (Enter or blur), and an invalid value is marked `aria-invalid` and reverted on blur. Closing the popover with the Settings button or a press outside commits a pending number like blur does; Esc reverts the field being edited, then closes. Pixels per meter is a document edit: one undo step per commit, read-only outside Edit mode ([§5.1](#51-editor-modes)). Every other control is an **editor setting**: per browser, saved at once, restored on load (a stored value that is missing or invalid falls back to its default, with a console warning for invalid ones; a stored record of another or no version is ignored as a whole, with one warning), not undoable, available in every mode. If browser storage is unavailable, settings live only for the session.
+  Grid size is shown in px at the current `pixelsPerMeter` and stored in meters. Checkboxes and radios apply at once; number fields apply on commit (Enter or blur), and an invalid value is marked `aria-invalid` and reverted on blur. Closing the popover with the Settings button or a press outside commits a pending number like blur does; Esc reverts the field being edited, then closes. Pixels per meter is a document edit: one undo step per commit, read-only outside Edit mode ([§5.1](#51-editor-modes)). Every other control is an **editor setting**: per browser, saved at once, restored on load (a stored value that is missing or invalid falls back to its default, with a console warning for invalid ones; a stored record of another or no version is ignored as a whole, with one warning), not undoable, available in every mode. If browser storage is unavailable, settings live only for the session. The Select tool's pivot mode ([§5.5](#55-tools)) is an editor setting under the same rules, toggled with Z and not shown in the popover.
 
 ### 5.4 Viewport
 - **Camera:** a `center` in meters and a `scale` in CSS px per meter, independent of `pixelsPerMeter`. Screen coordinates are CSS px from the top-left corner of the viewport host, Y down:
@@ -416,8 +416,8 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - **Levels:** the minor spacing, the major spacing, then the major spacing × 10ⁿ for n ≥ 1, equal spacings counted once. At most two levels are drawn: the finest level whose lines are at least 8 px apart on screen, whose opacity ramps from 0 at 8 px to full at 32 px, and the next coarser level, drawn stronger. Zooming out therefore turns 1 m lines into the fine level under 10 m lines.
   - Lines are 1 CSS px wide at every zoom, aligned to device pixels.
 - **Snapping:**
-  - **Grid snap** (*Snap to grid*, default off) rounds the points that tools place or drag to the nearest multiple of the minor spacing, in world coordinates, whether the grid is shown or not: creation points and polygon vertices, the Hinge anchor, and the position a Manipulate move reaches (root position, body position with its subtree following, joint anchor). Sizes follow from snapped points, and a circle's radius is rounded to the minor spacing, never below it. Sprite edit, Pose, inspector fields and Hierarchy additions do not snap.
-  - **Angle snap:** SHIFT while rotating (Manipulate rotate handle, `aimAxis` handle, sprite edit ring) or while dragging Hinge Joint limits rounds the resulting angle to a multiple of 15°: the root's `angle` or the body's root-local `angle` in Edit mode, the parent joint's `angle` channel in Animate mode, `aimAxis` and the sprite `angle` in their own frames, and the Hinge limit θ ([§5.5](#55-tools)).
+  - **Grid snap** (*Snap to grid*, default off) rounds the points that tools place or drag to the nearest multiple of the minor spacing, in world coordinates, whether the grid is shown or not: creation points and polygon vertices, the Hinge anchor, and the point a Select move carries: the pressed object's point when an object is dragged (root position, body origin with its subtree following, joint anchor), the pivot when the transform gizmo is dragged; an arrow of the gizmo snaps only its own axis ([§5.5](#55-tools)). Sizes follow from snapped points, and a circle's radius is rounded to the minor spacing, never below it. Sprite edit, Pose, inspector fields and Hierarchy additions do not snap.
+  - **Angle snap:** SHIFT while rotating (Select rotation ring, `aimAxis` handle, sprite edit ring) or while dragging Hinge Joint limits rounds the resulting angle to a multiple of 15°: the root's `angle`, or the body's root-local `angle` when the target is one body, or else the rotation itself (several bodies, joints) in Edit mode, the parent joint's `angle` channel in Animate mode, `aimAxis` and the sprite `angle` in their own frames, and the Hinge limit θ ([§5.5](#55-tools)).
 - **Display modes** (Settings, default Both), in every editor mode:
 
   | Mode | Sprites | Shapes |
@@ -431,12 +431,12 @@ Location: top, full width. One toolbar row with four button groups divided by se
 - **Gizmos** are drawn above the shapes and sprites, at a constant size in CSS px at every zoom, joints above the root:
   - root: a pivot cross (14 px arms, turned by the root's angle) and a ring (10 px radius) at the root position;
   - joints: a circle (6 px radius) at the anchor; when limits are enabled, an arc (20 px radius) from `lower` to `upper`; a needle (20 px) at the current joint angle (0 in Edit mode); the strength fill in Animate mode; and, when the joint is selected, an `aimAxis` arrow (32 px) along bodyB's angle plus `aimAxis`. Arc and needle angles are measured from the joint's **zero direction**: the direction from the anchor to bodyB's origin in the rest pose (bodyB's +X when they coincide), turned with bodyA. At rest the needle therefore lies along the child limb, and the arc shows how far it may swing each way. A joint without a valid `bodyA` or `bodyB` draws only its circle, and one whose `anchor` is missing or not finite draws nothing, is never hit and is left out of framing;
-  - the Manipulate rotate knob, and sprite handles in sprite-edit mode ([§5.5](#55-tools)), drawn by the active tool.
+  - the Select tool's transform gizmo and its point handles (`aimAxis` tip, sprite handles in sprite-edit mode, resize handles) ([§5.5](#55-tools)), drawn by the active tool above every other gizmo.
 
   Gizmos are drawn in `#d8dade`, except as the feedback below says.
-- **Hit testing** decides what the pointer is over, for hover, the tools and drops onto the viewport. At a screen point the hits are, topmost first: joints whose anchor is within 8 px (later joints in `joints` order first), the root when its position is within 12 px, then shapes that contain the point or lie within 4 px of it (later bodies first, and later shapes of a body first). Bodies, sprite images and sprite assets are never hit: a click on a shape selects the shape, and its body is selected from the Hierarchy. Shapes with invalid geometry (a non-positive size, fewer than 3 vertices) are skipped; concave and self-intersecting polygon drafts are hit as drawn (even-odd rule).
+- **Hit testing** decides what the pointer is over, for hover, the tools and drops onto the viewport. At a screen point the hits are, topmost first: joints whose anchor is within 8 px (later joints in `joints` order first), the root when its position is within 12 px, then shapes that contain the point or lie within 4 px of it (later bodies first, and later shapes of a body first). Bodies, sprite images and sprite assets are never hit: a click on a shape selects the shape, and its body is selected from the Hierarchy. Shapes with invalid geometry (a non-positive size, fewer than 3 vertices) are skipped; concave and self-intersecting polygon drafts are hit as drawn (even-odd rule). Handles of the active tool (the Select tool's gizmo and point handles, [§5.5](#55-tools)) are tested by the tool before these hits and win over them.
 - **Feedback**, in every display mode, drawn over the shape outlines:
-  - **Hover:** the first hit under the pointer is highlighted in `#5b9cf5` at 1 px: a shape's outline, or the root's or a joint's gizmo. Hover is shown while no button is pressed and no navigation is in progress, is cleared when the pointer leaves the viewport host (the Tools overlay included), and is not shown while a creation tool or Select Box is active.
+  - **Hover:** the first hit under the pointer is highlighted in `#5b9cf5` at 1 px: a shape's outline, or the root's or a joint's gizmo. Hover is shown while no button is pressed and no navigation is in progress, is cleared when the pointer leaves the viewport host (the Tools overlay included), and is not shown while a creation tool or Select Box is active, nor while the pointer is over a handle of the active tool (the handle highlights instead).
   - **Selection:** selected shapes, and every shape of a selected body, are outlined at 2 px in `#5b9cf5`; a selected root or joint draws its gizmo in that color, and a selected joint adds its `aimAxis` arrow. Selection wins over hover.
   - **Invalid:** objects that validation ([§6.4](#64-validation)) reports with an error draw their outline (shapes; for a body, all its shapes; for a clip, track, key or event, nothing) or their gizmo (root, joints) in `#e5484d`. Red wins over the hover and selection colors; a selected invalid object keeps the 2 px width.
 - **Overlays** are editor settings (Settings → Overlays, [§5.3](#53-header)), all off by default, drawn above the gizmos at a constant size:
@@ -447,16 +447,16 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - optional ground line, by default at the lowest point of the rest pose;
   - *pin rootBody* option to hang the ragdoll;
   - gravity.
-- **Accessibility:** the viewport host is focusable (`tabindex="0"`) and labelled "Viewport". Since it handles keys itself (navigation above), it uses `role="application"`, with `aria-roledescription="viewport"` and `aria-describedby` pointing to a visually hidden summary of its keys: "Space and drag, or middle drag, pans. Wheel, plus and minus zoom. F frames the selection, Home frames everything." Features that add viewport keys extend the summary; the tools add "Escape cancels the current tool operation, or clears the selection." That way screen readers pass single-key hotkeys ([§5.9](#59-hotkeys-defaults)) to the editor instead of using them for browse-mode navigation. The role applies only to the viewport host, never to the page or a panel. Selecting in the viewport needs a pointer; the Hierarchy offers the same selection by keyboard ([§5.6](#56-hierarchy-assets-and-problems-panels)).
+- **Accessibility:** the viewport host is focusable (`tabindex="0"`) and labelled "Viewport". Since it handles keys itself (navigation above), it uses `role="application"`, with `aria-roledescription="viewport"` and `aria-describedby` pointing to a visually hidden summary of its keys: "Space and drag, or middle drag, pans. Wheel, plus and minus zoom. F frames the selection, Home frames everything." Features that add viewport keys extend the summary; the tools add "Escape cancels the current tool operation, or clears the selection. Z switches the transform pivot between the selection center and the last selected object." That way screen readers pass single-key hotkeys ([§5.9](#59-hotkeys-defaults)) to the editor instead of using them for browse-mode navigation. The role applies only to the viewport host, never to the page or a panel. Selecting in the viewport needs a pointer; the Hierarchy offers the same selection by keyboard ([§5.6](#56-hierarchy-assets-and-problems-panels)).
 
 ### 5.5 Tools
 The tools live in a **floating toolbar overlay inside the Viewport panel**, not in a dock panel. It is always visible, has no toggle and is not listed in the Window menu.
 
 **Layout.**
 - A sibling of the viewport host inside the Viewport panel, before it in document order, stacked over it in the same grid cell, top-left with an 8 px margin. The Viewport panel isolates its stacking context, so the overlay never covers other panels or popups, and the overlay never changes the size of the host.
-- A vertical strip: panel surface at 92 % opacity, 6 px radius, and 4 px from its outer edge to the buttons (1 px border plus 3 px padding). Items are 32 × 32 px buttons with 20 px icons and separators 5 px tall (a 1 px line, as wide as a button, centered), with 2 px gaps between consecutive items. One column is 40 × 299 px.
-- Buttons in four groups with separators: selection (Select, Select Box), manipulation (Manipulate, Pose), creation (Circle, Box, Polygon), joints (Hinge Joint).
-- **Two columns** when the strip and its two 8 px margins do not fit the viewport host's height, i.e. when the host is shorter than 299 + 16 = 315 px: the first column holds selection and manipulation, the second creation and joints, each with a separator between its two groups, 4 px apart; 76 × 149 px. The separator between manipulation and creation is not shown. Button order (document, focus and keyboard) does not change. The Viewport minimum height of 168 px ([§5.2](#52-panels)) fits this layout (149 + 16 = 165 px).
+- A vertical strip: panel surface at 92 % opacity, 6 px radius, and 4 px from its outer edge to the buttons (1 px border plus 3 px padding). Items are 32 × 32 px buttons with 20 px icons and separators 5 px tall (a 1 px line, as wide as a button, centered), with 2 px gaps between consecutive items. One column is 40 × 265 px.
+- Buttons in four groups with separators: selection (Select, Select Box), manipulation (Pose), creation (Circle, Box, Polygon), joints (Hinge Joint). Moving and rotating belong to Select; there is no separate Manipulate tool.
+- **Two columns** when the strip and its two 8 px margins do not fit the viewport host's height, i.e. when the host is shorter than 265 + 16 = 281 px: the first column holds selection and manipulation, the second creation and joints, each with a separator between its two groups, 4 px apart; 76 × 149 px, set by the taller second column. The separator between manipulation and creation is not shown. Button order (document, focus and keyboard) does not change. The Viewport minimum height of 168 px ([§5.2](#52-panels)) fits this layout (149 + 16 = 165 px).
 - The overlay's current width (40 or 76 px) is the "Tools overlay width" that framing insets by ([§5.4](#54-viewport)).
 - Pointer presses, moves and the wheel over the overlay never reach the viewport: no tool input, no hover, no navigation; a wheel over it neither zooms nor scrolls the page.
 - Loading by drag & drop listens on the whole Viewport panel, so a drop on the overlay also loads ([§5.3](#53-header)); the overlay never stops drag events.
@@ -467,7 +467,6 @@ The tools live in a **floating toolbar overlay inside the Viewport panel**, not 
 |---|---|
 | Select | Arrow cursor. |
 | Select Box | Dashed rectangle plus a small cursor. |
-| Manipulate | Four-way move cross plus a 270° rotation arc. |
 | Pose | Bent limb of three dots plus a drag arrow. |
 | Circle | Circle, r = 8. |
 | Box | 16 × 12 rectangle, solid (not dashed) outline. |
@@ -493,46 +492,68 @@ The tools live in a **floating toolbar overlay inside the Viewport panel**, not 
 - **Aborting.** Esc, choosing another tool, Undo, a mode change, New or Load during a drag aborts it and leaves the document as it was ([§1](#1-conventions)); so does the pointer being lost (window switch, pointer capture lost). Esc, choosing another tool, a mode change, New and Load also abort an operation that spans several clicks (a polygon being drawn); Undo between those clicks undoes the previous step and keeps the operation. Choosing the active tool again does nothing.
 - **Coordinates and snapping.** Tools work in world meters and store root-local data. Points and lengths they place snap as [§5.4](#54-viewport) says.
 - **Creation tools** (Circle, Box, Polygon, Hinge Joint) show what they will create while drawing, change the document only when the operation completes (one undo step), then select what they created (the new shape, or the new joint) and stay active. An operation that is aborted or refused changes neither the document nor the selection.
-- **Cursor:** the active tool's cursor (crosshair for creation tools and Select Box, the default arrow for Select; Manipulate's follows what is under the pointer, below), except while navigating.
+- **Cursor:** the active tool's cursor (crosshair for creation tools and Select Box, the default arrow for Select, which follows what is under the pointer, below), except while navigating.
 
 **Tools.**
 
 - **Select and Select Box, common rules:**
   - They select world objects in the displayed pose ([§5.4](#54-viewport)): shapes, joints and, by click only, the root. A body is never selected in the viewport: a click or a box takes its shapes, and the body itself is selected from the Hierarchy ([§5.6](#56-hierarchy-assets-and-problems-panels)). Sprites and sprite assets are never selected here.
-  - They never change the document and record no undo step; the selection is not undoable ([§1](#1-conventions)). They work in every mode.
-  - The selection changes only when the operation completes, at the release. An aborted operation ([Common rules](#55-tools)) leaves the selection as it was.
+  - Selecting never changes the document and records no undo step; the selection is not undoable ([§1](#1-conventions)). Both tools select in every mode. Select Box never changes the document; Select also moves and rotates the selection in Edit mode (below).
+  - The selection changes only when the operation completes, at the release, except when a Select drag starts on an object outside the target (below). An aborted operation ([Common rules](#55-tools)) leaves the selection as it was.
   - Once the pointer has moved 4 px from the press point on screen, the press is a drag until its release, even if the pointer comes back (as for Circle and Box).
   - **Selection box:** a drag draws a rectangle from the press point to the pointer, axis-aligned on screen, in `#5b9cf5` (1 px outline, 10 % fill). The press point is held as a world point, so it stays on the same spot of the world when the view pans or zooms during the drag. Box corners are not snapped. At the release the box takes every shape that lies **entirely inside** it and every joint whose anchor lies inside it, edges included. The root is never taken by a box. Shapes with invalid geometry and joints whose anchor is not placed are skipped, as in hit testing; shapes hidden by the display mode are taken.
   - **Box modifiers**, read at the release: none replaces the selection with the boxed objects (an empty box clears the selection); SHIFT adds them; CTRL removes them. CTRL wins when both are held; ALT does nothing.
-- **Select** (`V`): click to select one object, drag for a selection box.
+- **Select** (`V`): click to select one object, drag an object to move it, drag empty space for a selection box. In Edit mode the selection also carries a **transform gizmo** to move it along an axis, move it freely or rotate it. Everything works in the displayed pose ([§5.4](#54-viewport)).
+  - **Press.** A left press is resolved in this order:
+    1. on a handle of the selection (*Handles and priority*, below; in Animate mode only the rotation ring, in Simulate mode none): a **handle press**;
+    2. on a hit ([§5.4](#54-viewport), Hit testing): an **object press**;
+    3. on empty space: a **box press**.
+
+    Right presses do nothing. A handle press that never becomes a drag does nothing; object and box presses that never become a drag are clicks, below.
   - A **click** looks at the hits at the press point, topmost first ([§5.4](#54-viewport), Hit testing). Its **target** is the topmost hit. With ALT, the target is the hit just below the topmost hit that is already selected, wrapping to the topmost; when no hit is selected, it is the topmost. Repeated ALT + clicks therefore cycle through overlapping objects. Example: with the hits [joint, shape A, shape B] and an empty selection, ALT + clicks select the joint, then A, then B, then the joint again.
   - **Click modifiers**, read at the release: none selects only the target; SHIFT adds the target, or removes it when it is already selected; CTRL removes it. CTRL wins over SHIFT; ALT only chooses the target and combines with both.
   - A click on empty space clears the selection when no modifier is held (as Esc does), and does nothing with SHIFT or CTRL.
-  - Hover keeps showing the topmost hit, also while ALT is held. A double click is two clicks. Right presses do nothing.
-- **Select Box** (`B`): drag for a selection box. A press that never becomes a drag acts as an empty box: without modifiers it clears the selection, with them it does nothing. With multiple shapes selected, they can be grouped (Ctrl+G) into one body.
-- **Manipulate** (`M`): move and rotate the selection, in the displayed pose ([§5.4](#54-viewport)).
-  - **Target.** The selection decides what the tool acts on. When the root is selected, the target is the root alone: it carries everything, so other selected objects are ignored. Otherwise the target is every selected body, the body of every selected shape, and every selected joint. Sprite assets and clips are ignored.
-  - **Press.** A left press is resolved in this order:
-    1. within 8 px of a handle of the target (rotate knob, `aimAxis` tip): drags that handle;
-    2. on the topmost hit ([§5.4](#54-viewport), Hit testing), when it belongs to the target (it is selected, or it is a shape whose body is in the target): drags the whole target;
-    3. on any other hit: selects only that object, then drags it as the new target;
-    4. on empty space: drags nothing; released as a click, it clears the selection.
-
-    Modifiers never change what is selected; the Select tool does that. Selecting at the press is not part of the operation, so an aborted drag keeps the new selection. Once the pointer has moved 4 px from the press point on screen, the press is a drag until its release; a click only selects.
-  - **Move** (dragging the target):
+  - Hover keeps showing the topmost hit, also while ALT is held. A double click is two clicks.
+  - **Drag.** A box press draws a selection box (common rules above). An object press, in Edit mode, **moves** (below): when the topmost hit belongs to the target (it is selected, or it is a shape whose body is in the target), the whole target moves; otherwise, once the press becomes a drag, the topmost hit is selected alone and its target moves. A drag always starts from the topmost hit: ALT only chooses a click's target. SHIFT and CTRL never change what a drag selects. The selection made when the drag starts is not part of the operation, so an aborted drag keeps it. In Animate and Simulate mode an object press that becomes a drag draws a selection box, like a box press. A handle press drags its handle.
+  - **Target.** The selection decides what moves and rotates. When the root is selected, the target is the root alone: it carries everything, so other selected objects are ignored. Otherwise the target is every selected body, the body of every selected shape, and every selected joint. Sprite assets and clips are ignored.
+  - **Move** (an object drag, a gizmo arrow or the gizmo square):
     - **Root:** moves the whole ragdoll (the root's `position`).
-    - **Bodies:** each target body moves with its **subtree** ([§2.4](#24-joints)), so moving an upper arm carries the forearm and the hand. ALT + drag moves only the target bodies. Each body moves once, also when subtrees overlap.
+    - **Bodies:** each target body moves with its **subtree** ([§2.4](#24-joints)), so moving an upper arm carries the forearm and the hand. ALT moves only the target bodies. Each body moves once, also when subtrees overlap.
     - **Joint anchors** move with the bodies when the body they are the parent joint of moves, or when both their bodies move; the others stay. Selected joints move their anchor too, so with only joints selected a drag moves just their anchors. Example: moving an upper arm carries the shoulder, elbow and wrist anchors; ALT + dragging the forearm carries the elbow anchor and leaves the wrist anchor with the hand. Validation warns when an anchor ends outside both bodies' shapes ([§6.4](#64-validation)).
-    - Everything moves by one vector: the pointer's displacement since the press, adjusted so that the pressed object's point (the root position, the origin of the pressed shape's body, the pressed joint's anchor) lands on the grid when grid snap is on ([§5.4](#54-viewport)).
-  - **Rotate knob:** shown when the target is the root, or exactly one body and no joints (any number of that body's shapes may be selected). It is a 5 px knob 40 px from the **pivot** along the root's or the body's +X axis, so it turns with it, joined to the pivot by a 1 px line, with a 4 px cross at the pivot, all in `#5b9cf5`. Dragging it rotates by the angle the pointer sweeps around the pivot since the press, following it past half a turn.
+    - Everything moves by one vector, in world axes: the pointer's displacement since the press, adjusted so that a **reference point** lands on the grid when grid snap is on ([§5.4](#54-viewport)). The reference point is the pressed object's point for an object drag (the root position, the origin of the pressed shape's body, the pressed joint's anchor) and the pivot for a gizmo drag. The X arrow keeps the vector's Y at 0 and snaps only the reference point's X; the Y arrow the reverse.
+  - **Transform gizmo.** Drawn in Edit mode while Select is active, the target is not empty and its pivot (below) is placed, also during drags (it follows the pivot), but not while a selection box is drawn. It sits on the pivot, has a constant size in CSS px at every zoom, and stays aligned with the world axes: it never turns with the root or the bodies.
+    - **X arrow**, `#e0524f` (the grid's X axis color): a 2 px shaft from 16 px to 46 px right of the pivot, then a filled head 8 px wide whose tip is 56 px from the pivot. Dragging it moves the target along world X only.
+    - **Y arrow**, `#58b85c` (the grid's Y axis color): the same shape, pointing up. Dragging it moves the target along world Y only.
+    - **Square**, `#f2c94c`: a 12 × 12 px square between the arrows, from 16 to 28 px right of and above the pivot, filled at 40 % opacity with a 1 px outline. Dragging it moves the target freely.
+    - **Rotation ring**, `#5b9cf5`: a 2 px circle of 72 px radius around the pivot, enclosing the arrows. Dragging anywhere on it rotates the target (Rotation, below). It is shown only when a rotation can change something: the target is the root, holds a body, or holds two or more joints.
+    - **Pivot mark**, `#d8dade`, at the pivot: a cross with 4 px arms in Center mode, a 4 px ring with a 1.5 px dot in its center in Last selected mode (Pivot, below). It shows the pivot mode and is not a handle.
+    - **Hit areas:** the square grown by 2 px on every side; an arrow within 6 px of the segment from 16 px to its tip; the ring within 6 px of its circle. No point within 12 px of the pivot (the root's hit radius) belongs to the gizmo, so a joint or the root drawn at the pivot is still pressed as an object.
+    - **Hover:** the handle under the pointer, and the handle being dragged, is drawn in `#ffffff` with its stroke 1 px wider. While the pointer is over a handle, no object hover is shown ([§5.4](#54-viewport), Feedback).
+    - **Readout:** during every move or rotation drag of Select (object or gizmo), a text 16 px right of and 16 px below the pointer, kept inside the viewport, in the style of the name labels (11 px, `#d8dade`, dark outline, [§5.4](#54-viewport)). A move shows `Δx: 12.0 px  Δy: -3.5 px`: the vector applied since the press, in world axes and in document pixels (`units.pixelsPerMeter`, [§1](#1-conventions)), not screen pixels. A rotation shows `Δθ: 15.0°`: the rotation applied since the press, counter-clockwise positive. One decimal; `-0.0` is shown as `0.0`.
+  - **Pivot.** The point the target rotates around and the gizmo sits on, from the displayed pose:
+    - **One object:** the root position for the root; for one body (any number of its shapes selected), the anchor of its parent joint ([§2.4](#24-joints)) when it has one and that anchor is placed, otherwise the body origin; for one joint, its anchor.
+    - **Several objects** (bodies and joints of the target), by the **pivot mode**: **Center** (default) takes the average of their points, the origin of every target body and the placed anchor of every target joint; **Last selected** takes the pivot the last selected of them would have alone. The last selected one is the target object that the last entry of the selection order maps to (a shape maps to its body).
+    - **CTRL** forces the body origin wherever a parent joint anchor would be used (one body, or a last selected body); in Center mode it changes nothing.
+    - **Z** switches the pivot mode between Center and Last selected, in every mode, but not during a drag. The pivot mode is an editor setting ([§5.3](#53-header)) and the pivot mark shows it.
+    - The pivot follows the target during a move and stays fixed during a rotation.
+  - **Rotation** (dragging the ring) rotates by the angle the pointer sweeps around the pivot since the press, following it past half a turn.
     - **Root:** rotates the whole ragdoll around the root position (the root's `angle`).
-    - **Body:** the pivot is the anchor of the body's parent joint ([§2.4](#24-joints)) when it has one and that anchor is placed, otherwise the body origin; CTRL forces the origin. The body rotates with its subtree and with the anchors that Move would carry; ALT rotates only the body.
-    - SHIFT rounds the resulting angle to 15° ([§5.4](#54-viewport)). CTRL, ALT and SHIFT are read live; when CTRL changes the pivot during a drag, the swept angle is measured again from the press point around the new pivot.
-  - **`aimAxis` handle:** when the target is exactly one joint, the tip of its `aimAxis` arrow ([§5.4](#54-viewport)) is a handle. Dragging it points `aimAxis` from the anchor toward the pointer, relative to bodyB's angle; SHIFT rounds `aimAxis` to 15°.
-  - **Sprite edit** (toggle `S` while a shape with a sprite is selected): the handles edit the sprite instead of the shape. Dragging changes `offset`, the ring changes `angle`, the corners change `scale` (SHIFT keeps proportions). Physics is untouched.
-  - **Cursor:** the default arrow over empty space, `move` over an object, `pointer` over a handle; during a drag, `move` while moving and `pointer` while rotating.
-  - **Undo:** each drag is one undo step, and a drag that ends where it started leaves none ([§1](#1-conventions)).
-  - **In Animate mode** only rotation is offered, into keys. The rotate knob is shown when the target is exactly one body that has a parent joint, whose anchor is the pivot; CTRL and ALT do nothing, and the root has no knob. Rotating sets the `angle` of that parent joint at the playhead (keyed if autokey is on), and the subtree follows by FK. Presses select as in Edit mode, and nothing moves.
+    - **Bodies and joints:** every target body rotates around the pivot with its subtree and with the anchors a move would carry, and every target joint's anchor rotates around it too; ALT rotates only the target bodies and the anchors of the target joints.
+    - SHIFT rounds to 15° ([§5.4](#54-viewport)): the root's `angle`; the body's root-local `angle` when the target is one body; otherwise the rotation itself. CTRL, ALT and SHIFT are read live; when CTRL changes the pivot during a drag, the swept angle is measured again from the press point around the new pivot.
+  - **Handles and priority.** In Edit mode, a press or hover is tested against the selection's handles before hit testing ([§5.4](#54-viewport)), and the first match wins:
+    1. the gizmo square;
+    2. the **point handles** of the selection: the `aimAxis` tip, sprite handles, resize handles, each with an 8 px hit radius;
+    3. the X arrow, then the Y arrow;
+    4. the rotation ring.
+
+    Handles are drawn in the reverse order, so the handle on top is the one a press takes. Joints, the root and shapes come after every handle, except within 12 px of the pivot, where the gizmo has no hit area. The gizmo never moves to make room for point handles. An object hidden under a handle is reached by zooming in (handles keep their size while the objects spread apart) or from the Hierarchy.
+  - **`aimAxis` handle:** when the target is exactly one joint, the tip of its `aimAxis` arrow ([§5.4](#54-viewport)) is a point handle. Dragging it points `aimAxis` from the anchor toward the pointer, relative to bodyB's angle; SHIFT rounds `aimAxis` to 15°.
+  - **Sprite edit** (toggle `S` while a shape with a sprite is selected): the gizmo and the handles edit the sprite instead of the shape: the arrows and the square change `offset`, the ring changes `angle` around the sprite's center, the corner handles change `scale` (SHIFT keeps proportions). Physics is untouched.
+  - **Cursor** in Edit mode: `move` over the square or an object, `ew-resize` over the X arrow, `ns-resize` over the Y arrow, `pointer` over the ring and point handles, the default arrow over empty space; during a drag, the cursor of what was pressed (`move` for an object). In Animate mode, `pointer` over the ring and the default arrow elsewhere; in Simulate mode, the default arrow.
+  - **Undo:** each move or rotation drag is one undo step, and a drag that ends where it started leaves none ([§1](#1-conventions)). Clicks and selection boxes record nothing.
+  - **In Animate mode** only rotation is offered, into keys. The gizmo shows only the rotation ring, and only when the target is exactly one body that has a parent joint, whose anchor is the pivot; CTRL, ALT and the pivot mode do nothing, and the root has no ring. Rotating sets the `angle` of that parent joint at the playhead (keyed if autokey is on), and the subtree follows by FK. Clicks and selection boxes select as in Edit mode, an object drag draws a selection box, and nothing moves.
+  - **In Simulate mode** Select only selects: no gizmo, and every drag draws a selection box.
+- **Select Box** (`B`): drag for a selection box. A press that never becomes a drag acts as an empty box: without modifiers it clears the selection, with them it does nothing. It never moves anything and shows no gizmo, so a box can start on top of objects, which a Select drag would move. With multiple shapes selected, they can be grouped (Ctrl+G) into one body.
 - **Pose** (`P`): simulates physics while the mouse is held, with **no gravity**. The grabbed body is pulled by a mouse joint, and the other joints hold their current pose at moderate strength.
   - In **Edit mode** the result is discarded on release (testing only). It never overrides the rest pose.
   - In **Animate mode** the result becomes the FK pose at the playhead. With **autokey** on, `angle` keys are created for every joint whose angle changed by more than 0.1°.
@@ -739,7 +760,7 @@ Default location ([§5.2](#52-panels)): bottom, full width. Modeled after Godot'
   - Scrubbing updates the FK preview and the sprites live.
   - The snap step defaults to 1/30 s.
 - **Loop toggle and length field** mirror the clip properties.
-- **Autokey (●):** while it is on, Pose and Manipulate changes in Animate mode create keys automatically.
+- **Autokey (●):** while it is on, Pose and Select rotation changes in Animate mode create keys automatically.
 - **Key selected (K):** keys the `angle` of all selected joints, or of all joints of the selected bodies, at the playhead.
 - **Preview stack:** checkboxes for other clips to evaluate together with the open clip, in both FK preview and Simulate mode (e.g. `alive` + `pain`). During Simulate, clicking a clip name calls `play(key)` on the running instance, so the user can rehearse how game code will trigger clips.
 - **Procedural preview** (Simulate mode): *Look at cursor* applies `lookAt` to the selected joints toward the mouse, with a weight slider and an optional strength value. It runs the same RagImporter code as production and is used to tune `aimAxis`, limits and motor values.
@@ -748,14 +769,15 @@ Default location ([§5.2](#52-panels)): bottom, full width. Modeled after Godot'
 
 | Key | Action | Key | Action |
 |---|---|---|---|
-| V / B / M / P | Select / Select box / Manipulate / Pose | C / R / N / H | Circle / Box / Polygon / Hinge |
-| S | Toggle sprite edit (Manipulate) | Del | Delete |
+| V / B / P | Select / Select box / Pose | C / R / N / H | Circle / Box / Polygon / Hinge |
+| S | Toggle sprite edit (Select) | Del | Delete |
 | Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | Undo / Redo | Ctrl+S / Ctrl+O | Save / Load |
 | Ctrl+G / Ctrl+Shift+G | Group / Ungroup | Ctrl+D | Duplicate selection |
 | Space | Play / Pause | . | Next frame |
 | K | Key selected | F / Home | Frame selection / all |
-| Esc | Abort tool / clear selection | | |
+| Esc | Abort tool / clear selection | Z | Pivot mode: center / last selected (Select) |
 
+- Z (without modifiers) and Ctrl+Z (Undo) are different hotkeys, since modifiers must match exactly. While CTRL is held during a Select rotation to force the body origin, pressing Z is therefore Undo, which aborts the drag ([§5.5](#55-tools)).
 - Hotkeys are ignored while focus is in a text field. Space also goes to a focused button or control instead of Play/Pause.
 - On macOS, Cmd acts as Ctrl. Keys match the character the keyboard layout produces (letters case-insensitive), and modifiers must match exactly.
 - A matched hotkey always suppresses the browser's own shortcut (e.g. Ctrl+S never opens the browser's save dialog), even when its action is currently disabled.
