@@ -276,6 +276,7 @@ export function selectTool() {
         hover: gizmoId(hover),
         active: gizmoId(active),
         mode: pivotMode(),
+        sweep: press?.dragging ? (press.manipulation?.sweep?.() ?? null) : null,
         points: (graphics) => drawResizeHandles(graphics, points.map((entry) => entry.screen), state),
       });
     },
