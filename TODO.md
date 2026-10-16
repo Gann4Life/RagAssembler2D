@@ -35,7 +35,7 @@
 - [ ] #22 Inspector: shape and sprite properties
 - [ ] #23 Inspector: joint properties
 - [ ] #24 Select tool: aimAxis handle and sprite edit mode
-- [ ] #25 Implement RagImporter.validate with all errors and warnings
+- [x] #25 Implement RagImporter.validate with all errors and warnings
 - [ ] #26 Problems panel with live validation
 - [ ] #27 Canonical .rag.json serializer and loader with migration
 - [ ] #28 Header Save/Load with sprite folder resolution
@@ -46,7 +46,7 @@
 - [ ] #72 Show a visible error when vendored libraries are missing
 - [x] #73 Clarify header alignment and viewport ARIA role in the spec
 - [ ] #77 Decide how Save writes meta.name and meta.editorVersion
-- [ ] #78 Warn about duplicate body, joint and shape names
+- [x] #78 Warn about duplicate body, joint and shape names
 - [ ] #83 Drag a whole panel stack by its tab bar
 - [ ] #84 Maximize a panel by double-clicking its tab
 - [ ] #85 Cycle focus between panels with F6 and Shift+F6

@@ -69,6 +69,7 @@ Each topic lives in its own file; read only the one you need.
 | Dock layout | [dock-layout.md](architecture/dock-layout.md) | Layout tree and dock. |
 | Emitter | [emitter.md](architecture/emitter.md) | Shared `Emitter` class. |
 | Schema | [schema.md](architecture/schema.md) | Property schema pointer. |
+| Validation | [validation.md](architecture/validation.md) | `lib/validate.js`, its geometry helpers and how the editor consumes problems. |
 
 ## Data flow
 

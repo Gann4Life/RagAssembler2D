@@ -119,39 +119,81 @@
 ## 6.3 Versioning
 - `version` is an integer and increases on any breaking change.
 - The editor migrates older versions on load and always saves the latest one.
-- RagImporter declares the versions it supports and **throws** on any other version, with a clear message.
+- RagImporter declares the versions it supports (`RagImporter.supportedVersions`) and **throws** on any other version, with a clear message; `validate` reports it as `E_VERSION_UNSUPPORTED` ([§6.4](#64-validation)).
 - Unknown fields:
   - RagImporter ignores them;
-  - the editor drops them with a warning.
+  - the editor drops them with a warning (`W_UNKNOWN_FIELD`).
 
 ## 6.4 Validation
-Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via `RagImporter.validate(json) → { errors, warnings }`.
+Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via `RagImporter.validate(json) → { errors, warnings }`. Errors block save and `parse`; warnings never block.
 
-**Errors** (block save / parse):
-- `format` is not `"ragassembler"`, or `version` is unsupported.
-- A missing field, a field of the wrong type, or a value outside the range or enum given for it in `docs/schema.md`.
-- Duplicate ids (across bodies, shapes, joints and sprite assets), use of the reserved `root` id, or a missing (`null`) or unknown `rootBody`.
-- A body without fixtures.
-- A joint with a missing `bodyA`/`bodyB`, or `bodyA == bodyB`.
-- `lower > 0` or `upper < 0` when limits are enabled.
-- A non-positive size or radius.
-- A polygon that is not convex or CCW, has fewer than 3 or more than 8 vertices, or is degenerate.
-- A sprite that references an unknown asset, or has a scale of 0.
-- A duplicate or invalid clip `key`.
-- A track with an unknown target, a channel invalid for its target, or more than one track for the same `target + channel` in a clip.
-- Keys unsorted, duplicated in `t`, or outside `[0, length]`.
-- A multiplier value outside 0–1.
-- A `sprite` key whose value is not an existing asset id or `null`, or whose `interp` is not `step`.
-- `length ≤ 0`, `speed ≤ 0`, or `fadeIn`/`fadeOut < 0`.
-- An event with an empty `name`, or a `t` out of range ([§4.7](04-animation-model.md#47-events)).
+**Contract:**
+- `validate` **never throws** for any input: any value `JSON.parse` can return, and editor JSON with `undefined`, `NaN` or `Infinity` in it. It needs neither liquidfun.js nor PIXI.js.
+- Each entry is a **problem** `{ severity, code, message, path, target }`:
+  - `severity`: `"error"` or `"warning"`, fixed per code (tables below);
+  - `code`: stable identifier from the tables below. Codes are the contract: they are never renamed or reused, only added;
+  - `message`: one English sentence for people, sentence case, no trailing period, starting with the object kind and its name when it has a usable one (`Joint "knee_l": bodyA and bodyB are the same body`). It names fields by their schema path and quotes no length or angle values (the editor shows pixels and degrees, [§1](01-conventions.md#1-conventions)). Wording is not stable; code against `code`;
+  - `path`: [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) to the offending value in the validated JSON (`"/bodies/2/fixtures/0/shape/radius"`; `""` for the whole document). A missing field points where it should be; a duplicate points at the later occurrence;
+  - `target`: the innermost object on `path` that the editor can select, as `{ type, id }`: `type` is `root`, `spriteAsset`, `body`, `shape`, `joint` or `clip` (the `docs/schema.md` type names), `id` is that object's `id` (a clip's `key`). It is `null` for document-level paths (`/format`, `/version`, `/meta`, `/units`, `/preview`) and when that object's `id` (`key`) is not a string. Problems inside tracks, keys and events target their clip.
+- **Gate:** if the input is not an object, `format` is wrong or `version` is not in `RagImporter.supportedVersions`, only those errors are returned.
+- **No cascades:** a rule that reads a field skips it when that field already has an error (a non-number `radius` gives `E_FIELD_TYPE` only), and a `(path, code)` pair is reported at most once.
+- **Order** is deterministic for a given input and otherwise unspecified.
+- **Editor-only input:** the editor may pass `{ hasImage(asset) → boolean }` as a second argument to get `W_SPRITE_IMAGE_MISSING`; without it that check is skipped. `RagImporter.validate` takes no options.
+- Every shape that fails the editor's drawing rule (`shapeGeometryValid` in `lib/geometry.js`) gets at least one error.
+
+**Errors:**
+
+| Code | Condition | Path |
+|---|---|---|
+| `E_FORMAT` | The input is not an object, or `format` is not `"ragassembler"`. | `""` or `/format` |
+| `E_VERSION_UNSUPPORTED` | `version` is missing or not one of `RagImporter.supportedVersions` ([§6.3](#63-versioning)). | `/version` |
+| `E_FIELD_MISSING` | A field of `docs/schema.md` is absent (only `fixtures[].sprite` is optional). | the field |
+| `E_FIELD_TYPE` | Wrong type: numbers must be finite, `integer` whole, `vec2` two finite numbers, `color` `#rrggbb`, references a string (or `null` where allowed), lists arrays of objects. | the field |
+| `E_FIELD_RANGE` | Outside the field's range in `docs/schema.md`, or not its constant (`ragdoll.id` is `"root"`). This covers non-positive sizes and radii, `length`/`speed ≤ 0`, negative fades, damping and motor values, `channels` outside 0–1, and `limits.lower > 0` or `limits.upper < 0` whether or not limits are enabled. | the field |
+| `E_FIELD_ENUM` | Not one of the field's enum values. | the field |
+| `E_ID_EMPTY` | An empty `id` (sprite asset, body, shape or joint). | `…/id` |
+| `E_ID_DUPLICATE` | An `id` already used earlier, across sprite assets, bodies, shapes and joints. | `…/id` |
+| `E_ID_RESERVED` | An object other than the root uses the id `root`. | `…/id` |
+| `E_ROOT_BODY_MISSING` | `rootBody` is `null`. | `/ragdoll/rootBody` |
+| `E_ROOT_BODY_UNKNOWN` | `rootBody` is not a body id. | `/ragdoll/rootBody` |
+| `E_BODY_NO_FIXTURES` | A body with an empty `fixtures` list. | `/bodies/i/fixtures` |
+| `E_POLYGON_VERTEX_COUNT` | Fewer than 3 or more than 8 vertices. | `…/shape/vertices` |
+| `E_POLYGON_DEGENERATE` | Two vertices closer than 0.0025 m, or three consecutive vertices collinear (cross product of the two edges within 1e-9 m²). | `…/shape/vertices` |
+| `E_POLYGON_NOT_CCW` | Negative signed area (clockwise). | `…/shape/vertices` |
+| `E_POLYGON_NOT_CONVEX` | A reflex vertex, or edges that turn more than once around (self-intersecting star). | `…/shape/vertices` |
+| `E_SPRITE_ASSET_UNKNOWN` | `sprite.asset` is neither `null` nor a sprite asset id. | `…/sprite/asset` |
+| `E_SPRITE_SCALE_ZERO` | A `sprite.scale` component is 0. | `…/sprite/scale` |
+| `E_JOINT_BODY_MISSING` | `bodyA` or `bodyB` is `null`. | `/joints/i/bodyA` or `bodyB` |
+| `E_JOINT_BODY_UNKNOWN` | `bodyA` or `bodyB` is not a body id. | `/joints/i/bodyA` or `bodyB` |
+| `E_JOINT_SAME_BODY` | `bodyA == bodyB`. | `/joints/i/bodyB` |
+| `E_CLIP_KEY_INVALID` | `key` does not match `[a-z0-9_]+`. | `/clips/i/key` |
+| `E_CLIP_KEY_DUPLICATE` | `key` already used by an earlier clip. | `/clips/i/key` |
+| `E_TRACK_TARGET_UNKNOWN` | `target` is not `"root"`, a joint id or a shape id. | `…/tracks/j/target` |
+| `E_TRACK_CHANNEL` | `channel` is not valid for the target ([§6.2](#62-field-reference)). | `…/tracks/j/channel` |
+| `E_TRACK_DUPLICATE` | An earlier track of the clip has the same `target + channel`. | `…/tracks/j` |
+| `E_KEYS_UNSORTED` | A key's `t` is smaller than the previous key's. | `…/keys/k/t` |
+| `E_KEY_TIME_DUPLICATE` | A key's `t` equals the previous key's. | `…/keys/k/t` |
+| `E_KEY_TIME_RANGE` | A key's `t` is outside `[0, length]`. | `…/keys/k/t` |
+| `E_KEY_VALUE` | `v` does not fit the channel: a multiplier not in 0–1, an angle not a finite number, a `sprite` value neither `null` nor an asset id. | `…/keys/k/v` |
+| `E_KEY_INTERP_SPRITE` | A `sprite` key whose `interp` is not `step`. | `…/keys/k/interp` |
+| `E_EVENT_NAME_EMPTY` | An event with an empty `name`. | `…/events/k/name` |
+| `E_EVENT_TIME_RANGE` | An event `t` outside `[0, length)` in a loop clip or `[0, length]` otherwise ([§4.7](04-animation-model.md#47-events)). | `…/events/k/t` |
 
 **Warnings:**
-- A body not connected to `rootBody`.
-- A joint anchor outside both bodies' shapes.
-- A body with zero mass.
-- Loop joints.
-- An empty clip (no tracks and no events).
-- A sprite asset that is unused, or whose image is missing in the editor.
+
+| Code | Condition | Path |
+|---|---|---|
+| `W_UNKNOWN_FIELD` | A key not in `docs/schema.md` for that object (and shape type). Not checked inside `json` values (`events[].data`). RagImporter ignores such fields; the editor drops them on load ([§6.3](#63-versioning)). | the key |
+| `W_BODY_UNLINKED` | A body not connected to `rootBody` through joints. Checked only when `rootBody` is a body id. | `/bodies/i` |
+| `W_JOINT_LOOP` | A loop joint ([§2.4](02-object-model.md#24-joints)). | `/joints/i` |
+| `W_ANCHOR_OUTSIDE` | The anchor is farther than 0.001 m from every shape of both bodies, in rest pose. | `/joints/i/anchor` |
+| `W_BODY_ZERO_MASS` | A body with fixtures and no errors in them whose total mass is 0. | `/bodies/i` |
+| `W_CLIP_EMPTY` | A clip with no tracks and no events. | `/clips/i` |
+| `W_SPRITE_UNUSED` | A sprite asset referenced by no `sprite.asset` and no `sprite` key value. | `/sprites/i` |
+| `W_SPRITE_IMAGE_MISSING` | Editor only: `hasImage(asset)` returned `false`. | `/sprites/i/src` |
+| `W_DUPLICATE_NAME` | One warning per duplicated name within a kind (bodies, joints, shapes; all shapes of the file form one kind). `path` is the second occurrence and the message lists every colliding id. Equal names across kinds do not warn. Runtime lookups by name return the first ([§7.1](07-ragimporter.md#71-api)). | `…/name` |
+
+Joint edges, unlinked bodies and loop joints follow one rule, shared with the editor's joint graph: a joint is an edge when `bodyA` and `bodyB` are two different body ids; a breadth-first search from `rootBody`, visiting edges in `joints` order, marks tree joints; every other edge between reachable bodies is a loop joint.
 
 ## 6.5 Round-trip guarantee
 **Load → Save produces a byte-identical file** for any valid file written by the same format version. To achieve this:
