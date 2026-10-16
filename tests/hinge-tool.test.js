@@ -4,7 +4,7 @@ import { createEditor } from '../js/editor.js';
 import { ROOT_UID } from '../js/model/model.js';
 import { createJoint, createShapeBody } from '../js/commands/create.js';
 import { setProps } from '../js/commands/props.js';
-import { hingeLimit, hingePair, hingeTool } from '../js/tools/hinge.js';
+import { hingeLimits, hingePair, hingeTool } from '../js/tools/hinge.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../js/viewport/style.js';
 import { defaultsOf } from '../lib/schema.js';
 
@@ -164,22 +164,29 @@ test('hingePair counts two shapes of one body once', () => {
 });
 
 const LIMIT_TABLE = [
-  [0, false, 0],
-  [37.4, false, 37],
-  [37.6, false, 38],
-  [250, false, 180],
-  [180, true, 180],
-  [37, true, 30],
-  [38, true, 45],
-  [3, true, 0],
-  [0.4, false, 0],
+  [0, {}, 0, 0],
+  [37.4, {}, 0, 37],
+  [-37.6, {}, -38, 0],
+  [37, { shift: true }, 0, 30],
+  [-38, { shift: true }, -45, 0],
+  [3, { shift: true }, 0, 0],
+  [45, { alt: true }, -45, 45],
+  [-45, { alt: true }, -45, 45],
+  [0, { alt: true }, 0, 0],
+  [-20, { alt: true, shift: true }, -15, 15],
+  [0.4, {}, 0, 0],
+  [-0.4, {}, 0, 0],
+  [180, {}, 0, 180],
+  [-179.6, {}, -180, 0],
 ];
 
-for (const [distance, shift, degrees] of LIMIT_TABLE) {
-  test(`hingeLimit(${distance}, ${shift}) is ${degrees} degrees`, () => {
-    const theta = hingeLimit(distance, shift);
-    near(theta, degrees * DEG);
-    assert.ok(!Object.is(theta, -0));
+for (const [degrees, modifiers, lower, upper] of LIMIT_TABLE) {
+  test(`hingeLimits(${degrees}, ${JSON.stringify(modifiers)}) is ${lower} / ${upper} degrees`, () => {
+    const limits = hingeLimits(degrees * DEG, { shift: false, alt: false, ...modifiers });
+    near(limits.lower, lower * DEG);
+    near(limits.upper, upper * DEG);
+    assert.ok(!Object.is(limits.lower, -0));
+    assert.ok(!Object.is(limits.upper, -0));
   });
 }
 
@@ -231,60 +238,102 @@ test('under a moved and rotated root the anchor is snapped in world and stored r
   nearAll(lastJoint(model).props.anchor, [-2, 0.5]);
 });
 
-test('a drag creates symmetric enabled limits from the screen distance to the anchor', () => {
-  const { model, registry, view, shapes } = environment();
-  view.hits = [shapes[1], shapes[0]];
-  gesture(registry, [[px(0.5), py(0)], [px(0.5) + 20, py(0)], [px(0.5) + 37.4, py(0)]]);
+function limitsAre(model, lower, upper) {
   const { limits } = lastJoint(model).props;
   assert.equal(limits.enabled, true);
-  near(limits.lower, -37 * DEG);
-  near(limits.upper, 37 * DEG);
+  near(limits.lower, lower * DEG, 'lower');
+  near(limits.upper, upper * DEG, 'upper');
+}
+
+test('a drag counter-clockwise of the zero direction creates 0 / phi, clockwise phi / 0, with ALT plus or minus phi', () => {
+  const cases = [
+    [[300, 150], {}, 0, 45],
+    [[300, 250], {}, -45, 0],
+    [[300, 150], { alt: true }, -45, 45],
+    [[300, 250], { alt: true }, -45, 45],
+    [[200, 200], {}, 0, 180],
+    [[250 + 40, 200 - 20], {}, 0, 27],
+  ];
+  for (const [[x, y], modifiers, lower, upper] of cases) {
+    const { model, registry, view, shapes } = environment();
+    view.hits = [shapes[1], shapes[0]];
+    gesture(registry, [[px(0.5), py(0)], [x, y], [x, y]], modifiers);
+    limitsAre(model, lower, upper);
+  }
 });
 
-test('a long drag clamps the limits to 180 degrees', () => {
-  const { model, registry, view, shapes } = environment();
+test('phi is measured against a rotated root and a zero direction that is not +X', () => {
+  const { model, registry, view, history, shapes } = environment();
+  history.execute(setProps([ROOT_UID], { angle: Math.PI / 2 }, 'Turn root'));
   view.hits = [shapes[1], shapes[0]];
-  gesture(registry, [[px(0.5), py(0)], [px(0.5), py(0) + 300], [px(0.5), py(0) + 300]]);
-  near(lastJoint(model).props.limits.upper, Math.PI);
+  gesture(registry, [[px(0), py(0.5)], [px(0) - 30, py(0.5) - 30], [px(0) - 30, py(0.5) - 30]]);
+  nearAll(lastJoint(model).props.anchor, [0.5, 0]);
+  limitsAre(model, 0, 45);
+  view.hits = [shapes[1], shapes[0]];
+  history.undo();
+  gesture(registry, [[px(0), py(0.5)], [px(0) + 30, py(0.5) - 30], [px(0) + 30, py(0.5) - 30]]);
+  limitsAre(model, -45, 0);
 });
 
-test('theta is measured from the anchor on screen after a pan mid-drag', () => {
+test('phi is measured from the anchor on screen after a pan mid-drag', () => {
   const { model, registry, view, camera, shapes } = environment();
   view.hits = [shapes[1], shapes[0]];
   send(registry, 'down', 250, 200);
-  send(registry, 'move', 300, 200);
+  send(registry, 'move', 300, 170);
   camera.panBy(20, 0);
-  send(registry, 'move', 300, 200);
+  send(registry, 'move', 300, 170);
   const arc = overlayOf(registry).find((call) => call[0] === 'arc');
-  nearCall(arc, ['arc', 270, 200, GIZMO_SIZE.jointArc, 30 * DEG, -30 * DEG, true]);
-  send(registry, 'up', 300, 200);
-  const { limits } = lastJoint(model).props;
-  near(limits.upper, 30 * DEG);
+  nearCall(arc, ['arc', 270, 200, GIZMO_SIZE.jointArc, 0, -45 * DEG, true]);
+  send(registry, 'up', 300, 170);
+  limitsAre(model, 0, 45);
   nearAll(lastJoint(model).props.anchor, [0.5, 0]);
 });
 
-test('a SHIFT change re-sent as a move changes theta', () => {
+test('SHIFT and ALT pressed and released mid-drag, re-sent as moves, change the limits', () => {
   const { model, registry, view, shapes } = environment();
   view.hits = [shapes[1], shapes[0]];
+  const pointer = [290, 180];
   send(registry, 'down', 250, 200);
-  send(registry, 'move', 288, 200);
-  nearCall(overlayOf(registry).find((call) => call[0] === 'arc'), ['arc', 250, 200, GIZMO_SIZE.jointArc, 38 * DEG, -38 * DEG, true]);
-  send(registry, 'move', 288, 200, { shift: true });
-  nearCall(overlayOf(registry).find((call) => call[0] === 'arc'), ['arc', 250, 200, GIZMO_SIZE.jointArc, 45 * DEG, -45 * DEG, true]);
-  send(registry, 'up', 288, 200, { shift: true });
-  near(lastJoint(model).props.limits.upper, 45 * DEG);
-  near(lastJoint(model).props.limits.lower, -45 * DEG);
+  send(registry, 'move', ...pointer);
+  nearCall(overlayOf(registry).find((call) => call[0] === 'arc'), ['arc', 250, 200, GIZMO_SIZE.jointArc, 0, -27 * DEG, true]);
+  send(registry, 'move', ...pointer, { shift: true });
+  nearCall(overlayOf(registry).find((call) => call[0] === 'arc'), ['arc', 250, 200, GIZMO_SIZE.jointArc, 0, -30 * DEG, true]);
+  send(registry, 'move', ...pointer, { shift: true, alt: true });
+  nearCall(overlayOf(registry).find((call) => call[0] === 'arc'), ['arc', 250, 200, GIZMO_SIZE.jointArc, 30 * DEG, -30 * DEG, true]);
+  send(registry, 'move', ...pointer, { alt: true });
+  send(registry, 'move', ...pointer);
+  send(registry, 'up', ...pointer, { shift: true });
+  limitsAre(model, 0, 30);
 });
 
-test('a drag back to the anchor creates a pin, and a move under 4 px stays a click', () => {
-  const { model, registry, view, shapes } = environment({ positions: [[0, 0], [1, 0], [0.5, 1]] });
+test('the pointer back within 1 px of the anchor keeps the last phi; a drag ending on the zero direction is a pin', () => {
+  const { model, registry, view, history, shapes } = environment({ positions: [[0, 0], [1, 0], [0.5, 1]] });
   view.hits = [shapes[1], shapes[0]];
-  gesture(registry, [[250, 200], [300, 200], [250, 200], [250, 200]]);
+  gesture(registry, [[250, 200], [250, 150], [250.5, 200], [250.5, 200]]);
+  limitsAre(model, 0, 90);
+  history.undo();
+  gesture(registry, [[250, 200], [250, 150], [300, 200], [300, 200]]);
   assert.deepEqual(lastJoint(model).props.limits, defaultsOf('joint').limits);
   view.hits = [shapes[2], shapes[0]];
   gesture(registry, [[250, 200], [253, 200], [253, 200]]);
   assert.equal(jointsOf(model).length, 2);
   assert.deepEqual(lastJoint(model).props.limits, defaultsOf('joint').limits);
+});
+
+test('readout: the limits next to the pointer during a drag, null before the latch and after the release', () => {
+  const { registry, view, shapes } = environment();
+  view.hits = [shapes[1], shapes[0]];
+  assert.equal(registry.readout(), null);
+  send(registry, 'down', 250, 200);
+  assert.equal(registry.readout(), null);
+  send(registry, 'move', 252, 200);
+  assert.equal(registry.readout(), null);
+  send(registry, 'move', 300, 250);
+  assert.deepEqual(registry.readout(), { text: 'lower: -45.0°  upper: 0.0°', screen: { x: 316, y: 266 } });
+  send(registry, 'move', 300, 250, { alt: true });
+  assert.equal(registry.readout().text, 'lower: -45.0°  upper: 45.0°');
+  send(registry, 'up', 300, 250);
+  assert.equal(registry.readout(), null);
 });
 
 test('refused presses record nothing and keep the selection', () => {
@@ -379,12 +428,12 @@ test('the right button is ignored, alone or during a left drag', () => {
   assert.deepEqual(overlayOf(registry), []);
   assert.deepEqual(jointsOf(model), []);
   send(registry, 'down', 250, 200);
-  send(registry, 'move', 290, 200);
-  send(registry, 'down', 290, 200, { button: 2, buttons: 3 });
-  send(registry, 'up', 290, 200, { button: 2 });
-  send(registry, 'up', 290, 200);
+  send(registry, 'move', 290, 160);
+  send(registry, 'down', 290, 160, { button: 2, buttons: 3 });
+  send(registry, 'up', 290, 160, { button: 2 });
+  send(registry, 'up', 290, 160);
   assert.equal(jointsOf(model).length, 1);
-  near(lastJoint(model).props.limits.upper, 40 * DEG);
+  limitsAre(model, 0, 45);
 });
 
 test('bodyA is the body closer to rootBody along a chain, whatever is on top', () => {
@@ -450,7 +499,7 @@ test('a refused press leaves the not-allowed cursor to the next moves', () => {
   send(registry, 'up', 260, 200);
 });
 
-test('overlay: circle and needle after the press, the arc once theta is above 0, nothing after release or cancel', () => {
+test('overlay: circle and needle after the press, the arc from lower to upper once phi is not 0, nothing after release or cancel', () => {
   const { registry, view, shapes } = environment();
   view.hits = [shapes[1], shapes[0]];
   assert.deepEqual(overlayOf(registry), []);
@@ -466,9 +515,8 @@ test('overlay: circle and needle after the press, the arc once theta is above 0,
   send(registry, 'move', 250, 240);
   const limited = overlayOf(registry);
   assert.equal(limited.length, 6);
-  const theta = 40 * DEG;
-  nearCall(limited[3], ['moveTo', 250 + GIZMO_SIZE.jointArc * Math.cos(theta), 200 + GIZMO_SIZE.jointArc * Math.sin(theta)]);
-  nearCall(limited[4], ['arc', 250, 200, GIZMO_SIZE.jointArc, theta, -theta, true]);
+  nearCall(limited[3], ['moveTo', 250, 200 + GIZMO_SIZE.jointArc]);
+  nearCall(limited[4], ['arc', 250, 200, GIZMO_SIZE.jointArc, 90 * DEG, 0, true]);
   assert.deepEqual(limited[5], STROKE);
   send(registry, 'up', 250, 240);
   assert.deepEqual(overlayOf(registry), []);

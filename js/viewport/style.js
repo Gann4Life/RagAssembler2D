@@ -25,8 +25,9 @@ export const LINE_WIDTH = Object.freeze({ outline: 1, selected: 2, gizmo: 2 });
  * Gizmo sizes, CSS px: root cross arm and ring radius, joint circle radius, limit arc radius, needle and
  * `aimAxis` arrow lengths, center-of-mass marker radius, and the transform gizmo: arrow start and tip distances
  * from the pivot, arrow head length and width, free-move square offset and side, rotation ring radius and pivot
- * mark size; resize handle side, and its side when hovered or dragged.
- * @type {Readonly<{ rootCross: number, rootRing: number, jointCircle: number, jointArc: number, jointNeedle: number, aimArrow: number, centerOfMass: number, arrowStart: number, arrowTip: number, arrowHead: number, arrowWidth: number, squareOffset: number, squareSize: number, rotateRing: number, pivot: number, resizeHandle: number, resizeHandleActive: number }>}
+ * mark size; resize handle side, and its side when hovered or dragged; joint limit handle radius, and its radius when
+ * hovered or dragged.
+ * @type {Readonly<{ rootCross: number, rootRing: number, jointCircle: number, jointArc: number, jointNeedle: number, aimArrow: number, centerOfMass: number, arrowStart: number, arrowTip: number, arrowHead: number, arrowWidth: number, squareOffset: number, squareSize: number, rotateRing: number, pivot: number, resizeHandle: number, resizeHandleActive: number, limitHandle: number, limitHandleActive: number }>}
  */
 export const GIZMO_SIZE = Object.freeze({
   rootCross: 14,
@@ -46,6 +47,8 @@ export const GIZMO_SIZE = Object.freeze({
   pivot: 4,
   resizeHandle: 8,
   resizeHandleActive: 10,
+  limitHandle: 5,
+  limitHandleActive: 6,
 });
 
 /**

@@ -14,6 +14,7 @@ import {
   rotationPivot,
   startMove,
   startRotation,
+  sweepTracker,
 } from '../js/tools/manipulation.js';
 import { formatMove } from '../js/tools/transform-gizmo.js';
 import { defaultsOf } from '../lib/schema.js';
@@ -339,4 +340,22 @@ test('startRotation of two joints turns only their anchors; Last selected uses t
   last.apply(event(env, { x: 2.5, y: 1 }));
   nearPair(anchor(model, joints[0]), [2.5, -2]);
   nearPair(anchor(model, joints[2]), [2.5, 0]);
+});
+
+test('sweepTracker accumulates past half a turn, ignores the 1 px dead zone and restarts', () => {
+  const env = environment();
+  const pivot = { x: 1, y: 1 };
+  const tracker = sweepTracker(env.ctx, pivot, onCircle(pivot, 1, 0));
+  near(tracker.update(onCircle(pivot, 1, 90 * DEG)), 90 * DEG);
+  near(tracker.update(onCircle(pivot, 1, 179 * DEG)), 179 * DEG);
+  near(tracker.update(onCircle(pivot, 1, -170 * DEG)), 190 * DEG);
+  near(tracker.update(onCircle(pivot, 1, 0)), 360 * DEG);
+  near(tracker.update(onCircle(pivot, 0.009, 180 * DEG)), 360 * DEG);
+  near(tracker.update(onCircle(pivot, 1, -30 * DEG)), 330 * DEG);
+  tracker.restart({ x: 0, y: 0 }, { x: 0, y: 1 });
+  near(tracker.update({ x: -1, y: 0 }), 90 * DEG);
+  near(tracker.update({ x: 0, y: -1 }), 180 * DEG);
+  const backwards = sweepTracker(env.ctx, pivot, onCircle(pivot, 1, 0));
+  near(backwards.update(onCircle(pivot, 1, -100 * DEG)), -100 * DEG);
+  near(backwards.update(onCircle(pivot, 1, 160 * DEG)), -200 * DEG);
 });

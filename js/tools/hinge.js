@@ -3,10 +3,12 @@ import { jointBetween, orderJointBodies } from '../model/queries.js';
 import { jointZeroAngle, placement } from '../viewport/placement.js';
 import { snapAngle } from '../viewport/snap.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../viewport/style.js';
+import { formatLimits } from './joint-limits.js';
 import { DRAG_THRESHOLD, defineTool } from './tool.js';
 
 const PRIMARY = 0;
-const MAX_LIMIT_DEGREES = 180;
+const PIVOT_DEAD_ZONE = 1;
+const READOUT_OFFSET = 16;
 
 function distance(from, to) {
   return Math.hypot(to.x - from.x, to.y - from.y);
@@ -37,22 +39,29 @@ export function hingePair(model, hits) {
   return orderJointBodies(model, first, second);
 }
 
+function wrap(angle) {
+  const turned = angle - 2 * Math.PI * Math.floor((angle + Math.PI) / (2 * Math.PI));
+  return turned === -Math.PI ? Math.PI : turned;
+}
+
 /**
- * Symmetric limit θ of a Hinge drag: 1 CSS px = 1°, rounded to a whole degree, clamped to 0–180°, and
- * rounded to 15° with SHIFT.
- * @param {number} distance Screen distance from the anchor to the pointer, CSS px.
- * @param {boolean} shift Whether SHIFT is held.
- * @returns {number} θ, radians, never `-0`.
+ * Limits of a Hinge drag from the limit angle φ: rounded to a whole degree, then to 15° with SHIFT; one-sided
+ * (`0 / φ` for φ > 0, `φ / 0` for φ < 0), or `−|φ| / |φ|` with ALT.
+ * @param {number} phi Angle from the zero direction to the pointer, radians, in (−π, π], counter-clockwise positive.
+ * @param {{ shift: boolean, alt: boolean }} modifiers SHIFT and ALT held.
+ * @returns {Readonly<{ lower: number, upper: number }>} Limits, radians, never `-0`.
  */
-export function hingeLimit(distance, shift) {
-  const degrees = Math.min(MAX_LIMIT_DEGREES, Math.round(distance));
-  return snapAngle((degrees * Math.PI) / 180, shift) + 0;
+export function hingeLimits(phi, { shift, alt }) {
+  const a = snapAngle((Math.round((phi * 180) / Math.PI) * Math.PI) / 180, shift) + 0;
+  if (alt) return Object.freeze({ lower: -Math.abs(a) + 0, upper: Math.abs(a) });
+  return Object.freeze({ lower: Math.min(a, 0) + 0, upper: Math.max(a, 0) + 0 });
 }
 
 /**
  * Builds the Hinge Joint tool: a press where shapes of two bodies overlap anchors a revolute joint at the
- * grid-snapped press point; a click creates a pin, a drag creates limits ±θ. One joint per press through
- * `history.execute`, then the joint is selected. Refused spots show the `not-allowed` cursor while hovering.
+ * grid-snapped press point; a click creates a pin, a drag creates one-sided limits toward the pointer (ALT:
+ * symmetric) and shows them in a readout. One joint per press through `history.execute`, then the joint is
+ * selected. Refused spots show the `not-allowed` cursor while hovering.
  * @returns {Readonly<import('./tool.js').Tool>} The tool.
  */
 export function hingeTool() {
@@ -62,11 +71,14 @@ export function hingeTool() {
   function latch(event) {
     if (!press.dragging && distance(press.screen, event.screen) >= DRAG_THRESHOLD) press.dragging = true;
     press.last = event;
+    if (!press.dragging) return;
+    const a = ctx.camera.worldToScreen(press.anchor);
+    const d = { x: event.screen.x - a.x, y: event.screen.y - a.y };
+    if (Math.hypot(d.x, d.y) >= PIVOT_DEAD_ZONE) press.phi = wrap(Math.atan2(-d.y, d.x) - press.zero);
   }
 
-  function thetaOf(event) {
-    if (!press.dragging) return 0;
-    return hingeLimit(distance(ctx.camera.worldToScreen(press.anchor), event.screen), event.shift);
+  function currentLimits() {
+    return hingeLimits(press.phi, { shift: press.last.shift, alt: press.last.alt });
   }
 
   return defineTool({
@@ -85,7 +97,7 @@ export function hingeTool() {
       if (!pair) return;
       const anchor = ctx.snapPoint(e.world);
       const zero = jointZeroAngle(anchor, placement(ctx.model).bodies.get(pair.bodyB));
-      press = { screen: e.screen, anchor, pair, zero, dragging: false, last: e };
+      press = { screen: e.screen, anchor, pair, zero, dragging: false, last: e, phi: 0 };
       ctx.setCursor(null);
       ctx.invalidateOverlay();
     },
@@ -100,12 +112,12 @@ export function hingeTool() {
     pointerUp(e) {
       if (e.button !== PRIMARY || !press) return;
       latch(e);
-      const theta = thetaOf(e);
+      const { lower, upper } = currentLimits();
       const { pair, anchor } = press;
       press = null;
       ctx.invalidateOverlay();
       const spec = { ...pair, anchor: ctx.toLocal(anchor) };
-      if (theta > 0) spec.limits = { enabled: true, lower: -theta, upper: theta };
+      if (lower !== 0 || upper !== 0) spec.limits = { enabled: true, lower, upper };
       const uid = ctx.history.execute(createJoint(spec));
       ctx.selection.set([uid]);
     },
@@ -115,19 +127,25 @@ export function hingeTool() {
       ctx.invalidateOverlay();
       return true;
     },
+    readout() {
+      if (!press?.dragging) return null;
+      const { lower, upper } = currentLimits();
+      const { x, y } = press.last.screen;
+      return { text: formatLimits(lower, upper), screen: { x: x + READOUT_OFFSET, y: y + READOUT_OFFSET } };
+    },
     drawOverlay(g) {
       if (!press) return;
       const a = ctx.camera.worldToScreen(press.anchor);
       const { zero } = press;
-      const theta = thetaOf(press.last);
+      const { lower, upper } = currentLimits();
       g.circle(a.x, a.y, GIZMO_SIZE.jointCircle);
       const tip = along(a, zero, GIZMO_SIZE.jointNeedle);
       g.moveTo(a.x, a.y);
       g.lineTo(tip.x, tip.y);
-      if (theta > 0) {
-        const start = along(a, zero - theta, GIZMO_SIZE.jointArc);
+      if (lower !== 0 || upper !== 0) {
+        const start = along(a, zero + lower, GIZMO_SIZE.jointArc);
         g.moveTo(start.x, start.y);
-        g.arc(a.x, a.y, GIZMO_SIZE.jointArc, -(zero - theta), -(zero + theta), true);
+        g.arc(a.x, a.y, GIZMO_SIZE.jointArc, -(zero + lower), -(zero + upper), true);
       }
       g.stroke({ width: LINE_WIDTH.outline, color: COLORS.highlight });
     },

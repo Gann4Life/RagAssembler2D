@@ -204,6 +204,37 @@ export function canRotate(target) {
   return target.root || target.bodies.length > 0 || target.joints.length >= 2;
 }
 
+/**
+ * Accumulates the angle the pointer sweeps around a pivot, following it past half a turn: each update adds the
+ * change of direction wrapped to (−π, π]. A pointer within 1 CSS px of the pivot on screen changes nothing.
+ * @param {import('./tool.js').ToolContext} ctx Tool context; its camera places the dead zone.
+ * @param {import('../../lib/geometry.js').Vec2} pivot Pivot, world meters.
+ * @param {import('../../lib/geometry.js').Vec2} from Start point of the sweep, world meters.
+ * @returns {{ update: (world: import('../../lib/geometry.js').Vec2) => number,
+ *   restart: (pivot: import('../../lib/geometry.js').Vec2, from: import('../../lib/geometry.js').Vec2) => void }}
+ *   `update` takes the pointer, world meters, and returns the swept angle, radians, counter-clockwise positive;
+ *   `restart` sets a new pivot and start point and resets the angle to 0.
+ */
+export function sweepTracker(ctx, pivot, from) {
+  let center = pivot;
+  let prev = direction(pivot, from);
+  let theta = 0;
+  return Object.freeze({
+    update(world) {
+      if (distance(ctx.camera.worldToScreen(center), ctx.camera.worldToScreen(world)) <= PIVOT_DEAD_ZONE) return theta;
+      const phi = direction(center, world);
+      theta += wrap(phi - prev);
+      prev = phi;
+      return theta;
+    },
+    restart(nextPivot, nextFrom) {
+      center = nextPivot;
+      prev = direction(nextPivot, nextFrom);
+      theta = 0;
+    },
+  });
+}
+
 function rootStart(model) {
   const { root } = placement(model);
   return root;
@@ -278,35 +309,30 @@ export function startRotation(ctx, { target, press, mode }) {
   const single = !target.root && target.bodies.length === 1 && target.joints.length === 0;
   const a0 = single ? readAngle(model.prop(target.bodies[0], 'angle')) : 0;
   const pivotOf = (ctrl) => (ctrl && !target.root ? originPivot : anchorPivot);
-  const sweep = { pivotCenter: press.ctrl, prev: direction(pivotOf(press.ctrl), press.world), theta: 0 };
   let current = pivotOf(press.ctrl);
+  const tracker = sweepTracker(ctx, current, press.world);
+  let pivotCenter = press.ctrl;
   let applied = 0;
 
   function follow(e) {
     current = pivotOf(e.ctrl);
-    if (e.ctrl !== sweep.pivotCenter) {
-      sweep.pivotCenter = e.ctrl;
-      if (distance(anchorPivot, originPivot) > 0) {
-        sweep.prev = direction(current, press.world);
-        sweep.theta = 0;
-      }
+    if (e.ctrl !== pivotCenter) {
+      pivotCenter = e.ctrl;
+      if (distance(anchorPivot, originPivot) > 0) tracker.restart(current, press.world);
     }
-    if (distance(ctx.camera.worldToScreen(current), e.screen) <= PIVOT_DEAD_ZONE) return;
-    const phi = direction(current, e.world);
-    sweep.theta += wrap(phi - sweep.prev);
-    sweep.prev = phi;
+    return tracker.update(e.world);
   }
 
   return Object.freeze({
     apply(e) {
-      follow(e);
+      const theta = follow(e);
       if (target.root) {
-        const angle = ctx.snapAngle(root.angle + sweep.theta, e.shift) + 0;
+        const angle = ctx.snapAngle(root.angle + theta, e.shift) + 0;
         applied = angle - root.angle;
         ctx.history.execute(setProps([ROOT_UID], { angle }, 'Rotate ragdoll'));
         return;
       }
-      applied = single ? ctx.snapAngle(a0 + sweep.theta, e.shift) - a0 : ctx.snapAngle(sweep.theta, e.shift);
+      applied = single ? ctx.snapAngle(a0 + theta, e.shift) - a0 : ctx.snapAngle(theta, e.shift);
       const active = e.alt ? only : full;
       const turned = transformParts(active, rotationAbout(ctx.toLocal(current), applied));
       ctx.history.execute(placeParts(merge(full, turned), 'Rotate'));

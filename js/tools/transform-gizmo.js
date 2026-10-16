@@ -183,18 +183,20 @@ function drawSlice(g, pivot, radius, sweep) {
  * Draws the transform gizmo on a `PIXI.Graphics` in screen space: dashed ring (32 dashes), arrows, square, then the pivot
  * mark (a cross in Center mode, a ring with a dot in Last selected mode). The hovered or active handle is white and
  * 1 px wider. `sweep`, when given with a ring, first fills the swept-angle slice (see `rotationSlice`).
- * `points`, when given, draws point handles between the arrows and the square. Uses only `moveTo`,
- * `lineTo`, `poly`, `rect`, `circle`, `fill` and `stroke`.
+ * `points`, when given, draws point handles between the arrows and the square; `under`, when given, draws first,
+ * before the slice and the ring. Uses only `moveTo`, `lineTo`, `poly`, `rect`, `circle`, `fill` and `stroke`.
  * @param {object} g `PIXI.Graphics` to draw on.
  * @param {Readonly<GizmoLayout>} layout Gizmo layout.
  * @param {{ hover: GizmoHandle|null, active: GizmoHandle|null, mode: 'center'|'last',
- *   sweep?: { start: number, angle: number }|null, points?: (g: object) => void }} state Hovered and dragged handles,
- *   the pivot mode, the rotation in progress (world press direction and applied angle) and the point handle drawer.
+ *   sweep?: { start: number, angle: number }|null, points?: (g: object) => void, under?: (g: object) => void }} state
+ *   Hovered and dragged handles, the pivot mode, the rotation in progress (world press direction and applied angle),
+ *   the point handle drawer and the drawer of what lies under the gizmo.
  * @returns {void}
  */
-export function drawGizmo(g, layout, { hover, active, mode, points, sweep }) {
+export function drawGizmo(g, layout, { hover, active, mode, points, sweep, under }) {
   const state = { hover, active };
   const { pivot, square } = layout;
+  under?.(g);
   if (layout.ring !== null && sweep) drawSlice(g, pivot, layout.ring, sweep);
   if (layout.ring !== null) {
     const ring = look('ring', COLORS.gizmoZ, LINE_WIDTH.gizmo, state);
