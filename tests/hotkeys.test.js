@@ -13,11 +13,11 @@ import { Camera } from '../js/viewport/camera.js';
 import { TOOL_SPECS, defineTool } from '../js/tools/tool.js';
 import { ToolRegistry } from '../js/tools/registry.js';
 
-const DESIGN = readFileSync(new URL('../DESIGN.md', import.meta.url), 'utf8');
+const DESIGN = readFileSync(new URL('../docs/design/05-9-hotkeys.md', import.meta.url), 'utf8');
 
 function designHotkeyKeys() {
   const lines = DESIGN.split(/\r?\n/);
-  const start = lines.findIndex((line) => line.startsWith('### 5.9'));
+  const start = lines.findIndex((line) => line.startsWith('# 5.9'));
   const rows = [];
   for (let index = start + 1; index < lines.length && !lines[index].startsWith('#'); index++) {
     if (!lines[index].startsWith('|') || /^\|\s*(Key|---)/.test(lines[index])) continue;

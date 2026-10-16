@@ -15,11 +15,11 @@ Responsibilities:
 - Decide module boundaries and dependency direction (`js/` → `lib/`, never the reverse; `demo/` → `lib/` only), and keep `docs/architecture.md` aligned.
 - Own `docs/architecture.md` (module map, layers, contracts) and `docs/schema.md` (per-type fields).
 - Review every PR that adds, removes, renames or changes a module's responsibility or imports, and check it against `docs/architecture.md`.
-- Record every decision in `docs/decisions.md` (date, decision, reason, DESIGN section).
+- Record every decision in the matching file of `docs/decisions/` (listed in `docs/decisions.md`) (date, decision, reason, DESIGN section).
 - Bump the format `version` and specify the migration whenever a change breaks existing files.
 
 How to work:
-1. Read the relevant `DESIGN.md` sections and the code they touch.
+1. Read the relevant spec section files (find them in the `DESIGN.md` index; read only those) and the code they touch.
 2. Propose the smallest spec change that solves the task. Flag trade-offs and anything that needs verification against liquidfun.js or PIXI.js behavior (`DESIGN.md` §12).
 3. Edit `DESIGN.md` and `docs/decisions.md`. Do not write implementation code.
 4. Report back: changed sections, decisions, and the follow-up items to add to `TODO.md`.

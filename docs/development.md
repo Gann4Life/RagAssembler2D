@@ -12,7 +12,7 @@ npx http-server -c-1 .     # editor: http://localhost:8080, demo: http://localho
 
 ES modules require HTTP. Opening `index.html` from disk does not work. The demo page is **(planned)**.
 
-What the editor shows now (see [Editor boot](architecture.md#editor-boot)):
+What the editor shows now (see [Editor boot](architecture/editor-boot.md#editor-boot)):
 - A header toolbar across the top: New, Load, Save | Undo, Redo | Play, Pause, Next frame, Stop, and Window, Settings at the right end. Every button is disabled (muted text, tooltip ends with "(not available yet)"), but stays focusable. Tab reaches the toolbar once; Left/Right/Home/End move between buttons. On narrow windows the header scrolls horizontally.
 - Below it, an empty dark PIXI viewport that fills the rest of the window and resizes with it. When focused with Tab it shows a blue focus ring.
 - A Tools toolbar floats at the top-left of the viewport: one icon button per tool, in groups, with a tooltip (name and hotkey) on hover or keyboard focus. Tools that are not built yet stay disabled. Up/Down/Left/Right/Home/End move between buttons. On a viewport shorter than 315 px it switches to two columns.
@@ -51,9 +51,9 @@ Current coverage:
 - `tests/queries.test.js` checks the joint graph queries (`jointTree`, `jointBetween`, `orderJointBodies`, `parentJoints`, `bodySubtree`) on small models. `tests/hinge-tool.test.js` checks `hingePair`, `hingeLimit` and the Hinge Joint tool on `createEditor()` with a fake view: click and drag creation, grid snap, limits, refusals, undo, cancellation, cursor and overlay calls. `createJoint` is checked in `tests/create.test.js`. The pointer feel and the overlay drawing are checked in the browser.
 - `tests/delete.test.js` checks `deletionPlan` and `deleteObjects` (cascade, tracks, `rootBody` reassignment, one undo step with an exact restore). `tests/hierarchy.test.js` checks the Hierarchy tree model (`hierarchyTree`, `hierarchyRows`, `fuzzyMatch`, `ancestorKeys`) and `tests/tree-nav.test.js` checks `treeKey`. `tests/queries.test.js` also covers `jointEdges` and `referencesTo`, `tests/create.test.js` unassigned joints, and `tests/editor.test.js` the `delete`, `add-shape` and `add-joint` actions. The panel DOM (`js/panels/hierarchy.js`) is checked in the browser.
 - `tests/liquidfun-api.test.js` loads `vendor/liquidfun.js` in Node and checks the API surface RagImporter uses and the heap rules of `DESIGN.md` §7.4 (20,000 create/destroy cycles, 10⁶ vector-setter calls). `vendor/liquidfun.js` in Node and checks the API surface RagImporter uses and the heap rules of `DESIGN.md` §7.4 (20,000 create/destroy cycles, 10⁶ vector-setter calls).
-- `tests/liquidfun-contact-filter.test.js` loads `vendor/liquidfun.js` in Node and checks the contact filter behavior RagImporter relies on ([`DESIGN.md` §7.5](../DESIGN.md#75-contact-filter-and-host-integration)): the JS filter replaces the default rule, the reimplementation of that rule, per-shape self-collision, replacement and uninstall, one filter across worlds, the `groupIndex` fallback and filter cost.
+- `tests/liquidfun-contact-filter.test.js` loads `vendor/liquidfun.js` in Node and checks the contact filter behavior RagImporter relies on ([`DESIGN.md` §7.5](design/07-ragimporter.md#75-contact-filter-and-host-integration)): the JS filter replaces the default rule, the reimplementation of that rule, per-shape self-collision, replacement and uninstall, one filter across worlds, the `groupIndex` fallback and filter cost.
 - `tests/architecture.test.js` runs the conformance checks below on the real sources; `tests/architecture-checks.test.js` proves each check fails on an in-memory violation. Helpers live in `tests/helpers/` (`scan.js`: tokenizer and import scanner; `architecture.js`: checks).
-- **Native worlds in tests:** the heap is a fixed 16 MiB and is not reclaimed by garbage collection. Every test that creates a `b2World` must destroy it (and any filter it installed) before it ends. About 15 live worlds exhaust the heap and abort `Step` ([`DESIGN.md` §7.4](../DESIGN.md#74-native-memory)).
+- **Native worlds in tests:** the heap is a fixed 16 MiB and is not reclaimed by garbage collection. Every test that creates a `b2World` must destroy it (and any filter it installed) before it ends. About 15 live worlds exhaust the heap and abort `Step` ([`DESIGN.md` §7.4](design/07-ragimporter.md#74-native-memory)).
 
 ### Architecture conformance checks
 
@@ -85,7 +85,7 @@ Both files are loaded with plain `<script>` tags, as served, with no build step.
 - The doebi/liquidfun.js repository declares no license of its own. It ships only the Box2D notice (`NOTICE`).
 - **API exposure:** loading the script defines a single global, `Box2D`. The classes live on it (`Box2D.b2World`, `Box2D.b2Vec2`, `Box2D.b2RevoluteJointDef`, …). There are **no** global `b2World` / `b2Vec2`. Fields use WebIDL accessors (`bd.set_type(Box2D.b2_dynamicBody)`, `body.GetPosition().get_y()`).
 - The file is self-contained: no `.mem` or `.wasm` side file is requested.
-- **Heap:** fixed 16 MiB that cannot grow; objects created with `new Box2D.*` stay until `Box2D.destroy`. Rules: [`DESIGN.md` §7.4](../DESIGN.md#74-native-memory).
+- **Heap:** fixed 16 MiB that cannot grow; objects created with `new Box2D.*` stay until `Box2D.destroy`. Rules: [`DESIGN.md` §7.4](design/07-ragimporter.md#74-native-memory).
 - Under Node it installs a `process.on('uncaughtException')` handler as a side effect of loading.
 - On load it writes `pre-main prep time: 0 ms` with `console.log`. This is informational, not an error.
 

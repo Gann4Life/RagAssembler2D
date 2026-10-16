@@ -65,7 +65,7 @@ function shapeOutline(shape) {
 }
 
 /**
- * Creates the viewport scene ([View sync](docs/architecture.md)): layers, a world container placed by the
+ * Creates the viewport scene ([View sync](docs/architecture/view-sync.md)): layers, a world container placed by the
  * camera (`scale = camera.scale / pixelsPerMeter`), and one display object per root, body and shape, keyed by
  * uid. Model `change` events update entries one by one (add, remove, move, dirty `set`), flushed once per frame
  * from the PIXI shared ticker; only `reset` rebuilds. `display.mode` sets the sprite layer's visibility and the

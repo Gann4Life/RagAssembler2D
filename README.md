@@ -48,7 +48,7 @@ node --test tests/
 
 ## Documentation
 
-- [DESIGN.md](DESIGN.md): full product spec (object model, animation model, file format, runtime API).
+- [DESIGN.md](DESIGN.md): product spec index (object model, animation model, file format, runtime API).
 - [docs/](docs/README.md): architecture, format property schema, development setup and design decisions.
 - [CHANGELOG.md](CHANGELOG.md) and [TODO.md](TODO.md).
 - [CLAUDE.md](CLAUDE.md): contribution guidelines.

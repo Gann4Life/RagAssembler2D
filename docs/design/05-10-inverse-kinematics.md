@@ -1,0 +1,2 @@
+# 5.10 Inverse kinematics
+Out of scope for v1. It was considered mostly for feet placement, but not all ragdolls have feet and not all are humanoid. Procedural joint control ([§4.8](04-animation-model.md#48-procedural-joint-control)) covers the single-joint cases (look at, aim). If IK is added later, it should be a runtime helper in RagImporter that produces procedural `angle` targets for a chain, not an editor-only feature.
