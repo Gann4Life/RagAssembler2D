@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format follows [Kee
 - The root can no longer be moved or rotated in the editor; its position and angle are read-only. Existing files keep their stored root transform, and the file format is unchanged.
 - New documents name the root "root" instead of "ragdoll".
 
+## [0.11.0] - 2026-10-17
+
+### Changed
+- Panel tabs show the default cursor at rest and the grabbing cursor only while a tab is being dragged.
+
 ## [0.10.0] - 2026-10-17
 
 ### Added
