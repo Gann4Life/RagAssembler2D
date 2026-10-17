@@ -15,6 +15,8 @@ import { confirmDialog, noticeDialog } from './confirm-dialog.js';
 import { RAG_FILE_ACCEPT, attachFileDrop, blockFileNavigation, pickTextFile, saveTextFile } from './files.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { ROOT_UID } from './model/model.js';
+import { renameAnchor, renamePoint } from './model/rename.js';
+import { attachRenameField, openRenamePopup } from './rename-field.js';
 import { setProps } from './commands/props.js';
 import { createPoseSession } from './physics/pose-session.js';
 import { DEV_VERSION, loadVersion } from './version.js';
@@ -38,12 +40,13 @@ const editor = createEditor({
   editorVersion: () => editorVersion,
   confirm: (request) => confirmDialog(document, request),
   notify: (notice) => noticeDialog(document, notice),
+  uiBusy: () => document.querySelector('.menu, dialog[open]') !== null,
   files: {
     openText: () => pickTextFile(document, RAG_FILE_ACCEPT),
     saveText: (fileName, text) => saveTextFile(document, fileName, text),
   },
 });
-const { actions, history, modes, selection, model, settings, camera, tools } = editor;
+const { actions, history, modes, selection, model, settings, camera, tools, rename } = editor;
 settings.on('settings', () => saveSettings(settings.toJSON()));
 
 const header = createHeader(document);
@@ -52,7 +55,7 @@ document.getElementById('header').replaceWith(header);
 const dock = createDock(document.getElementById('workspace'), {
   viewportElement: document.getElementById('panel-viewport'),
 });
-createHierarchy(dock.panelElement('hierarchy'), editor);
+const hierarchy = createHierarchy(dock.panelElement('hierarchy'), editor);
 attachFileDrop(document.getElementById('panel-viewport'), (read) => editor.loadFrom(read), () => actions.isEnabled('load'));
 blockFileNavigation(document);
 
@@ -180,3 +183,42 @@ actions.register('settings', { run: toggleSettings, isEnabled: () => modes.can('
 actions.register('frame-selection', { run: () => viewport.frame(selection.objects), isEnabled: () => modes.can('camera') });
 actions.register('frame-all', { run: () => viewport.frame(null), isEnabled: () => modes.can('camera') });
 refreshHeader();
+
+let pointer = null;
+const trackPointer = (event) => {
+  pointer = { x: event.clientX, y: event.clientY };
+};
+document.addEventListener('pointermove', trackPointer, { capture: true, passive: true });
+document.addEventListener('pointerdown', trackPointer, { capture: true, passive: true });
+document.addEventListener('pointerout', (event) => {
+  if (event.relatedTarget === null) pointer = null;
+});
+
+function elementUnderPointer() {
+  return pointer === null ? null : document.elementFromPoint(pointer.x, pointer.y);
+}
+
+function openRenameField(session, returnFocus) {
+  const under = elementUnderPointer();
+  const inline = under && dock.panelElement('hierarchy').contains(under) ? hierarchy.renameRow(session.uid) : null;
+  if (inline) {
+    attachRenameField(inline.input, rename, { returnFocus, onClose: inline.restore });
+    return;
+  }
+  const panel = document.getElementById('panel-viewport');
+  const viewportRect = viewportHost.getBoundingClientRect();
+  const overViewport = under !== null && panel.contains(under);
+  const world = renamePoint(model, session.uid, viewport.scene.pose());
+  const anchor = renameAnchor({
+    pointer: overViewport ? { x: pointer.x - viewportRect.left, y: pointer.y - viewportRect.top } : null,
+    point: world === null ? null : camera.worldToScreen(world),
+    width: viewportRect.width,
+    height: viewportRect.height,
+  });
+  const popup = openRenamePopup(panel, { anchor, viewport: viewportRect });
+  attachRenameField(popup.input, rename, { returnFocus, onClose: () => popup.element.remove() });
+}
+
+rename.on('rename', ({ session }) => {
+  if (session !== null) openRenameField(session, document.activeElement);
+});
