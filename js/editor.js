@@ -374,8 +374,8 @@ export function createEditor({
     reason: shapeEditReason((uids) => {
       const plan = readPlan(groupPlan, uids);
       if (plan === null) return null;
-      if (plan.invalid) return INVALID_GEOMETRY;
-      return plan.bodies.length === 1 ? 'select shapes of two or more bodies' : null;
+      if (plan.bodies.length === 1) return 'select shapes of two or more bodies';
+      return plan.invalid ? INVALID_GEOMETRY : null;
     }),
   });
   const splittable = (result) => result !== null && result.parts.length > 0 && !result.invalid;

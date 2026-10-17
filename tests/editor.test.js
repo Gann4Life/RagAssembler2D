@@ -583,6 +583,8 @@ test('group, ungroup and split state reasons', () => {
   assert.equal(actions.isEnabled('split'), false);
   assert.equal(actions.reason('split'), 'a shape has invalid geometry');
   assert.equal(actions.reason('ungroup'), null);
+  selection.set([uids.f_4, uids.f_5]);
+  assert.equal(actions.reason('group'), 'select shapes of two or more bodies');
   selection.set([uids.b_3]);
   assert.equal(actions.reason('ungroup'), null);
   assert.equal(actions.isEnabled('ungroup'), true);
