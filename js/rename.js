@@ -1,7 +1,7 @@
-import { Emitter } from '../../lib/emitter.js';
-import { polygonCentroid, transformPoint } from '../../lib/geometry.js';
-import { setProps } from '../commands/props.js';
-import { placement } from '../viewport/placement.js';
+import { Emitter } from '../lib/emitter.js';
+import { polygonCentroid, transformPoint } from '../lib/geometry.js';
+import { setProps } from './commands/props.js';
+import { placement } from './viewport/placement.js';
 
 /**
  * An open rename field: the object it renames and its name when it opened.
@@ -53,8 +53,8 @@ function shapeCenter(record) {
  * `center`, polygon centroid) or a joint anchor, in the displayed pose. Pure.
  * @param {import('./model.js').Model} model Document model.
  * @param {number} uid Root, body, shape or joint uid.
- * @param {import('../viewport/bounds.js').Pose|null} [pose] Displayed pose; the rest pose when omitted.
- * @returns {import('../../lib/geometry.js').Vec2|null} World meters, or `null` when it is not finite or the uid is
+ * @param {import('./viewport/bounds.js').Pose|null} [pose] Displayed pose; the rest pose when omitted.
+ * @returns {import('../lib/geometry.js').Vec2|null} World meters, or `null` when it is not finite or the uid is
  *   of another type.
  */
 export function renamePoint(model, uid, pose = null) {
@@ -76,10 +76,10 @@ export function renamePoint(model, uid, pose = null) {
 /**
  * Anchor point of the rename popup: the pointer when it is over the viewport, else the object's screen point when
  * it is finite and inside the viewport, else the viewport center. Pure.
- * @param {{ pointer: import('../../lib/geometry.js').Vec2|null, point: import('../../lib/geometry.js').Vec2|null,
+ * @param {{ pointer: import('../lib/geometry.js').Vec2|null, point: import('../lib/geometry.js').Vec2|null,
  *   width: number, height: number }} options Pointer and object point, CSS px from the viewport's top-left (`null`
  *   when absent), and the viewport size, CSS px.
- * @returns {import('../../lib/geometry.js').Vec2} Anchor, CSS px from the viewport's top-left.
+ * @returns {import('../lib/geometry.js').Vec2} Anchor, CSS px from the viewport's top-left.
  */
 export function renameAnchor({ pointer, point, width, height }) {
   if (isFinitePoint(pointer)) return Object.freeze({ x: pointer.x, y: pointer.y });
@@ -92,10 +92,10 @@ export function renameAnchor({ pointer, point, width, height }) {
 /**
  * Top-left corner of the rename popup: `RENAME_POPUP_OFFSET` right of and below the anchor, then moved as little
  * as needed to stay inside the viewport (the top-left edge wins when the popup is larger). Pure.
- * @param {import('../../lib/geometry.js').Vec2} anchor Anchor, CSS px from the viewport's top-left.
+ * @param {import('../lib/geometry.js').Vec2} anchor Anchor, CSS px from the viewport's top-left.
  * @param {{ width: number, height: number }} size Popup size, CSS px.
  * @param {{ width: number, height: number }} viewport Viewport size, CSS px.
- * @returns {import('../../lib/geometry.js').Vec2} Corner, CSS px from the viewport's top-left.
+ * @returns {import('../lib/geometry.js').Vec2} Corner, CSS px from the viewport's top-left.
  */
 export function renamePopupPosition(anchor, size, viewport) {
   const clamp = (value, extent, limit) => Math.max(0, Math.min(value, limit - extent)) + 0;
@@ -121,7 +121,7 @@ export class Rename {
 
   /**
    * Creates a closed session and subscribes to the model's `change` and `reset` events and the modes' `mode` event.
-   * @param {{ model: import('./model.js').Model, history: import('../commands/history.js').History,
+   * @param {{ model: import('./model.js').Model, history: import('./commands/history.js').History,
    *   selection: import('./selection.js').Selection, modes: import('../modes.js').Modes }} core Editor core parts.
    */
   constructor({ model, history, selection, modes }) {

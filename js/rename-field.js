@@ -1,4 +1,4 @@
-import { renamePopupPosition } from './model/rename.js';
+import { renamePopupPosition } from './rename.js';
 
 const STOPPED_EVENTS = Object.freeze(['pointerdown', 'mousedown', 'click', 'dblclick', 'keyup']);
 
@@ -27,7 +27,7 @@ export function createRenameInput(doc) {
  * the core while the field has focus, return focus to `returnFocus`. When the session closes, for any reason, the
  * field is detached and `onClose` is called once.
  * @param {HTMLInputElement} input Field already in the document.
- * @param {import('./model/rename.js').Rename} rename Rename session with an open field.
+ * @param {import('./rename.js').Rename} rename Rename session with an open field.
  * @param {{ returnFocus: Element|null, onClose: () => void }} options Element focused before F2, and the cleanup.
  * @returns {() => void} Cancels the session when it is still open.
  */

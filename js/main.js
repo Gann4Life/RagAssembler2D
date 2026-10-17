@@ -15,7 +15,7 @@ import { confirmDialog, noticeDialog } from './confirm-dialog.js';
 import { RAG_FILE_ACCEPT, attachFileDrop, blockFileNavigation, pickTextFile, saveTextFile } from './files.js';
 import { loadSettings, saveSettings } from './storage.js';
 import { ROOT_UID } from './model/model.js';
-import { renameAnchor, renamePoint } from './model/rename.js';
+import { renameAnchor, renamePoint } from './rename.js';
 import { attachRenameField, openRenamePopup } from './rename-field.js';
 import { setProps } from './commands/props.js';
 import { createPoseSession } from './physics/pose-session.js';

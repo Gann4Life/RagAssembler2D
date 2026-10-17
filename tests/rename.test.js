@@ -8,7 +8,7 @@ import {
   renamePoint,
   renamePopupPosition,
   renameTarget,
-} from '../js/model/rename.js';
+} from '../js/rename.js';
 import { serialize } from '../lib/serialize.js';
 import { ragFile } from './helpers/rag-file.js';
 

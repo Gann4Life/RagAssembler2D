@@ -4,7 +4,7 @@ import { createJoint, createShapeBody } from './commands/create.js';
 import { deleteObjects, deletionPlan } from './commands/delete.js';
 import { groupBodies, groupPlan, splitParts, splitShapes, ungroupBodies, ungroupParts } from './commands/group.js';
 import { Selection } from './model/selection.js';
-import { Rename } from './model/rename.js';
+import { Rename } from './rename.js';
 import { History } from './commands/history.js';
 import { Modes } from './modes.js';
 import { ActionRegistry } from './actions.js';
