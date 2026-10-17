@@ -40,6 +40,7 @@ export function attachRenameField(input, rename, { returnFocus, onClose }) {
   const stop = (event) => event.stopPropagation();
   const onKeyDown = (event) => {
     event.stopPropagation();
+    if (event.isComposing) return;
     if (event.key === 'Enter') {
       event.preventDefault();
       restore = true;

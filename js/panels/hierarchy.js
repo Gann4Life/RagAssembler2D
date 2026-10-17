@@ -7,10 +7,9 @@ import { createRenameInput } from '../rename-field.js';
 
 /**
  * @typedef {object} Hierarchy
- * @property {(uid: number) => ({ input: HTMLInputElement, restore: () => void }|null)} renameRow Clears the search,
- *   expands the row's ancestors, scrolls it into view as little as needed and puts a rename field in place of its label;
- *   estore puts the label back. 
-ull when the object has no row.
+ * @property {(uid: number) => ({ input: HTMLInputElement, restore: () => void }|null)} renameRow
+ *   Clears the search, expands the row's ancestors, scrolls it into view as little as needed and puts a
+ *   rename field in place of its label; `restore` puts the label back. `null` when the object has no row.
  * @property {() => void} destroy Removes listeners, tooltips, the pending frame callback and the panel content.
  */
 
