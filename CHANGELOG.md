@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-17
+
+### Added
+- Ctrl+G groups the bodies of the selected shapes and bodies into one body; shapes keep their place in the world.
+- Ctrl+Shift+G ungroups the selected bodies into one body per shape.
+- Alt+G splits the selected shapes of a body into a new body.
+- Grouping bodies that have joints between them asks for confirmation and deletes those joints, with their animation tracks; Undo restores them.
+- Group, Ungroup and Split are Edit mode only, are disabled with a reason when they cannot apply, and are each one undo step.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

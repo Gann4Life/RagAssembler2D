@@ -1,7 +1,5 @@
 # Group, Ungroup and Split
 
-> Status: **(planned)**, #18.
-
 Behavior: [`DESIGN.md` §2.2](../design/02-object-model.md#22-bodies-and-shapes) (rules and examples), [§5.1](../design/05-1-modes.md#51-editor-modes) (Edit mode only), [§5.9](../design/05-9-hotkeys.md#59-hotkeys-defaults) (Ctrl+G, Ctrl+Shift+G, Alt+G). Everything is core and tested under Node; no UI module changes, since the operations have no button yet and their confirmation reuses the shared dialog.
 
 | Concern | Core (Node-tested) |
