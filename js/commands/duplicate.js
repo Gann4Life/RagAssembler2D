@@ -1,11 +1,11 @@
 import { ROOT_UID } from '../model/model.js';
-import { selectedBodies } from '../model/queries.js';
+import { bodySubtree, jointChildBody, parentJoints, selectedBodies } from '../model/queries.js';
 
 /**
  * What duplicating a selection copies, computed from the model before mutating it.
  * @typedef {object} DuplicatePlan
- * @property {ReadonlyArray<number>} bodies Copied bodies (the bodies of the selection), in `bodies` order.
- * @property {ReadonlyArray<number>} joints Copied joints (both bodies copied), in `joints` order.
+ * @property {ReadonlyArray<number>} bodies Copied bodies (whole branches), in `bodies` order.
+ * @property {ReadonlyArray<number>} joints Copied joints (internal, or selected and re-attached), in `joints` order.
  * @property {boolean} empty Whether no body is copied.
  */
 
@@ -52,20 +52,34 @@ function shifted(point, offset) {
 }
 
 /**
- * Computes what duplicating a selection copies: the bodies of the selection (the given bodies plus the body of
- * every given shape) and every joint whose two bodies are both copied. Other node types are ignored. Reads the
- * model only.
+ * Computes what duplicating a selection copies: the union of the whole branches of the selected bodies, the
+ * bodies of the selected shapes and the child body of every selected joint; every joint whose two bodies are
+ * copied; and every selected joint with only its child body copied (re-attached to the uncopied body). Other
+ * node types are ignored. Reads the model only.
  * @param {import('../model/model.js').Model} model Document model.
  * @param {ReadonlyArray<number>} uids Selected uids.
  * @returns {Readonly<DuplicatePlan>} The frozen plan.
  * @throws {Error} When a uid is unknown.
  */
 export function duplicatePlan(model, uids) {
-  const bodies = selectedBodies(model, uids);
-  const copied = new Set(bodies);
+  const parents = parentJoints(model);
+  const copied = new Set();
+  for (const body of selectedBodies(model, uids)) {
+    for (const member of bodySubtree(model, body, parents)) copied.add(member);
+  }
+  const selectedJoints = new Set();
+  for (const uid of uids) {
+    const child = jointChildBody(model, uid, parents);
+    if (child === null) continue;
+    selectedJoints.add(uid);
+    for (const member of bodySubtree(model, child, parents)) copied.add(member);
+  }
+  const bodies = model.children(ROOT_UID, 'bodies').filter((body) => copied.has(body));
   const joints = model.children(ROOT_UID, 'joints').filter((joint) => {
     const { bodyA, bodyB } = model.get(joint).props;
-    return copied.has(resolve(model, bodyA)) && copied.has(resolve(model, bodyB));
+    const a = copied.has(resolve(model, bodyA));
+    const b = copied.has(resolve(model, bodyB));
+    return (a && b) || ((a || b) && selectedJoints.has(joint));
   });
   return Object.freeze({ bodies: Object.freeze(bodies), joints: Object.freeze(joints), empty: bodies.length === 0 });
 }
@@ -74,7 +88,7 @@ export function duplicatePlan(model, uids) {
  * Builds a command that duplicates a selection as {@link duplicatePlan} computes when it runs: copies are appended
  * with new ids and `<base>_copy<k>` names, bodies and joint anchors moved by `offset`, shapes unchanged, no track
  * copied, `rootBody` unchanged. `run` returns the uids that replace the selection: the copy of every given body,
- * shape and joint that was copied, in the given order.
+ * shape and joint that was copied, in the given order; bodies copied only as part of a branch are not included.
  * @param {ReadonlyArray<number>} uids Selected uids.
  * @param {readonly [number, number]} offset Offset added to body positions and joint anchors, root-local meters.
  * @param {string} [label] Undo step label.
@@ -116,8 +130,8 @@ export function duplicateSelection(uids, offset, label = 'Duplicate') {
           ...source,
           id: model.nextId('j'),
           name: jointName(source.name),
-          bodyA: ids.get(source.bodyA),
-          bodyB: ids.get(source.bodyB),
+          bodyA: ids.get(source.bodyA) ?? source.bodyA,
+          bodyB: ids.get(source.bodyB) ?? source.bodyB,
           anchor: shifted(source.anchor, shift),
         };
         copies.set(joint, tx.add(ROOT_UID, 'joints', undefined, { type: 'joint', props }));
