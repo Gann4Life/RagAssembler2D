@@ -5,7 +5,7 @@
 | V / B / D | Select / Select box / Pose | C / R / N / H | Circle / Box / Polygon / Hinge |
 | S | Toggle sprite edit (Select) | Del | Delete |
 | Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | Undo / Redo | Ctrl+S / Ctrl+O | Save / Load |
-| Ctrl+G / Ctrl+Shift+G / Alt+G | Group / Ungroup / Split ([§2.2](02-object-model.md#22-bodies-and-shapes)) | Ctrl+D | Duplicate selection |
+| Ctrl+G / Ctrl+Shift+G / Alt+G | Group / Ungroup / Split ([§2.2](02-object-model.md#22-bodies-and-shapes)) | Ctrl+D | Duplicate selection ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) |
 | Space | Play / Pause | . | Next frame |
 | K | Key selected | F / Home | Frame selection / all |
 | Esc | Abort tool / clear selection | Z | Pivot mode: center / last selected (Select) |
