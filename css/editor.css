@@ -201,7 +201,7 @@ body {
   color: inherit;
   font: inherit;
   white-space: nowrap;
-  cursor: grab;
+  cursor: default;
   touch-action: none;
 }
 
