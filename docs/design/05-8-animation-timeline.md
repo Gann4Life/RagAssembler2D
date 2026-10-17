@@ -6,7 +6,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
 │ Preview stack: [✓ alive] [ pain] [ dead] ...     Procedural: [ Look at cursor] weight ──○──          zoom ──○──   │
 ├──────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────┤
 │                          │ 0.0     0.2     0.4     0.6     0.8     1.0     ▼ playhead                             │
-│ ▾ ragdoll (root)         │                                                                                       │
+│ ▾ root                   │                                                                                       │
 │     strength             │ ◆───────────────────────────────◆                                                     │
 │ ▾ knee_l                 │                                                                                       │
 │     angle                │ ◆───────◆───────◆───────◆                                                             │

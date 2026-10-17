@@ -3,7 +3,7 @@
 Every ragdoll is a tree of world objects whose parent is the **root**.
 
 ```
-ragdoll (root)            world object: transform + global animation channels
+root (the ragdoll)        world object: locked transform + global animation channels
 ├── body                  rigid body, made of one or more shapes
 │   └── shape (fixture)   circle | box | polygon, optionally with a sprite
 ├── joint                 revolute (hinge) joint between two bodies
@@ -14,9 +14,10 @@ ragdoll (root)            world object: transform + global animation channels
 ## 2.1 Root (the ragdoll itself)
 The root is a **parent object in the world**, not a physics body.
 
-- It has its own transform (`position`, `angle`). It is drawn in the viewport as a pivot gizmo and can be selected and moved/rotated with the Select tool ([§5.5](05-5-tools.md#55-tools)). Moving it moves all its children.
+- It has its own transform (`position`, `angle`), **locked** in the editor: nothing in the editor changes it (no transform gizmo, no drag or rotation, read-only in the inspector). New documents have `position` (0, 0) and `angle` 0, so the root frame is the world frame. A loaded file keeps its stored values, and the editor draws its children through them; Save writes them back unchanged ([§6.2](06-file-format.md#62-field-reference)). It is drawn in the viewport as a pivot gizmo and can be selected ([§5.5](05-5-tools.md#55-tools)).
 - Body positions, body angles and joint anchors are stored **local to the root**.
 - It has its own inspector and is always the first node in the Hierarchy.
+- Its `name` (default `root`) is the ragdoll's name: the user renames it in the Hierarchy or the inspector ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels), [§5.7](05-7-inspector.md#57-inspector--properties-panel)), and Save writes it as `meta.name` and suggests `<name>.rag.json` ([§5.3](05-3-header.md#53-header)).
 - It owns the **global animation channels** `strength`, `gain` and `damping` ([§4.2](04-animation-model.md#42-channels)). They are **multipliers in 0–1, default 1**, and they never replace joint values. This is how a whole ragdoll can go limp from a single track, without keying every joint.
 - At runtime, the spawn transform (`x`, `y`, `angle`, `flipX`) is applied to the root. After spawning, `rag.position` / `rag.angle` follow `rootBody`.
 
@@ -24,7 +25,7 @@ The root is a **parent object in the world**, not a physics body.
 
 ## 2.2 Bodies and shapes
 - In the UI a **shape** is what the user draws. A **body** owns one or more shapes (Box2D fixtures).
-- Creating a shape creates a new body with that single shape. The body is placed at the shape's center (circle and box center, polygon centroid) with the opposite of the root's angle, so the shape keeps the orientation it was drawn with on screen; the shape is stored around the body origin (`center` `[0, 0]`, box `angle` 0, polygon vertices relative to the centroid).
+- Creating a shape creates a new body with that single shape. The body is placed at the shape's center (circle and box center, polygon centroid) with the opposite of the root's angle (0 unless a loaded file stores another), so the shape keeps the orientation it was drawn with on screen; the shape is stored around the body origin (`center` `[0, 0]`, box `angle` 0, polygon vertices relative to the centroid).
 - **Group, Ungroup and Split** change which body owns which shapes, in Edit mode only ([§5.1](05-1-modes.md#51-editor-modes)). They work on the **bodies of the selection**: the selected bodies plus the body of every selected shape; other selected objects are ignored. Each operation is one undo step, keeps every shape where it is in the world (sprites included), keeps shape ids, names and fields other than the geometry and sprite placement below (so sprite tracks keep their targets), and then selects shapes, as stated per operation. An operation that would re-express a shape with invalid geometry ([§6.4](06-file-format.md#64-validation)) is unavailable until that shape is fixed.
   - **Group** (Ctrl+G) merges the bodies of the selection into one body with several fixtures. It needs two or more bodies.
     - **Survivor:** `rootBody` when it is one of them, else the first of them in `bodies` order. It keeps its id, name, `position`, `angle`, other fields and place in `bodies`, and its own shapes come first; the shapes of the other bodies follow, body by body in `bodies` order, each body's in fixture order. The other bodies are deleted, with their own fields (`linearDamping`, `angularDamping`, `fixedRotation`, `bullet`): the survivor's apply to the group. `rootBody` never changes.

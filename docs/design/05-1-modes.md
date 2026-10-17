@@ -19,7 +19,7 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 | Select, Select Box, Hierarchy selection | ✓ | ✓ | ✓ |
 | Pose | ✓ | ✓ (into keys, below) | — |
 | Creation tools: Circle, Box, Polygon, Hinge | ✓ | — | — |
-| Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add/delete; Group, Ungroup, Split, Duplicate; Select move and rest-pose rotate (objects and transform gizmo), joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
+| Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add, rename and delete; Group, Ungroup, Split, Duplicate; Select move and rest-pose rotate (objects and transform gizmo), joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
 | Animation edits: clip properties, tracks, keys, events, key buttons ◆, autokey, Key selected (K), Select rotation ring → parent joint `angle`, Pose → keys | — | ✓ | — |
 | Asset import | ✓ | ✓ | — |
 | Asset delete | ✓ | — | — |
