@@ -1,6 +1,6 @@
 import { polygonCentroid, shapeGeometryValid } from '../../lib/geometry.js';
 import { ROOT_UID } from '../model/model.js';
-import { referencesTo } from '../model/queries.js';
+import { referencesTo, selectedBodies } from '../model/queries.js';
 import { deletionPlan } from './delete.js';
 
 /**
@@ -61,21 +61,14 @@ function resolve(model, id) {
 }
 
 function readSelection(model, uids) {
+  const bodies = selectedBodies(model, uids);
   const givenBodies = new Set();
   const shapes = new Set();
-  const picked = new Set();
   for (const uid of uids) {
-    const node = model.get(uid);
-    if (node === null) throw new Error(`Unknown node uid ${uid}`);
-    if (node.type === 'body') {
-      givenBodies.add(uid);
-      picked.add(uid);
-    } else if (node.type === 'shape') {
-      shapes.add(uid);
-      picked.add(node.parent);
-    }
+    const type = model.get(uid).type;
+    if (type === 'body') givenBodies.add(uid);
+    else if (type === 'shape') shapes.add(uid);
   }
-  const bodies = model.children(ROOT_UID, 'bodies').filter((body) => picked.has(body));
   return { bodies, givenBodies, shapes };
 }
 

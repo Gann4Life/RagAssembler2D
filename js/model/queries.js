@@ -170,6 +170,24 @@ export function bodySubtree(model, bodyUid, parents = parentJoints(model)) {
 }
 
 /**
+ * The bodies of a selection: the given bodies plus the body of every given shape. Other node types are ignored.
+ * @param {import('./model.js').Model} model Document model.
+ * @param {ReadonlyArray<number>} uids Selected uids.
+ * @returns {number[]} A new list of body uids, each once, in `bodies` order.
+ * @throws {Error} When a uid is unknown.
+ */
+export function selectedBodies(model, uids) {
+  const picked = new Set();
+  for (const uid of uids) {
+    const node = model.get(uid);
+    if (node === null) throw new Error(`Unknown node uid ${uid}`);
+    if (node.type === 'body') picked.add(uid);
+    else if (node.type === 'shape') picked.add(node.parent);
+  }
+  return model.children(ROOT_UID, 'bodies').filter((body) => picked.has(body));
+}
+
+/**
  * Finds the joints and tracks that reference a node by its file id. A reference resolves through
  * `model.uidOf`, so only the first holder of a duplicated id is referenced.
  * @param {import('./model.js').Model} model Document model.
