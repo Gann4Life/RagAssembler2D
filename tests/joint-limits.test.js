@@ -83,7 +83,7 @@ test('limitJoint: one joint with editable limits, else null', () => {
   assert.equal(limitJoint(model, [joint, shapes[0]]), null);
   assert.equal(limitJoint(model, [joint, bodies[2]]), null);
   assert.equal(limitJoint(model, [joint, other]), null);
-  assert.equal(limitJoint(model, [joint, ROOT_UID]), null);
+  assert.equal(limitJoint(model, [joint, ROOT_UID]), joint);
   assert.equal(limitJoint(model, []), null);
   const cases = [
     { bodyB: null },

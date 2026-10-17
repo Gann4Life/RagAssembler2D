@@ -50,11 +50,11 @@ function rowLines(rows) {
 test('hierarchyTree: an empty ragdoll is the root alone', () => {
   const { model } = build({});
   const tree = hierarchyTree(model);
-  assert.deepEqual(outline(tree), ['root ragdoll']);
+  assert.deepEqual(outline(tree), ['root root']);
   assert.equal(tree.key, String(ROOT_UID));
   assert.equal(tree.uid, ROOT_UID);
   assert.equal(tree.id, 'root');
-  assert.equal(tree.name, 'ragdoll');
+  assert.equal(tree.name, 'root');
 });
 
 test('hierarchyTree: chains and branches go body, shapes, then joints in joints order, each holding its child body', () => {
@@ -64,7 +64,7 @@ test('hierarchyTree: chains and branches go body, shapes, then joints in joints 
     rootBody: 'b_1',
   });
   assert.deepEqual(outline(hierarchyTree(model)), [
-    'root ragdoll',
+    'root root',
     '  body b_1',
     '    shape f_1',
     '    joint j_1',
@@ -102,7 +102,7 @@ test('hierarchyTree: a loop joint is a leaf under its bodyA', () => {
     rootBody: 'b_1',
   });
   assert.deepEqual(outline(hierarchyTree(model)), [
-    'root ragdoll',
+    'root root',
     '  body b_1',
     '    shape f_1',
     '    joint j_1',
@@ -145,7 +145,7 @@ test('hierarchyTree: unlinked parts are joint trees under the Unlinked group, th
   });
   const tree = hierarchyTree(model);
   assert.deepEqual(outline(tree), [
-    'root ragdoll',
+    'root root',
     '  body b_1',
     '    shape f_1',
     '  unlinked Unlinked',
@@ -177,7 +177,7 @@ test('hierarchyTree: no Unlinked group when everything is linked; rootBody null 
   assert.ok(hierarchyTree(linked.model).children.every((item) => item.kind !== 'unlinked'));
   const loose = build({ bodies: { b_1: ['f_1'], b_2: ['f_2'] }, joints: [['b_1', 'b_2']], rootBody: null });
   assert.deepEqual(outline(hierarchyTree(loose.model)), [
-    'root ragdoll',
+    'root root',
     '  unlinked Unlinked',
     '    body b_1',
     '      shape f_1',
@@ -249,7 +249,7 @@ test('hierarchyRows lists every row in preorder with levels, positions and paren
   const { model } = build(CHAIN);
   const rows = hierarchyRows(hierarchyTree(model));
   assert.deepEqual(rowLines(rows), [
-    'ragdoll',
+    'root',
     '  torso',
     '    f_1',
     '    shoulder',
@@ -280,30 +280,30 @@ test('hierarchyRows hides the descendants of collapsed rows', () => {
   const { model, uids } = build(CHAIN);
   const tree = hierarchyTree(model);
   const rows = hierarchyRows(tree, { collapsed: new Set([String(uids.j_1), UNLINKED_KEY]) });
-  assert.deepEqual(rowLines(rows), ['ragdoll', '  torso', '    f_1', '    shoulder', '    j_2', '      b_3', '        f_4', '  Unlinked']);
+  assert.deepEqual(rowLines(rows), ['root', '  torso', '    f_1', '    shoulder', '    j_2', '      b_3', '        f_4', '  Unlinked']);
   const shoulder = rows[3];
   assert.deepEqual([shoulder.expandable, shoulder.expanded], [true, false]);
-  assert.deepEqual(rowLines(hierarchyRows(tree, { collapsed: new Set([String(ROOT_UID)]) })), ['ragdoll']);
+  assert.deepEqual(rowLines(hierarchyRows(tree, { collapsed: new Set([String(ROOT_UID)]) })), ['root']);
 });
 
 test('hierarchyRows with a query keeps matches and their dimmed ancestors, expanded', () => {
   const { model, uids } = build(CHAIN);
   const tree = hierarchyTree(model);
   const rows = hierarchyRows(tree, { query: 'knl', collapsed: new Set() });
-  assert.deepEqual(rowLines(rows), ['ragdoll', '  torso', '    shoulder', '      upper arm', '        knee_l']);
+  assert.deepEqual(rowLines(rows), ['root', '  torso', '    shoulder', '      upper arm', '        knee_l']);
   assert.deepEqual(rows.map((row) => row.dimmed), [true, true, true, true, false]);
   assert.deepEqual(rows[4].match, { field: 'label', indices: [0, 1, 5] });
   assert.deepEqual(rows.map((row) => [row.posInSet, row.setSize]), [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]]);
   assert.deepEqual([rows[3].expandable, rows[3].expanded], [true, true]);
   assert.deepEqual(rowLines(hierarchyRows(tree, { query: '  KNEE ' })).slice(-2), ['        knee_l', '        knee_r']);
   const collapsed = hierarchyRows(tree, { query: 'knl', collapsed: new Set([String(uids.j_1)]) });
-  assert.deepEqual(rowLines(collapsed), ['ragdoll', '  torso', '    shoulder']);
+  assert.deepEqual(rowLines(collapsed), ['root', '  torso', '    shoulder']);
 });
 
 test('hierarchyRows matches ids when the label does not match', () => {
   const { model } = build(CHAIN);
   const rows = hierarchyRows(hierarchyTree(model), { query: 'b2' });
-  assert.deepEqual(rowLines(rows), ['ragdoll', '  torso', '    shoulder', '      upper arm']);
+  assert.deepEqual(rowLines(rows), ['root', '  torso', '    shoulder', '      upper arm']);
   assert.deepEqual(rows[3].match, { field: 'id', indices: [0, 2] });
   assert.equal(rows[3].dimmed, false);
   assert.equal(rows[3].expandable, false);
@@ -317,10 +317,10 @@ test('hierarchyRows: the Unlinked group never matches, and no match gives no row
   assert.deepEqual(hierarchyRows(tree, { query: 'Unlinked' }), []);
   assert.deepEqual(hierarchyRows(tree, { query: 'zzz' }), []);
   const rows = hierarchyRows(tree, { query: 'j3' });
-  assert.deepEqual(rowLines(rows), ['ragdoll', '  Unlinked', '    j_3']);
+  assert.deepEqual(rowLines(rows), ['root', '  Unlinked', '    j_3']);
   assert.deepEqual(rows.map((row) => row.dimmed), [true, true, false]);
   assert.equal(rows[0].match, null);
-  assert.equal(hierarchyRows(tree, { query: 'rag' })[0].dimmed, false);
+  assert.equal(hierarchyRows(tree, { query: 'rt' })[0].dimmed, false);
 });
 
 test('fuzzyMatch finds the leftmost ordered characters, ignoring case and spaces', () => {

@@ -97,12 +97,13 @@ test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, tool rows first', (
       'frame-all',
       'escape',
       'pivot-mode',
+      'rename',
     ],
   );
   assert.ok(Object.isFrozen(HOTKEYS));
   assert.ok(HOTKEYS.every((row) => Object.isFrozen(row)));
   for (const { keys } of HOTKEYS) {
-    assert.match(keys, /^(Ctrl\+)?(Shift\+)?(Alt\+)?([A-Z0-9.]|Space|Del|Esc|Home)$/);
+    assert.match(keys, /^(Ctrl\+)?(Shift\+)?(Alt\+)?([A-Z0-9.]|Space|Del|Esc|Home|F2)$/);
   }
 });
 
@@ -209,6 +210,8 @@ test('matchHotkey treats Meta as Ctrl and maps named keys', () => {
   assert.equal(matchHotkey(keyEvent(' ')), 'toggle-play');
   assert.equal(matchHotkey(keyEvent('Home')), 'frame-all');
   assert.equal(matchHotkey(keyEvent('.')), 'next-frame');
+  assert.equal(matchHotkey(keyEvent('F2')), 'rename');
+  assert.equal(matchHotkey(keyEvent('F2', { shiftKey: true })), null);
   assert.equal(matchHotkey(keyEvent('Enter')), null);
   assert.equal(matchHotkey(keyEvent('Del')), null);
 });
@@ -273,6 +276,20 @@ test('dispatchKey ignores handled events and text fields', () => {
     assert.equal(dispatchKey(keyEvent('Delete', { target: { tagName: 'INPUT', type } }), { actions, tools: null, viewportFocused: false }), true);
   }
   assert.deepEqual(runs, ['delete', 'delete', 'delete', 'delete', 'delete', 'delete']);
+});
+
+test('F2 is a global hotkey outside text fields, which keep their own F2', () => {
+  const { actions, runs } = registry(['rename']);
+  for (const target of [{ tagName: 'BODY' }, { tagName: 'LI' }, { tagName: 'BUTTON' }, { tagName: 'DIV' }]) {
+    const event = keyEvent('F2', { target });
+    assert.equal(dispatchKey(event, { actions, tools: null, viewportFocused: target.tagName === 'DIV' }), true);
+    assert.equal(event.prevented, true);
+  }
+  const typing = keyEvent('F2', { target: { tagName: 'INPUT', type: 'text' } });
+  assert.equal(dispatchKey(typing, { actions, tools: null, viewportFocused: false }), false);
+  assert.equal(typing.prevented, false);
+  assert.equal(dispatchKey(keyEvent('F2', { repeat: true }), { actions, tools: null, viewportFocused: false }), true);
+  assert.deepEqual(runs, ['rename', 'rename', 'rename', 'rename']);
 });
 
 test('Space matches only on the page body or with the viewport focused', () => {

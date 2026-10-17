@@ -8,9 +8,9 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 
 | Property | Notes |
 |---|---|
-| name | Ragdoll name. |
+| name | Ragdoll name, default `root`; Save writes it as `meta.name` and suggests `<name>.rag.json` ([§5.3](05-3-header.md#53-header)). |
 | id | `root`, read-only. |
-| position, angle | Editor scene placement. |
+| position, angle | Read-only: the locked root transform ([§2.1](02-object-model.md#21-root-the-ragdoll-itself)). |
 | rootBody | Dropdown of bodies. |
 | pixelsPerMeter | Editor and runtime render scale. |
 | preview gravity | Editor preview only. |

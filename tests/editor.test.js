@@ -116,7 +116,7 @@ test('a mode change cancels the open gesture', () => {
   history.execute(setProps([ROOT_UID], { 'meta.name': 'dragged' }));
   modes.openClip(clip);
   assert.equal(history.inGesture, false);
-  assert.equal(model.prop(ROOT_UID, 'meta.name'), 'ragdoll');
+  assert.equal(model.prop(ROOT_UID, 'meta.name'), 'root');
   assert.equal(history.state.undoLabel, 'Add clip');
 });
 
@@ -140,7 +140,7 @@ test('escape cancels an open gesture, else clears the selection', () => {
   history.execute(setProps([ROOT_UID], { 'meta.name': 'x' }));
   assert.equal(actions.run('escape'), true);
   assert.equal(history.inGesture, false);
-  assert.equal(model.prop(ROOT_UID, 'meta.name'), 'ragdoll');
+  assert.equal(model.prop(ROOT_UID, 'meta.name'), 'root');
   assert.deepEqual(selection.objects, [ROOT_UID]);
   actions.run('escape');
   assert.deepEqual(selection.objects, []);
@@ -208,7 +208,7 @@ test('escape cancels through the tool registry, else clears the selection', () =
   history.beginGesture();
   history.execute(setProps([ROOT_UID], { 'meta.name': 'x' }));
   assert.equal(tools.cancel(), true);
-  assert.equal(model.prop(ROOT_UID, 'meta.name'), 'ragdoll');
+  assert.equal(model.prop(ROOT_UID, 'meta.name'), 'root');
   history.beginGesture();
   actions.run('escape');
   assert.equal(history.inGesture, false);

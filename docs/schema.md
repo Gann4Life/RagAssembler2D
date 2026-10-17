@@ -27,7 +27,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 |---|---|---|---|---|---|
 | `format` | string | `"ragassembler"` | constant | — | R |
 | `version` | integer | `FORMAT_VERSION` (1) | supported versions | — | R |
-| `meta.name` | string | `"ragdoll"` (Save writes `ragdoll.name`) | — | — | E, R |
+| `meta.name` | string | `"root"` (Save writes `ragdoll.name`) | — | — | E, R |
 | `meta.editorVersion` | string | set by Save (running editor version) | — | — | E, R |
 | `units.pixelsPerMeter` | number | `32` | >0 | px/m | |
 | `preview.gravity` | vec2 | `[0, -10]` | — | m/s² | E |
@@ -44,15 +44,15 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | Path | Type | Default | Range | Unit | Flags |
 |---|---|---|---|---|---|
 | `id` | string | `"root"` | constant | — | R |
-| `name` | string | `"ragdoll"` | — | — | |
-| `position` | vec2 | `[0, 0]` | — | m | E |
-| `angle` | number | `0` | — | rad | E |
+| `name` | string | `"root"` | — | — | |
+| `position` | vec2 | `[0, 0]` | — | m | E, R |
+| `angle` | number | `0` | — | rad | E, R |
 | `rootBody` | ref:body or `null` | `null` | an existing body | — | |
 | `channels.strength` | number | `1` | 0–1 | mult | A |
 | `channels.gain` | number | `1` | 0–1 | mult | A |
 | `channels.damping` | number | `1` | 0–1 | mult | A |
 
-The root inspector also shows `units.pixelsPerMeter` and `preview.gravity` from the document.
+The root inspector also shows `units.pixelsPerMeter` and `preview.gravity` from the document. `position` and `angle` are locked: no editor command writes them, and loaded values are kept ([`DESIGN.md` §2.1](design/02-object-model.md#21-root-the-ragdoll-itself)).
 
 ## spriteAsset (`sprites[]`)
 

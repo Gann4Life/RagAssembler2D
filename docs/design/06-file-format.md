@@ -104,7 +104,8 @@
   - `sprite.offset/angle` are local to the shape's frame ([§2.2](02-object-model.md#22-bodies-and-shapes));
   - `bodies[].position/angle` and `joints[].anchor` are local to the root, in rest pose;
   - `joints[].aimAxis` is local to bodyB;
-  - `ragdoll.position/angle` is the root's placement in the editor scene and is **ignored by runtime spawn**, which uses its own transform.
+  - `ragdoll.position/angle` is the root's placement in the editor scene and is **ignored by runtime spawn**, which uses its own transform. The editor never changes it ([§2.1](02-object-model.md#21-root-the-ragdoll-itself)): new documents write `[0, 0]` and `0`, and loaded values are kept, drawn and saved back as they are.
+- **`ragdoll.name`**: the ragdoll's name, `"root"` in a new document. Save writes it as `meta.name` and uses it for the suggested file name ([§5.3](05-3-header.md#53-header)).
 - **`ragdoll.channels`**: base values of the global multipliers when no clip animates them.
 - **`sprites[].src`**: path relative to the `.rag.json` file. It is used as the texture key unless the host provides a resolver ([§7.3](07-ragimporter.md#73-sprites-and-rendering)).
 - **`fixtures[].sprite`**: optional; `null` or absent means no sprite.

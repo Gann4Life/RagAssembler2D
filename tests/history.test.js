@@ -231,7 +231,7 @@ test('a malformed command throws a TypeError and the transaction closes after ru
   let leaked;
   history.execute(command('Leak', (tx) => (leaked = tx)));
   assert.throws(() => leaked.set(ROOT_UID, 'meta.name', 'late'), /closed/);
-  assert.equal(model.prop(ROOT_UID, 'meta.name'), 'ragdoll');
+  assert.equal(model.prop(ROOT_UID, 'meta.name'), 'root');
 });
 
 test('a new step clears redo', () => {

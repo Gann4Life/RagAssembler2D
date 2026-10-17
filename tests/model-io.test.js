@@ -243,6 +243,37 @@ test('saveJson gives the canonical text and file name, with warnings allowed', (
   assert.throws(() => saveJson(model, ''), TypeError);
 });
 
+test('a new document names the root root, keeps a zero root transform and saves as root.rag.json', () => {
+  const { model } = sampleEditor();
+  const json = toJson(model, 'dev');
+  assert.equal(json.ragdoll.name, 'root');
+  assert.equal(json.meta.name, 'root');
+  assert.deepEqual(json.ragdoll.position, [0, 0]);
+  assert.equal(json.ragdoll.angle, 0);
+  const result = saveJson(model, 'dev');
+  assert.equal(result.ok, true);
+  assert.equal(result.fileName, 'root.rag.json');
+});
+
+test('a loaded non-zero root transform is kept and saved byte-identical', () => {
+  const file = ragFile();
+  file.ragdoll.position = [-3.25, 12.5];
+  file.ragdoll.angle = 0.75;
+  const text = serialize(file);
+  const model = new Model();
+  assert.equal(loadJson(model, text).ok, true);
+  assert.deepEqual(model.get(ROOT_UID).props.position, [-3.25, 12.5]);
+  assert.equal(model.get(ROOT_UID).props.angle, 0.75);
+  assert.equal(saveJson(model, '0.1.0').text, text);
+});
+
+test('a loaded root keeps its name, ragdoll included', () => {
+  const model = new Model();
+  loadJson(model, serialize({ ...ragFile(), meta: { name: 'ragdoll', editorVersion: '0.1.0' }, ragdoll: { ...ragFile().ragdoll, name: 'ragdoll' } }));
+  assert.equal(model.get(ROOT_UID).props.name, 'ragdoll');
+  assert.equal(saveJson(model, '0.1.0').fileName, 'ragdoll.rag.json');
+});
+
 test('ragFileName sanitizes the root name', () => {
   const table = [
     ['Humanoid', 'Humanoid.rag.json'],

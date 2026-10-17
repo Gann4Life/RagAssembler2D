@@ -177,9 +177,12 @@ export function selectTool() {
     return node?.type === 'shape' && target.bodies.includes(node.parent);
   }
 
+  function movableHits(hits) {
+    return hits.filter((uid) => ctx.model.get(uid)?.type !== 'root');
+  }
+
   function pressedPoint(uid) {
     const node = ctx.model.get(uid);
-    if (node.type === 'root') return ctx.toWorld({ x: 0, y: 0 });
     const value = node.type === 'joint' ? node.props.anchor : ctx.model.prop(node.parent, 'position');
     return ctx.toWorld(isFinitePair(value) ? { x: value[0], y: value[1] } : { x: 0, y: 0 });
   }
@@ -197,8 +200,8 @@ export function selectTool() {
   }
 
   function startObjectDrag() {
-    const hit = press.hits[0];
-    if (!editing()) {
+    const hit = movableHits(press.hits)[0];
+    if (!editing() || hit === undefined) {
       press.kind = 'box';
       return;
     }
@@ -215,7 +218,7 @@ export function selectTool() {
 
   function hoverCursor(screen, pick) {
     if (pick !== null) return pickCursor(pick);
-    return editing() && ctx.hitTest(screen).length > 0 ? 'move' : null;
+    return editing() && movableHits(ctx.hitTest(screen)).length > 0 ? 'move' : null;
   }
 
   function finishClick(start, e) {
@@ -252,7 +255,7 @@ export function selectTool() {
       if (handle !== null) {
         press.manipulation = handlePress(e, handle);
         ctx.setCursor(pickCursor(handle));
-      } else if (kind === 'object' && editing()) {
+      } else if (kind === 'object' && editing() && movableHits(hits).length > 0) {
         ctx.setCursor('move');
       }
     },

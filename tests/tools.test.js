@@ -286,7 +286,7 @@ test('a left press, drag and release is one undo step', () => {
   assert.equal(rootName(services.model), 'dropped');
   assert.equal(services.history.inGesture, false);
   assert.equal(services.history.undo(), true);
-  assert.equal(rootName(services.model), 'ragdoll');
+  assert.equal(rootName(services.model), 'root');
   assert.equal(services.history.canUndo, false);
   assert.deepEqual(log.slice(1), ['select:down:0', 'select:move', 'select:move', 'select:move', 'select:up:0']);
 });
@@ -453,7 +453,7 @@ test('drawOverlay clears the graphics and lets the active tool draw', () => {
 });
 
 function assertNoStep(services) {
-  assert.equal(rootName(services.model), 'ragdoll');
+  assert.equal(rootName(services.model), 'root');
   assert.equal(services.history.inGesture, false);
   assert.equal(services.history.canUndo, false);
 }
@@ -512,7 +512,7 @@ test('a mode change during a drag reverts it', () => {
   registry.pointer(input('move', 0, 210, 200));
   services.modes.openClip(clip);
   registry.pointer(input('up', 0));
-  assert.equal(rootName(services.model), 'ragdoll');
+  assert.equal(rootName(services.model), 'root');
   assert.equal(services.history.inGesture, false);
   assert.equal(services.history.state.undoLabel, 'Add clip');
   assert.ok(log.includes('select:cancel'));
@@ -622,7 +622,7 @@ test('a release whose handler throws aborts the press and rethrows', () => {
   assert.throws(() => registry.pointer(input('up', 0)), /boom/);
   assert.equal(cancels, 1);
   assert.equal(services.history.inGesture, false);
-  assert.equal(rootName(services.model), 'ragdoll');
+  assert.equal(rootName(services.model), 'root');
   assertNoStep(services);
 });
 

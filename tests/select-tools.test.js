@@ -249,6 +249,37 @@ test('a click selects the root over a shape under it', () => {
   assert.deepEqual(selection.objects, [uid('f_0')]);
 });
 
+test('the root never moves: a drag that starts on the root alone draws a selection box', () => {
+  const { tools, selection, model, changes, calls, uid } = environment();
+  selection.set([ROOT_UID]);
+  hover(tools, 200, 200);
+  assert.equal(calls.cursor.at(-1), 'default');
+  assert.deepEqual(overlay(tools), []);
+  send(tools, 'down', 200, 200);
+  assert.notEqual(calls.cursor.at(-1), 'move');
+  send(tools, 'move', 300, 120);
+  send(tools, 'move', 390, 10);
+  assert.deepEqual(overlay(tools).map(([method]) => method), ['rect', 'fill', 'stroke']);
+  send(tools, 'up', 390, 10);
+  assert.deepEqual(model.prop(ROOT_UID, 'position'), [0, 0]);
+  assert.equal(model.prop(ROOT_UID, 'angle'), 0);
+  assert.deepEqual(changes, []);
+  assert.deepEqual(selection.objects, [...boxTest(model, boxAabb({ x: 0, y: 0 }, { x: 1.9, y: 1.9 }))]);
+  assert.ok(selection.objects.includes(uid('j_1')));
+});
+
+test('the root never moves: a drag on the root over a shape moves the shape under it', () => {
+  const { tools, selection, model, history, calls, uid } = environment({ underRoot: true });
+  selection.set([ROOT_UID]);
+  hover(tools, 200, 200);
+  assert.equal(calls.cursor.at(-1), 'move');
+  drag(tools, [200, 200], [230, 200]);
+  assert.deepEqual(selection.objects, [uid('f_0')]);
+  near(model.prop(uid('b_0'), 'position')[0], 0.3);
+  assert.deepEqual(model.prop(ROOT_UID, 'position'), [0, 0]);
+  assert.equal(history.state.undoLabel, 'Move');
+});
+
 test('click modifiers: SHIFT toggles, CTRL removes and wins, ALT cycles overlapping hits', () => {
   const { tools, selection, uid } = environment();
   const [f1, f2, f3, j1] = [uid('f_1'), uid('f_2'), uid('f_3'), uid('j_1')];
@@ -869,13 +900,14 @@ test('Select Box shows no gizmo and draws a box over the gizmo and objects', () 
   assert.deepEqual(selection.objects, [env.joints[1]]);
 });
 
-test('overlay: the gizmo for the root, one body, one joint without a ring, and several objects with each pivot mark', () => {
+test('overlay: no gizmo for the root alone, the gizmo for one body, one joint without a ring, and several objects with each pivot mark', () => {
   const env = chain();
   const { tools, selection, actions, history, shapes, joints } = env;
   assert.deepEqual(overlay(tools), []);
   history.execute(setProps([ROOT_UID], { position: [0, 1], angle: Math.PI / 2 }));
   selection.set([ROOT_UID]);
-  assert.deepEqual(ringAt(overlay(tools)), { x: 200, y: 100 });
+  assert.deepEqual(overlay(tools), []);
+  assert.equal(tools.handleAt({ x: 200, y: 100 }), null);
   history.undo();
   selection.set([shapes[1]]);
   const body = overlay(tools);
@@ -979,6 +1011,8 @@ test('resize handles: a selected box only, a selected body on its circles and bo
   selection.set([uid('f_3')]);
   assert.equal(handleRects(overlay(tools)).length, 0);
   selection.set([uid('f_1'), ROOT_UID]);
+  assert.equal(handleRects(overlay(tools)).length, 8);
+  selection.set([ROOT_UID]);
   assert.equal(handleRects(overlay(tools)).length, 0);
   selection.set([uid('f_1')]);
   path(tools, [[222, 178], [242, 178]]);

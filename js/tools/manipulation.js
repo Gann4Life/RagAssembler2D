@@ -1,6 +1,5 @@
 import { transformPoint } from '../../lib/geometry.js';
 import { defaultsOf } from '../../lib/schema.js';
-import { setProps } from '../commands/props.js';
 import { manipulationParts, placeParts, rotationAbout, transformParts } from '../commands/transform.js';
 import { ROOT_UID } from '../model/model.js';
 import { parentJoints } from '../model/queries.js';
@@ -10,7 +9,6 @@ import { formatMove, formatRotation } from './transform-gizmo.js';
 /**
  * What the Select tool moves and rotates, derived from the selection.
  * @typedef {object} Target
- * @property {boolean} root Whether the root is the target; then `bodies` and `joints` are empty.
  * @property {number[]} bodies Body uids.
  * @property {number[]} joints Joint uids.
  */
@@ -83,14 +81,13 @@ function pixelsPerMeter(model) {
 }
 
 /**
- * The target of a selection: the root alone when it is selected; otherwise the selected bodies and the bodies of
- * selected shapes, deduplicated in selection order, and the selected joints. Pure.
+ * The target of a selection: the selected bodies and the bodies of selected shapes, deduplicated in selection order,
+ * and the selected joints. The root, which never moves, and every other node type are ignored. Pure.
  * @param {import('../model/model.js').Model} model Document model.
  * @param {number[]} objects Selected uids.
  * @returns {Readonly<Target>} Frozen target.
  */
 export function manipulationTarget(model, objects) {
-  if (objects.includes(ROOT_UID)) return Object.freeze({ root: true, bodies: Object.freeze([]), joints: Object.freeze([]) });
   const bodies = [];
   const joints = [];
   for (const uid of objects) {
@@ -102,7 +99,7 @@ export function manipulationTarget(model, objects) {
     else if (node.type === 'joint' && !joints.includes(uid)) joints.push(uid);
     if (body !== null && !bodies.includes(body)) bodies.push(body);
   }
-  return Object.freeze({ root: false, bodies: Object.freeze(bodies), joints: Object.freeze(joints) });
+  return Object.freeze({ bodies: Object.freeze(bodies), joints: Object.freeze(joints) });
 }
 
 /**
@@ -123,15 +120,14 @@ export function rotationPivot(model, bodyUid, center) {
 }
 
 /**
- * The target object the last selection entry maps to: the root for a root target; else the last selected body of
- * the target, shape of a target body (as its body) or target joint. Pure.
+ * The target object the last selection entry maps to: the last selected body of the target, shape of a target body
+ * (as its body) or target joint. Pure.
  * @param {import('../model/model.js').Model} model Document model.
  * @param {number[]} objects Selected uids, in selection order.
  * @param {Target} target Target of `objects`.
- * @returns {{ type: 'root'|'body'|'joint', uid: number }|null} The object, or `null` when none maps to the target.
+ * @returns {{ type: 'body'|'joint', uid: number }|null} The object, or `null` when none maps to the target.
  */
 export function lastTargetObject(model, objects, target) {
-  if (target.root) return Object.freeze({ type: 'root', uid: ROOT_UID });
   for (let index = objects.length - 1; index >= 0; index--) {
     const uid = objects[index];
     const node = model.get(uid);
@@ -144,7 +140,6 @@ export function lastTargetObject(model, objects, target) {
 }
 
 function alonePivot(model, place, object, ctrl) {
-  if (object.type === 'root') return { x: place.root.x, y: place.root.y };
   if (object.type === 'body') return transformPoint(place.root, rotationPivot(model, object.uid, ctrl));
   const anchor = place.anchors.get(object.uid);
   return anchor ? { x: anchor.x, y: anchor.y } : null;
@@ -166,7 +161,7 @@ function centerPivot(place, target) {
 }
 
 /**
- * The transform gizmo's pivot for a selection, in the rest pose: the root position; one body's parent joint
+ * The transform gizmo's pivot for a selection, in the rest pose: one body's parent joint
  * anchor (else its origin; the origin with CTRL); one joint's anchor; for several objects, the mean of the body
  * origins and placed joint anchors (`center`) or the pivot of the last selected one alone (`last`). Pure.
  * @param {import('../model/model.js').Model} model Document model.
@@ -179,8 +174,7 @@ export function gizmoPivot(model, objects, { mode, ctrl }) {
   const target = manipulationTarget(model, objects);
   const place = placement(model);
   let pivot = null;
-  if (target.root) pivot = alonePivot(model, place, { type: 'root', uid: ROOT_UID }, ctrl);
-  else if (target.bodies.length === 1 && target.joints.length === 0) {
+  if (target.bodies.length === 1 && target.joints.length === 0) {
     pivot = alonePivot(model, place, { type: 'body', uid: target.bodies[0] }, ctrl);
   } else if (target.joints.length === 1 && target.bodies.length === 0) {
     pivot = alonePivot(model, place, { type: 'joint', uid: target.joints[0] }, ctrl);
@@ -196,12 +190,12 @@ export function gizmoPivot(model, objects, { mode, ctrl }) {
 }
 
 /**
- * Whether rotating a target can change anything: the root, at least one body, or at least two joints.
+ * Whether rotating a target can change anything: at least one body, or at least two joints.
  * @param {Target} target Target.
  * @returns {boolean}
  */
 export function canRotate(target) {
-  return target.root || target.bodies.length > 0 || target.joints.length >= 2;
+  return target.bodies.length > 0 || target.joints.length >= 2;
 }
 
 /**
@@ -235,15 +229,10 @@ export function sweepTracker(ctx, pivot, from) {
   });
 }
 
-function rootStart(model) {
-  const { root } = placement(model);
-  return root;
-}
-
 /**
  * Starts a move drag of a target. Each step moves by the pointer's displacement since `press`, adjusted so that
  * `ref` lands on the grid when grid snap is on; an `axis` of `'x'` or `'y'` keeps the other component at 0. The
- * root moves its `position`; bodies carry their subtrees (ALT: the bodies alone) and the anchors they carry.
+ * bodies carry their subtrees (ALT: the bodies alone) and the anchors they carry.
  * Executes one command per step on `ctx.history`.
  * @param {import('./tool.js').ToolContext} ctx Tool context.
  * @param {{ target: Target, ref: import('../../lib/geometry.js').Vec2, axis: 'x'|'y'|'xy',
@@ -252,10 +241,10 @@ function rootStart(model) {
  */
 export function startMove(ctx, { target, ref, axis, press }) {
   const { model } = ctx;
-  const root = rootStart(model);
+  const { root } = placement(model);
   const startPivot = gizmoPivot(model, ctx.selection.objects, { mode: ctx.settings.get('gizmo.pivot'), ctrl: press.ctrl });
-  const full = target.root ? null : manipulationParts(model, target, { subtree: true });
-  const only = target.root ? null : manipulationParts(model, target, { subtree: false });
+  const full = manipulationParts(model, target, { subtree: true });
+  const only = manipulationParts(model, target, { subtree: false });
   let d = { x: 0, y: 0 };
 
   function vector(e) {
@@ -269,10 +258,6 @@ export function startMove(ctx, { target, ref, axis, press }) {
   return Object.freeze({
     apply(e) {
       d = vector(e);
-      if (target.root) {
-        ctx.history.execute(setProps([ROOT_UID], { position: [root.x + d.x + 0, root.y + d.y + 0] }, 'Move ragdoll'));
-        return;
-      }
       const local = rotate(d, -root.angle);
       const active = e.alt ? only : full;
       const moved = transformParts(active, { x: local.x, y: local.y, angle: 0 });
@@ -289,10 +274,9 @@ export function startMove(ctx, { target, ref, axis, press }) {
 
 /**
  * Starts a rotation drag of a target by the angle the pointer sweeps around the pivot, following it past half a
- * turn. The root turns its `angle` around its position; bodies and joints turn around the gizmo pivot with their
- * subtrees and carried anchors (ALT: the bodies alone and the target joints' anchors). CTRL, read live, moves the
- * pivot to the body origin and restarts the sweep when that moves the pivot; SHIFT snaps the root angle, the one
- * body's root-local angle, or else the rotation itself, to 15°. Executes one command per step on `ctx.history`.
+ * turn. Bodies and joints turn around the gizmo pivot with their subtrees and carried anchors (ALT: the bodies alone and the target joints' anchors). CTRL, read live, moves the
+ * pivot to the body origin and restarts the sweep when that moves the pivot; SHIFT snaps the one body's root-local
+ * angle, or else the rotation itself, to 15°. Executes one command per step on `ctx.history`.
  * @param {import('./tool.js').ToolContext} ctx Tool context.
  * @param {{ target: Target, press: import('./tool.js').ToolPointerEvent, mode: 'center'|'last' }} options Target,
  *   press event and pivot mode.
@@ -300,15 +284,14 @@ export function startMove(ctx, { target, ref, axis, press }) {
  */
 export function startRotation(ctx, { target, press, mode }) {
   const { model } = ctx;
-  const root = rootStart(model);
   const objects = ctx.selection.objects;
-  const anchorPivot = target.root ? { x: root.x, y: root.y } : gizmoPivot(model, objects, { mode, ctrl: false });
-  const originPivot = target.root ? anchorPivot : (gizmoPivot(model, objects, { mode, ctrl: true }) ?? anchorPivot);
-  const full = target.root ? null : manipulationParts(model, target, { subtree: true });
-  const only = target.root ? null : manipulationParts(model, target, { subtree: false });
-  const single = !target.root && target.bodies.length === 1 && target.joints.length === 0;
+  const anchorPivot = gizmoPivot(model, objects, { mode, ctrl: false });
+  const originPivot = gizmoPivot(model, objects, { mode, ctrl: true }) ?? anchorPivot;
+  const full = manipulationParts(model, target, { subtree: true });
+  const only = manipulationParts(model, target, { subtree: false });
+  const single = target.bodies.length === 1 && target.joints.length === 0;
   const a0 = single ? readAngle(model.prop(target.bodies[0], 'angle')) : 0;
-  const pivotOf = (ctrl) => (ctrl && !target.root ? originPivot : anchorPivot);
+  const pivotOf = (ctrl) => (ctrl ? originPivot : anchorPivot);
   let current = pivotOf(press.ctrl);
   const tracker = sweepTracker(ctx, current, press.world);
   let pivotCenter = press.ctrl;
@@ -326,12 +309,6 @@ export function startRotation(ctx, { target, press, mode }) {
   return Object.freeze({
     apply(e) {
       const theta = follow(e);
-      if (target.root) {
-        const angle = ctx.snapAngle(root.angle + theta, e.shift) + 0;
-        applied = angle - root.angle;
-        ctx.history.execute(setProps([ROOT_UID], { angle }, 'Rotate ragdoll'));
-        return;
-      }
       applied = single ? ctx.snapAngle(a0 + theta, e.shift) - a0 : ctx.snapAngle(theta, e.shift);
       const active = e.alt ? only : full;
       const turned = transformParts(active, rotationAbout(ctx.toLocal(current), applied));

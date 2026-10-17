@@ -3,9 +3,13 @@ import { treeKey } from '../tree-nav.js';
 import { openMenu } from '../menu.js';
 import { actionTitle } from '../header.js';
 import { attachTooltip } from '../tooltip.js';
+import { createRenameInput } from '../rename-field.js';
 
 /**
  * @typedef {object} Hierarchy
+ * @property {(uid: number) => ({ input: HTMLInputElement, restore: () => void }|null)} renameRow
+ *   Clears the search, expands the row's ancestors, scrolls it into view as little as needed and puts a
+ *   rename field in place of its label; `restore` puts the label back. `null` when the object has no row.
  * @property {() => void} destroy Removes listeners, tooltips, the pending frame callback and the panel content.
  */
 
@@ -552,7 +556,30 @@ export function createHierarchy(element, editor) {
   render();
   refreshButtons();
 
+  function renameRow(uid) {
+    if (query !== '') clearQuery();
+    pendingReveal = [...(pendingReveal ?? []), uid];
+    flush();
+    const li = rowElements.get(String(uid));
+    const label = li?.querySelector('.hierarchy-label');
+    if (!label) return null;
+    const input = createRenameInput(doc);
+    input.classList.add('is-inline');
+    label.replaceWith(input);
+    li.scrollIntoView({ block: 'nearest' });
+    return {
+      input,
+      restore() {
+        if (!input.isConnected) return;
+        input.remove();
+        li.dataset.signature = '';
+        render();
+      },
+    };
+  }
+
   return {
+    renameRow,
     destroy() {
       for (const off of unsubscribe) off();
       if (frame !== 0) view.cancelAnimationFrame(frame);

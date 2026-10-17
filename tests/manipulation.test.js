@@ -85,16 +85,16 @@ function onCircle(center, radius, angle) {
   return { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) };
 }
 
-test('manipulationTarget: the root wins, shapes give their body once, joints are kept, other types ignored', () => {
+test('manipulationTarget: the root is ignored, shapes give their body once, joints are kept, other types ignored', () => {
   const { model, history, shapes, bodies, joints } = environment();
   const clip = addClip(history);
-  assert.deepEqual(manipulationTarget(model, [shapes[1], ROOT_UID, joints[0]]), { root: true, bodies: [], joints: [] });
+  assert.deepEqual(manipulationTarget(model, [shapes[1], ROOT_UID, joints[0]]), { bodies: [bodies[1]], joints: [joints[0]] });
+  assert.deepEqual(manipulationTarget(model, [ROOT_UID]), { bodies: [], joints: [] });
   assert.deepEqual(manipulationTarget(model, [shapes[2], bodies[1], bodies[2], joints[1], clip, 999, shapes[1]]), {
-    root: false,
     bodies: [bodies[2], bodies[1]],
     joints: [joints[1]],
   });
-  assert.deepEqual(manipulationTarget(model, []), { root: false, bodies: [], joints: [] });
+  assert.deepEqual(manipulationTarget(model, []), { bodies: [], joints: [] });
   assert.ok(Object.isFrozen(manipulationTarget(model, [bodies[0]])));
 });
 
@@ -113,7 +113,8 @@ test('lastTargetObject maps the last selection entry to a target object', () => 
   const { model, history, shapes, bodies, joints } = environment();
   const clip = addClip(history);
   const last = (objects) => lastTargetObject(model, objects, manipulationTarget(model, objects));
-  assert.deepEqual(last([shapes[1], ROOT_UID]), { type: 'root', uid: ROOT_UID });
+  assert.deepEqual(last([shapes[1], ROOT_UID]), { type: 'body', uid: bodies[1] });
+  assert.equal(last([ROOT_UID]), null);
   assert.deepEqual(last([bodies[1], shapes[2]]), { type: 'body', uid: bodies[2] });
   assert.deepEqual(last([shapes[2], joints[0]]), { type: 'joint', uid: joints[0] });
   assert.deepEqual(last([joints[0], bodies[3], clip, 999]), { type: 'body', uid: bodies[3] });
@@ -124,9 +125,8 @@ test('lastTargetObject maps the last selection entry to a target object', () => 
 test('gizmoPivot: one object uses its own pivot', () => {
   const { model, history, shapes, bodies, joints } = environment();
   const pivot = (objects, options = {}) => gizmoPivot(model, objects, { mode: 'center', ctrl: false, ...options });
-  history.execute(setProps([ROOT_UID], { position: [0.3, 0.4] }));
-  assert.deepEqual(pivot([ROOT_UID, bodies[1]]), { x: 0.3, y: 0.4 });
-  history.execute(setProps([ROOT_UID], { position: [0, 0] }));
+  assert.equal(pivot([ROOT_UID]), null);
+  assert.deepEqual(pivot([ROOT_UID, bodies[1]]), { x: 0.5, y: 0 });
   assert.deepEqual(pivot([bodies[1]]), { x: 0.5, y: 0 });
   assert.deepEqual(pivot([shapes[1]]), { x: 0.5, y: 0 });
   assert.deepEqual(pivot([shapes[1]], { ctrl: true }), { x: 1, y: 0 });
@@ -158,15 +158,14 @@ test('gizmoPivot works in world meters under a moved and rotated root', () => {
   history.execute(setProps([ROOT_UID], { position: [1, 2], angle: Math.PI / 2 }));
   nearPoint(gizmoPivot(model, [bodies[1]], { mode: 'center', ctrl: false }), { x: 1, y: 2.5 });
   nearPoint(gizmoPivot(model, [bodies[1], bodies[3]], { mode: 'center', ctrl: false }), { x: 1, y: 4 });
-  nearPoint(gizmoPivot(model, [ROOT_UID], { mode: 'last', ctrl: true }), { x: 1, y: 2 });
+  assert.equal(gizmoPivot(model, [ROOT_UID], { mode: 'last', ctrl: true }), null);
 });
 
-test('canRotate: the root, any body, or two joints', () => {
-  assert.equal(canRotate({ root: true, bodies: [], joints: [] }), true);
-  assert.equal(canRotate({ root: false, bodies: [3], joints: [] }), true);
-  assert.equal(canRotate({ root: false, bodies: [], joints: [4] }), false);
-  assert.equal(canRotate({ root: false, bodies: [], joints: [4, 5] }), true);
-  assert.equal(canRotate({ root: false, bodies: [], joints: [] }), false);
+test('canRotate: any body, or two joints', () => {
+  assert.equal(canRotate({ bodies: [3], joints: [] }), true);
+  assert.equal(canRotate({ bodies: [], joints: [4] }), false);
+  assert.equal(canRotate({ bodies: [], joints: [4, 5] }), true);
+  assert.equal(canRotate({ bodies: [], joints: [] }), false);
 });
 
 test('startMove moves along X, Y or freely; the pivot follows the move', () => {
@@ -211,7 +210,7 @@ test('startMove snaps the reference point on its axis under a moved and rotated 
   }
 });
 
-test('startMove: ALT is read live and moves the bodies alone; the root moves its position', () => {
+test('startMove: ALT is read live and moves the bodies alone; the root never moves', () => {
   const env = environment();
   const { model, ctx, history, selection, bodies, joints } = env;
   selection.set([bodies[2]]);
@@ -225,28 +224,25 @@ test('startMove: ALT is read live and moves the bodies alone; the root moves its
   assert.deepEqual(anchor(model, joints[2]), [2.5, 0]);
   drag.apply(event(env, { x: 2.6, y: 0 }));
   nearPair(position(model, bodies[3]), [3.6, 0]);
-  selection.set([ROOT_UID]);
-  const root = startMove(ctx, { target: manipulationTarget(model, selection.objects), ref: { x: 0, y: 0 }, axis: 'y', press: event(env, { x: 0, y: 0 }) });
-  root.apply(event(env, { x: 0.3, y: 0.4 }));
-  nearPair(model.prop(ROOT_UID, 'position'), [0, 0.4]);
-  assert.equal(history.state.undoLabel, 'Move ragdoll');
-  nearPoint(root.pivot(), { x: 0, y: 0.4 });
+  selection.set([ROOT_UID, bodies[0]]);
+  const both = startMove(ctx, { target: manipulationTarget(model, selection.objects), ref: { x: 0, y: 0 }, axis: 'y', press: event(env, { x: 0, y: 0 }) });
+  both.apply(event(env, { x: 0.3, y: 0.4 }));
+  nearPair(position(model, bodies[0]), [0, 0.4]);
+  assert.deepEqual(model.prop(ROOT_UID, 'position'), [0, 0]);
+  assert.equal(history.state.undoLabel, 'Move');
 });
 
-test('startRotation of the root turns its angle around its position, SHIFT in 15 degree steps', () => {
+test('startRotation never turns the root, also when it is selected with a body', () => {
   const env = environment();
-  const { model, ctx, history, selection } = env;
-  history.execute(setProps([ROOT_UID], { angle: 0.2 }));
-  selection.set([ROOT_UID]);
+  const { model, ctx, history, selection, bodies } = env;
+  selection.set([ROOT_UID, bodies[0]]);
   const target = manipulationTarget(model, selection.objects);
   const drag = startRotation(ctx, { target, press: event(env, { x: 1, y: 0 }), mode: 'center' });
   drag.apply(event(env, { x: 0, y: 1 }));
-  near(model.prop(ROOT_UID, 'angle'), 0.2 + Math.PI / 2);
-  assert.equal(drag.readout(), 'Δθ: 90.0°');
-  drag.apply(event(env, onCircle({ x: 0, y: 0 }, 1, 10 * DEG), { shift: true }));
-  near(model.prop(ROOT_UID, 'angle'), 15 * DEG);
-  assert.equal(history.state.undoLabel, 'Rotate ragdoll');
-  nearPoint(drag.pivot(), { x: 0, y: 0 });
+  near(model.prop(bodies[0], 'angle'), Math.PI / 2);
+  assert.equal(model.prop(ROOT_UID, 'angle'), 0);
+  assert.deepEqual(model.prop(ROOT_UID, 'position'), [0, 0]);
+  assert.equal(history.state.undoLabel, 'Rotate');
 });
 
 test('startRotation of one body turns its subtree around the parent anchor; CTRL restarts the sweep only when the pivot moves', () => {

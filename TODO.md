@@ -74,7 +74,7 @@
 - [ ] #144 Move a shape to another body by dragging it in the Hierarchy
 - [x] #147 Version every deploy as a release and show the version in the editor
 - [x] #152 Edit hinge joint limits with angle handles
-- [ ] #153 Lock the root transform, name it root and let the user rename it
+- [x] #153 Lock the root transform, name it root and let the user rename it
 - [x] #156 Change the Pose tool hotkey from P to D
 - [ ] #158 Sprite folder resolution on Load and image export on Save
 

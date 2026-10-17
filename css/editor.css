@@ -911,3 +911,43 @@ body.dock-resizing-column * {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
+
+.rename-input {
+  min-width: 0;
+  padding: 1px 4px;
+  border: 1px solid var(--focus);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.rename-input:focus {
+  outline: none;
+}
+
+.rename-input.is-inline {
+  flex: 1 1 auto;
+  height: 20px;
+}
+
+.rename-popup {
+  position: fixed;
+  z-index: 15;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+}
+
+.rename-popup-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.rename-popup .rename-input {
+  width: 200px;
+}

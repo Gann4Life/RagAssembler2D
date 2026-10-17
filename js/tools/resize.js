@@ -68,15 +68,14 @@ function oneDecimal(value) {
 }
 
 /**
- * The shapes that carry resize handles for a selection, in resize order: none when the root is selected; else each
- * selected shape at its place and each selected body's shapes in child order, each shape once at its first place,
- * keeping only circles and boxes with valid geometry. Pure.
+ * The shapes that carry resize handles for a selection, in resize order: each selected shape at its place and each
+ * selected body's shapes in child order, each shape once at its first place, keeping only circles and boxes with
+ * valid geometry; the root and joints add none. Pure.
  * @param {import('../model/model.js').Model} model Document model.
  * @param {number[]} objects Selected uids, in selection order.
  * @returns {ReadonlyArray<number>} Frozen shape uids.
  */
 export function resizeShapes(model, objects) {
-  if (objects.includes(ROOT_UID)) return Object.freeze([]);
   const shapes = [];
   const add = (uid) => {
     if (!shapes.includes(uid) && shapeRecord(model, uid) !== null) shapes.push(uid);
