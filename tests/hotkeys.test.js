@@ -88,6 +88,7 @@ test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, tool rows first', (
       'load',
       'group',
       'ungroup',
+      'split',
       'duplicate',
       'toggle-play',
       'next-frame',
@@ -179,6 +180,25 @@ test('matchHotkey matches letters case-insensitively with exact modifiers', () =
   assert.equal(matchHotkey(keyEvent('S', { shiftKey: true })), null);
   assert.equal(matchHotkey(keyEvent('s', { ctrlKey: true })), 'save');
   assert.equal(matchHotkey(keyEvent('g', { ctrlKey: true, shiftKey: true })), 'ungroup');
+});
+
+test('Alt+G matches split by character, or by physical key when Alt changes the character', () => {
+  assert.equal(matchHotkey(keyEvent('g', { altKey: true })), 'split');
+  assert.equal(matchHotkey(keyEvent('G', { altKey: true, code: 'KeyG' })), 'split');
+  assert.equal(matchHotkey(keyEvent('©', { altKey: true, code: 'KeyG' })), 'split');
+  assert.equal(matchHotkey(keyEvent('©', { altKey: true, code: 'KeyH' })), null);
+  assert.equal(matchHotkey(keyEvent('h', { altKey: true, code: 'KeyG' })), null);
+  assert.equal(matchHotkey(keyEvent('g', { ctrlKey: true, altKey: true })), null);
+  assert.equal(matchHotkey(keyEvent('©', { ctrlKey: true, altKey: true, code: 'KeyG' })), null);
+  assert.equal(matchHotkey(keyEvent('G', { altKey: true, shiftKey: true, code: 'KeyG' })), null);
+  assert.equal(matchHotkey(keyEvent('g', { ctrlKey: true, code: 'KeyG' })), 'group');
+});
+
+test('rows without Alt ignore code', () => {
+  assert.equal(matchHotkey(keyEvent('©', { code: 'KeyV' })), null);
+  assert.equal(matchHotkey(keyEvent('ü', { code: 'KeyB' })), null);
+  assert.equal(matchHotkey(keyEvent('ж', { ctrlKey: true, code: 'KeyZ' })), null);
+  assert.equal(matchHotkey(keyEvent('q', { code: 'KeyV' })), null);
 });
 
 test('matchHotkey treats Meta as Ctrl and maps named keys', () => {

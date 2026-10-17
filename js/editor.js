@@ -2,6 +2,7 @@ import { defaultsOf } from '../lib/schema.js';
 import { Model, ROOT_UID } from './model/model.js';
 import { createJoint, createShapeBody } from './commands/create.js';
 import { deleteObjects, deletionPlan } from './commands/delete.js';
+import { groupBodies, groupPlan, splitParts, splitShapes, ungroupBodies, ungroupParts } from './commands/group.js';
 import { Selection } from './model/selection.js';
 import { History } from './commands/history.js';
 import { Modes } from './modes.js';
@@ -57,7 +58,7 @@ import { hingeTool } from './tools/hinge.js';
 /**
  * What a core action asks the user to confirm before a destructive step; rendered by the confirmation dialog.
  * @typedef {object} ConfirmRequest
- * @property {'delete'|'new'|'load'} kind What asks.
+ * @property {'delete'|'new'|'load'|'group'} kind What asks.
  * @property {string} title Dialog heading.
  * @property {string} message Plain-text sentence or two.
  * @property {ReadonlyArray<string>} items Plain-text list under the message; may be empty.
@@ -66,6 +67,7 @@ import { hingeTool } from './tools/hinge.js';
  */
 
 const MODE_NAMES = Object.freeze({ edit: 'Edit', animate: 'Animate', simulate: 'Simulate' });
+const INVALID_GEOMETRY = 'a shape has invalid geometry';
 
 function countOf(count, word) {
   return `${count} ${count === 1 ? word : word === 'body' ? 'bodies' : `${word}s`}`;
@@ -99,6 +101,39 @@ function deleteRequest(model, plan) {
       }),
     ),
     confirmLabel: 'Delete',
+    cancelLabel: 'Cancel',
+  });
+}
+
+function labelOf(model, uid) {
+  const name = model.prop(uid, 'name');
+  return typeof name === 'string' && name !== '' ? name : model.prop(uid, 'id');
+}
+
+function groupRequest(model, plan) {
+  const { deletion } = plan;
+  const keysOf = (tracks) => tracks.reduce((total, track) => total + model.children(track, 'keys').length, 0);
+  const tracksPart =
+    deletion.tracks.length > 0
+      ? `, which also removes ${countOf(deletion.tracks.length, 'track')} and ${countOf(keysOf(deletion.tracks), 'key')} from ${countOf(deletion.clips.length, 'clip')}`
+      : '';
+  return Object.freeze({
+    kind: 'group',
+    title: 'Delete joints inside the group?',
+    message: `Grouping ${countOf(plan.bodies.length, 'body')} deletes ${countOf(plan.joints.length, 'joint')} between them${tracksPart}. Undo restores them.`,
+    items: Object.freeze(
+      plan.joints.map((joint) => {
+        const tracks = deletion.tracks.filter((track) => {
+          const target = model.prop(track, 'target');
+          return typeof target === 'string' && model.uidOf(target) === joint;
+        });
+        const label = labelOf(model, joint);
+        return tracks.length === 0
+          ? label
+          : `${label}: ${countOf(tracks.length, 'track')}, ${countOf(keysOf(tracks), 'key')}`;
+      }),
+    ),
+    confirmLabel: 'Group',
     cancelLabel: 'Cancel',
   });
 }
@@ -182,7 +217,8 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * actions. The tool registry is the first `mode` listener, so a mode change cancels the operation in progress
  * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
  * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
- * and the `delete`, `add-shape`, `add-joint`, `new` actions, plus `load` and `save` when `files` is given.
+ * and the `delete`, `group`, `ungroup`, `split`, `add-shape`, `add-joint`, `new` actions, plus `load` and `save`
+ * when `files` is given.
  * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null,
  *   confirm?: (request: ConfirmRequest) => Promise<boolean>, notify?: (notice: Notice) => Promise<void>,
  *   files?: FileService|null, editorVersion?: () => string }} [options] Restored editor settings, defaults when
@@ -301,6 +337,63 @@ export function createEditor({
       const rootOnly = selection.objects.length === 1 && selection.objects[0] === ROOT_UID;
       return rootOnly && !history.inGesture && !confirming ? 'the ragdoll root cannot be deleted' : null;
     },
+  });
+  const canShapeEdit = () => selection.focus === 'objects' && canEditRest();
+  const readPlan = (plan, uids) => {
+    try {
+      return plan(model, uids);
+    } catch {
+      return null;
+    }
+  };
+  const hasBodies = (uids) => uids.some((uid) => ['body', 'shape'].includes(model.get(uid)?.type));
+  const shapeEditReason = (stateReason) => () => {
+    if (selection.focus !== 'objects') return null;
+    const byMode = modeReason('edit.rest');
+    if (byMode !== null) return byMode;
+    if (history.inGesture || confirming) return null;
+    return stateReason(selection.objects);
+  };
+  const groupable = (plan) => plan !== null && !plan.empty && !plan.invalid;
+  const canGroup = (uids) => canShapeEdit() && groupable(readPlan(groupPlan, uids));
+  const runGroup = () => {
+    const uids = [...selection.objects];
+    const plan = groupPlan(model, uids);
+    const group = () => selection.set(history.execute(groupBodies(uids)));
+    if (!plan.confirm) {
+      group();
+      return undefined;
+    }
+    return ask(groupRequest(model, plan)).then((accepted) => {
+      if (accepted && canGroup(uids)) group();
+    });
+  };
+  actions.register('group', {
+    run: runGroup,
+    isEnabled: () => !confirming && canGroup(selection.objects),
+    reason: shapeEditReason((uids) => {
+      const plan = readPlan(groupPlan, uids);
+      if (plan === null) return null;
+      if (plan.invalid) return INVALID_GEOMETRY;
+      return plan.bodies.length === 1 ? 'select shapes of two or more bodies' : null;
+    }),
+  });
+  const splittable = (result) => result !== null && result.parts.length > 0 && !result.invalid;
+  const partsReason = (plan, noPart) => (uids) => {
+    const result = readPlan(plan, uids);
+    if (result === null) return null;
+    if (result.invalid) return INVALID_GEOMETRY;
+    return result.parts.length === 0 && hasBodies(uids) ? noPart : null;
+  };
+  actions.register('ungroup', {
+    run: () => selection.set(history.execute(ungroupBodies([...selection.objects]))),
+    isEnabled: () => !confirming && canShapeEdit() && splittable(readPlan(ungroupParts, selection.objects)),
+    reason: shapeEditReason(partsReason(ungroupParts, 'each selected body has a single shape')),
+  });
+  actions.register('split', {
+    run: () => selection.set(history.execute(splitShapes([...selection.objects]))),
+    isEnabled: () => !confirming && canShapeEdit() && splittable(readPlan(splitParts, selection.objects)),
+    reason: shapeEditReason(partsReason(splitParts, 'select some, not all, shapes of a body')),
   });
   let loading = false;
   let saving = false;

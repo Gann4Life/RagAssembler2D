@@ -5,6 +5,7 @@ import {
   composeTransforms,
   invertTransform,
   pointInShape,
+  polygonCentroid,
   polygonProblems,
   shapeBounds,
   shapeGeometryValid,
@@ -260,4 +261,40 @@ test('polygonProblems: a five-point star gives notConvex', () => {
 test('polygonProblems: checks run in the documented order', () => {
   assert.equal(polygonProblems([[0, 0], [0, 0], [0, 1], [1, 1], [1, 0]]), 'degenerate');
   assert.equal(polygonProblems([[0, 0], [0, 1], [1, 1]]), 'notCcw');
+});
+test('polygonCentroid of a square is its center', () => {
+  const c = polygonCentroid([[1, 1], [3, 1], [3, 3], [1, 3]]);
+  near(c.x, 2);
+  near(c.y, 2);
+});
+
+test('polygonCentroid of a triangle is the vertex average', () => {
+  const c = polygonCentroid([[0, 0], [3, 0], [0, 3]]);
+  near(c.x, 1);
+  near(c.y, 1);
+});
+
+test('polygonCentroid weights by area, not by vertex count', () => {
+  const c = polygonCentroid([[0, 0], [2, 0], [2, 1], [1, 1], [0, 1]]);
+  near(c.x, 1);
+  near(c.y, 0.5);
+});
+
+test('polygonCentroid accepts clockwise input', () => {
+  const c = polygonCentroid([[0, 3], [3, 0], [0, 0]]);
+  near(c.x, 1);
+  near(c.y, 1);
+});
+
+test('polygonCentroid of a zero-area polygon is the vertex average', () => {
+  const c = polygonCentroid([[0, 0], [1, 1], [2, 2]]);
+  near(c.x, 1);
+  near(c.y, 1);
+});
+
+test('polygonCentroid never yields -0', () => {
+  const c = polygonCentroid([[-1, -1], [1, -1], [1, 1], [-1, 1]]);
+  assert.ok(Object.is(c.x, 0) && Object.is(c.y, 0), `${c.x}, ${c.y}`);
+  const flat = polygonCentroid([[-1, 0], [0, 0], [1, 0]]);
+  assert.ok(Object.is(flat.x, 0) && Object.is(flat.y, 0));
 });
