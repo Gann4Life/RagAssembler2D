@@ -56,7 +56,7 @@ test('a new model holds the root with schema defaults and empty collections', ()
   assert.equal(root.collection, null);
   assert.deepEqual(root.props, {
     ...defaultsOf('root'),
-    meta: { name: 'ragdoll' },
+    meta: { name: 'root' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
   });

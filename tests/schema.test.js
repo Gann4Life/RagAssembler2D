@@ -70,6 +70,17 @@ test('body positions and angles and joint anchors are meters and radians', () =>
   assert.equal(unit('root', 'angle'), 'rad');
 });
 
+test('the root transform is read-only and the root defaults to the name root', () => {
+  const spec = (type, path) => SCHEMA[type].find((item) => item.path === path);
+  assert.equal(spec('root', 'position').readOnly, true);
+  assert.equal(spec('root', 'angle').readOnly, true);
+  assert.deepEqual(spec('root', 'position').default, [0, 0]);
+  assert.equal(spec('root', 'angle').default, 0);
+  assert.equal(spec('root', 'name').readOnly, false);
+  assert.equal(spec('root', 'name').default, 'root');
+  assert.equal(spec('document', 'meta.name').default, 'root');
+});
+
 test('every object type with an id also has a name field', () => {
   for (const type of OBJECT_TYPES) {
     const paths = SCHEMA[type].map((spec) => spec.path);
@@ -94,7 +105,7 @@ test('defaultsOf returns the documented defaults per type', () => {
   assert.deepEqual(defaultsOf('document'), {
     format: 'ragassembler',
     version: 1,
-    meta: { name: 'ragdoll' },
+    meta: { name: 'root' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
     sprites: [],
@@ -104,7 +115,7 @@ test('defaultsOf returns the documented defaults per type', () => {
   });
   assert.deepEqual(defaultsOf('root'), {
     id: 'root',
-    name: 'ragdoll',
+    name: 'root',
     position: [0, 0],
     angle: 0,
     rootBody: null,
