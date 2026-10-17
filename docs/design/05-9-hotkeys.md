@@ -5,14 +5,14 @@
 | V / B / D | Select / Select box / Pose | C / R / N / H | Circle / Box / Polygon / Hinge |
 | S | Toggle sprite edit (Select) | Del | Delete |
 | Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | Undo / Redo | Ctrl+S / Ctrl+O | Save / Load |
-| Ctrl+G / Ctrl+Shift+G | Group / Ungroup | Ctrl+D | Duplicate selection |
+| Ctrl+G / Ctrl+Shift+G / Alt+G | Group / Ungroup / Split ([§2.2](02-object-model.md#22-bodies-and-shapes)) | Ctrl+D | Duplicate selection |
 | Space | Play / Pause | . | Next frame |
 | K | Key selected | F / Home | Frame selection / all |
 | Esc | Abort tool / clear selection | Z | Pivot mode: center / last selected (Select) |
 
 - Z (without modifiers) and Ctrl+Z (Undo) are different hotkeys, since modifiers must match exactly. While CTRL is held during a Select rotation to force the body origin, pressing Z is therefore Undo, which aborts the drag ([§5.5](05-5-tools.md#55-tools)).
 - Hotkeys are ignored while focus is in a text field. Space also goes to a focused button or control instead of Play/Pause.
-- On macOS, Cmd acts as Ctrl. Keys match the character the keyboard layout produces (letters case-insensitive), and modifiers must match exactly.
+- On macOS, Cmd acts as Ctrl. Keys match the character the keyboard layout produces (letters case-insensitive), and modifiers must match exactly. Exception: a hotkey with Alt and a letter also matches the physical key of that letter, because Alt (Option on macOS) changes the character it produces (Option+G gives "©").
 - A matched hotkey always suppresses the browser's own shortcut (e.g. Ctrl+S never opens the browser's save dialog), even when its action is currently disabled.
 - Holding a key repeats only Undo, Redo and Next frame; other hotkeys act once per press.
 - While a drag or scrub is in progress, hotkeys that edit the document (Delete, Group, Duplicate, Key selected, …) do nothing; Undo and Esc cancel the drag.

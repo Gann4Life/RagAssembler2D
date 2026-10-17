@@ -25,6 +25,7 @@ export const HOTKEYS = Object.freeze(
     { keys: 'Ctrl+O', action: 'load' },
     { keys: 'Ctrl+G', action: 'group' },
     { keys: 'Ctrl+Shift+G', action: 'ungroup' },
+    { keys: 'Alt+G', action: 'split' },
     { keys: 'Ctrl+D', action: 'duplicate' },
     { keys: 'Space', action: 'toggle-play' },
     { keys: '.', action: 'next-frame' },
@@ -71,19 +72,29 @@ function isPageBody(target) {
   return String(target?.tagName ?? '').toUpperCase() === 'BODY';
 }
 
+const LETTER = /^[A-Z]$/;
+
+function keyMatches(row, key, code) {
+  if (row.key === key) return true;
+  return row.alt && LETTER.test(row.key) && !LETTER.test(key) && code === `Key${row.key}`;
+}
+
 /**
  * Finds the action bound to a keyboard event. `Meta` counts as `Ctrl`, letters match case-insensitively,
- * and Ctrl, Shift and Alt must match exactly.
- * @param {{ key: string, ctrlKey?: boolean, metaKey?: boolean, shiftKey?: boolean, altKey?: boolean }} event Keyboard event.
+ * and Ctrl, Shift and Alt must match exactly. A row with Alt and a letter also matches `code` `Key<letter>` when
+ * `key` is not an ASCII letter (Option on macOS changes the character).
+ * @param {{ key: string, code?: string, ctrlKey?: boolean, metaKey?: boolean, shiftKey?: boolean, altKey?: boolean }} event
+ *   Keyboard event.
  * @returns {import('./actions.js').ActionId|null} Bound action, or `null`.
  */
 export function matchHotkey(event) {
   const key = eventKey(event);
+  const code = String(event.code ?? '');
   const ctrl = Boolean(event.ctrlKey || event.metaKey);
   const shift = Boolean(event.shiftKey);
   const alt = Boolean(event.altKey);
   const binding = BINDINGS.find(
-    (row) => row.key === key && row.ctrl === ctrl && row.shift === shift && row.alt === alt,
+    (row) => keyMatches(row, key, code) && row.ctrl === ctrl && row.shift === shift && row.alt === alt,
   );
   return binding?.action ?? null;
 }

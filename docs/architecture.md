@@ -58,6 +58,7 @@ Each topic lives in its own file; read only the one you need.
 | Commands and undo | [commands-and-undo.md](architecture/commands-and-undo.md) | Command objects, transactions and history. |
 | Joint graph | [joint-graph.md](architecture/joint-graph.md) | Joint tree and queries. |
 | Hierarchy and deletion | [hierarchy-and-deletion.md](architecture/hierarchy-and-deletion.md) | Hierarchy tree model and deletion plans. |
+| Group, Ungroup and Split | [grouping.md](architecture/grouping.md) | Plans, commands, actions, confirmation and hotkeys that move shapes between bodies (#18). |
 | Selection | [selection.md](architecture/selection.md) | Selection state. |
 | Editor composition | [editor-composition.md](architecture/editor-composition.md) | `createEditor` composition root. |
 | Change notifications | [change-notifications.md](architecture/change-notifications.md) | Model, selection and mode events. |

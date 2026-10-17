@@ -450,3 +450,305 @@ test('D activates Pose in Edit mode', () => {
   assert.equal(dispatchKey(event, { actions, tools, viewportFocused: true }), true);
   assert.equal(tools.active?.id, 'pose');
 });
+function buildRig(editor, { bodies, joints = [], clips = [], rootBody = null }) {
+  const uids = {};
+  editor.history.execute({
+    label: 'Build',
+    run(tx) {
+      const { fixtures: _fixtures, ...bodyDefaults } = defaultsOf('body');
+      for (const { id, shapes } of bodies) {
+        uids[id] = tx.add(ROOT_UID, 'bodies', undefined, {
+          type: 'body',
+          props: { ...bodyDefaults, id, name: id },
+          children: {
+            fixtures: shapes.map(([shapeId, radius = 0.25]) => ({
+              type: 'shape',
+              props: { ...defaultsOf('shape', 'circle'), id: shapeId, name: shapeId, shape: { type: 'circle', center: [0, 0], radius } },
+            })),
+          },
+        });
+        shapes.forEach(([shapeId], index) => {
+          uids[shapeId] = tx.model.children(uids[id], 'fixtures')[index];
+        });
+      }
+      for (const [id, bodyA, bodyB, name = id] of joints) {
+        uids[id] = tx.add(ROOT_UID, 'joints', undefined, { type: 'joint', props: { ...defaultsOf('joint'), id, name, bodyA, bodyB } });
+      }
+      const { tracks: _tracks, events: _events, ...clipProps } = defaultsOf('clip');
+      for (const { key, tracks } of clips) {
+        uids[key] = tx.add(ROOT_UID, 'clips', undefined, {
+          type: 'clip',
+          props: { ...clipProps, key },
+          children: {
+            tracks: tracks.map(([target, channel, keys]) => ({
+              type: 'track',
+              props: { target, channel },
+              children: { keys: Array.from({ length: keys }, (_, t) => ({ type: 'key', props: { t, value: 0.5 } })) },
+            })),
+          },
+        });
+      }
+      tx.set(ROOT_UID, 'rootBody', rootBody);
+    },
+  });
+  return uids;
+}
+
+const SHAPE_ACTIONS = ['group', 'ungroup', 'split'];
+
+const SHAPE_RIG = {
+  bodies: [
+    { id: 'b_1', shapes: [['f_1'], ['f_2']] },
+    { id: 'b_2', shapes: [['f_3']] },
+  ],
+  rootBody: 'b_1',
+};
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
+test('group, ungroup and split are enabled in Edit mode and refused with the mode reason in Animate and Simulate', () => {
+  const editor = createEditor();
+  const { selection, actions, modes } = editor;
+  const uids = buildRig(editor, SHAPE_RIG);
+  selection.set([uids.f_2, uids.f_3]);
+  for (const id of SHAPE_ACTIONS) {
+    assert.equal(actions.isEnabled(id), true, id);
+    assert.equal(actions.reason(id), null, id);
+    assert.equal(actions.isRepeatable(id), false, id);
+  }
+  modes.openClip(addClip(editor));
+  selection.set([uids.f_2, uids.f_3]);
+  for (const id of SHAPE_ACTIONS) {
+    assert.equal(actions.isEnabled(id), false, id);
+    assert.equal(actions.reason(id), 'not available in Animate mode', id);
+    assert.equal(actions.run(id), false, id);
+  }
+  modes.openClip(null);
+  modes.startSimulate();
+  selection.set([uids.f_2, uids.f_3]);
+  for (const id of SHAPE_ACTIONS) assert.equal(actions.reason(id), 'not available in Simulate mode', id);
+  assert.equal(editor.model.children(ROOT_UID, 'bodies').length, 2);
+});
+
+test('group, ungroup and split are disabled with no reason during a gesture', () => {
+  const editor = createEditor();
+  const { selection, actions, history } = editor;
+  const uids = buildRig(editor, SHAPE_RIG);
+  selection.set([uids.f_2, uids.f_3]);
+  history.beginGesture();
+  for (const id of SHAPE_ACTIONS) {
+    assert.equal(actions.isEnabled(id), false, id);
+    assert.equal(actions.reason(id), null, id);
+    assert.equal(actions.run(id), false, id);
+  }
+  history.endGesture();
+  assert.equal(editor.model.children(ROOT_UID, 'bodies').length, 2);
+});
+
+test('group, ungroup and split state reasons', () => {
+  const editor = createEditor();
+  const { selection, actions } = editor;
+  const uids = buildRig(editor, {
+    bodies: [
+      { id: 'b_1', shapes: [['f_1'], ['f_2']] },
+      { id: 'b_2', shapes: [['f_3']] },
+      { id: 'b_3', shapes: [['f_4', -1], ['f_5']] },
+    ],
+    joints: [['j_1', 'b_1', 'b_2']],
+  });
+  selection.set([]);
+  for (const id of SHAPE_ACTIONS) assert.equal(actions.reason(id), null, id);
+  selection.set([uids.j_1]);
+  for (const id of SHAPE_ACTIONS) {
+    assert.equal(actions.isEnabled(id), false, id);
+    assert.equal(actions.reason(id), null, id);
+  }
+  selection.set([uids.f_1, uids.f_2]);
+  assert.equal(actions.reason('group'), 'select shapes of two or more bodies');
+  assert.equal(actions.reason('split'), 'select some, not all, shapes of a body');
+  assert.equal(actions.isEnabled('ungroup'), true);
+  selection.set([uids.f_3]);
+  assert.equal(actions.reason('ungroup'), 'each selected body has a single shape');
+  selection.set([uids.f_1, uids.f_4]);
+  assert.equal(actions.isEnabled('group'), false);
+  assert.equal(actions.reason('group'), 'a shape has invalid geometry');
+  assert.equal(actions.isEnabled('split'), false);
+  assert.equal(actions.reason('split'), 'a shape has invalid geometry');
+  assert.equal(actions.reason('ungroup'), null);
+  selection.set([uids.f_4, uids.f_5]);
+  assert.equal(actions.reason('group'), 'select shapes of two or more bodies');
+  selection.set([uids.b_3]);
+  assert.equal(actions.reason('ungroup'), null);
+  assert.equal(actions.isEnabled('ungroup'), true);
+  selection.set([uids.f_3, uids.f_1]);
+  assert.equal(actions.isEnabled('group'), true);
+  assert.equal(actions.reason('group'), null);
+});
+
+test('group without internal joints never asks, runs synchronously and selects the group shapes', () => {
+  let asked = 0;
+  const editor = createEditor({
+    confirm: () => {
+      asked += 1;
+      return Promise.resolve(true);
+    },
+  });
+  const { model, selection, actions, history } = editor;
+  const uids = buildRig(editor, SHAPE_RIG);
+  selection.set([uids.f_3, uids.f_1]);
+  assert.equal(actions.run('group'), true);
+  assert.equal(asked, 0);
+  assert.deepEqual(model.children(ROOT_UID, 'bodies'), [uids.b_1]);
+  assert.deepEqual(selection.objects, [uids.f_1, uids.f_2, uids.f_3]);
+  assert.equal(history.state.undoLabel, 'Group');
+});
+
+const ARM = {
+  bodies: [
+    { id: 'b_1', shapes: [['f_1']] },
+    { id: 'b_2', shapes: [['f_2']] },
+    { id: 'b_3', shapes: [['f_3']] },
+  ],
+  joints: [
+    ['j_1', 'b_1', 'b_2', 'elbow_l'],
+    ['j_2', 'b_2', 'b_3', 'wrist_l'],
+  ],
+  clips: [
+    { key: 'walk', tracks: [['j_1', 'angle', 5], ['j_1', 'strength', 3]] },
+    { key: 'run', tracks: [['j_1', 'angle', 4]] },
+  ],
+  rootBody: 'b_1',
+};
+
+test('group with internal joints asks once with the group request, then groups as one step', async () => {
+  const requests = [];
+  const answer = deferred();
+  const editor = createEditor({
+    confirm: (request) => {
+      requests.push(request);
+      return answer.promise;
+    },
+  });
+  const { model, selection, actions, history } = editor;
+  const uids = buildRig(editor, ARM);
+  selection.set([uids.f_3, uids.f_2, uids.f_1]);
+  assert.equal(actions.run('group'), true);
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0], {
+    kind: 'group',
+    title: 'Delete joints inside the group?',
+    message: 'Grouping 3 bodies deletes 2 joints between them, which also removes 3 tracks and 12 keys from 2 clips. Undo restores them.',
+    items: ['elbow_l: 3 tracks, 12 keys', 'wrist_l'],
+    confirmLabel: 'Group',
+    cancelLabel: 'Cancel',
+  });
+  for (const id of [...SHAPE_ACTIONS, 'delete']) {
+    assert.equal(actions.isEnabled(id), false, id);
+    assert.equal(actions.reason(id), null, id);
+  }
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 3);
+  answer.resolve(true);
+  await answer.promise;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(model.children(ROOT_UID, 'bodies'), [uids.b_1]);
+  assert.deepEqual(model.children(ROOT_UID, 'joints'), []);
+  assert.deepEqual(selection.objects, [uids.f_1, uids.f_2, uids.f_3]);
+  assert.equal(history.state.undoLabel, 'Group');
+  history.undo();
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 3);
+  assert.equal(model.children(ROOT_UID, 'joints').length, 2);
+  assert.equal(history.state.undoLabel, 'Build');
+});
+
+test('a group request with internal joints but no tracks has no track clause', async () => {
+  const requests = [];
+  const editor = createEditor({
+    confirm: (request) => {
+      requests.push(request);
+      return Promise.resolve(false);
+    },
+  });
+  const uids = buildRig(editor, { ...ARM, clips: [] });
+  editor.selection.set([uids.f_1, uids.f_2]);
+  editor.actions.run('group');
+  assert.equal(requests[0].message, 'Grouping 2 bodies deletes 1 joint between them. Undo restores them.');
+  assert.deepEqual(requests[0].items, ['elbow_l']);
+});
+
+for (const [label, settle] of [
+  ['false', (answer) => answer.resolve(false)],
+  ['a rejection', (answer) => answer.reject(new Error('closed'))],
+]) {
+  test(`group changes nothing when the confirmation answers ${label}`, async () => {
+    const answer = deferred();
+    const editor = createEditor({ confirm: () => answer.promise });
+    const { model, selection, actions, history } = editor;
+    const uids = buildRig(editor, ARM);
+    selection.set([uids.f_1, uids.f_2]);
+    actions.run('group');
+    settle(answer);
+    await answer.promise.catch(() => {});
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(model.children(ROOT_UID, 'bodies').length, 3);
+    assert.equal(history.state.undoLabel, 'Build');
+    assert.equal(actions.isEnabled('group'), true);
+  });
+}
+
+test('a mode change before the answer groups nothing', async () => {
+  const answer = deferred();
+  const editor = createEditor({ confirm: () => answer.promise });
+  const { model, selection, actions, modes } = editor;
+  const uids = buildRig(editor, ARM);
+  selection.set([uids.f_1, uids.f_2]);
+  actions.run('group');
+  modes.openClip(uids.walk);
+  answer.resolve(true);
+  await answer.promise;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 3);
+  assert.equal(model.children(ROOT_UID, 'joints').length, 2);
+});
+
+test('ungroup and split select the shapes their command returns', () => {
+  const editor = createEditor();
+  const { model, selection, actions, history } = editor;
+  const uids = buildRig(editor, {
+    bodies: [{ id: 'b_1', shapes: [['f_1'], ['f_2'], ['f_3']] }],
+    rootBody: 'b_1',
+  });
+  selection.set([uids.f_3, uids.f_2]);
+  assert.equal(actions.run('split'), true);
+  assert.deepEqual(selection.objects, [uids.f_2, uids.f_3]);
+  assert.equal(history.state.undoLabel, 'Split');
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 2);
+  history.undo();
+  selection.set([uids.b_1]);
+  assert.equal(actions.run('ungroup'), true);
+  assert.deepEqual(selection.objects, [uids.f_1, uids.f_2, uids.f_3]);
+  assert.equal(history.state.undoLabel, 'Ungroup');
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 3);
+});
+
+test('Ctrl+G, Ctrl+Shift+G and Alt+G reach group, ungroup and split', () => {
+  const editor = createEditor();
+  const { model, selection, actions } = editor;
+  const uids = buildRig(editor, SHAPE_RIG);
+  const press = (key, init) => dispatchKey({ ...deleteKey(), key, ...init }, { actions });
+  selection.set([uids.f_2]);
+  assert.equal(press('©', { altKey: true, code: 'KeyG' }), true);
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 3);
+  selection.set([uids.f_1, uids.f_2, uids.f_3]);
+  assert.equal(press('g', { ctrlKey: true }), true);
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
+  assert.equal(press('G', { ctrlKey: true, shiftKey: true }), true);
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 3);
+});

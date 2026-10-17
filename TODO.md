@@ -28,7 +28,7 @@
 - [ ] #15 Spike: assess feasibility of the Convex Polygon tool
 - [x] #16 Hinge Joint tool with pin and drag-limits
 - [x] #17 Manipulate tool: move and rotate root and body subtrees
-- [ ] #18 Group and Ungroup bodies
+- [x] #18 Group and Ungroup bodies
 - [x] #19 Hierarchy panel with tree, search, delete and add
 - [ ] #20 Inspector framework with root and body properties
 - [ ] #21 Assets panel with import, drag-assign, usage and delete guard
