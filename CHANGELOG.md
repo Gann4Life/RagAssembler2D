@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-17
+
+### Added
+- F2 renames the single selected object: inline in the Hierarchy, or in a popup in the viewport.
+
+### Changed
+- The root can no longer be moved or rotated in the editor; its position and angle are read-only. Existing files keep their stored root transform, and the file format is unchanged.
+- New documents name the root "root" instead of "ragdoll".
+
 ## [0.10.0] - 2026-10-17
 
 ### Added
