@@ -11,9 +11,9 @@ Behavior: [`DESIGN.md` §2.2](../design/02-object-model.md#22-bodies-and-shapes)
 
 ## `js/commands/group.js`
 
-Core. Imports `lib/geometry.js` (`shapeGeometryValid`, `polygonCentroid`), `js/model/model.js` (`ROOT_UID`), `js/model/queries.js` (`referencesTo`) and `js/commands/delete.js` (`deletionPlan`).
+Core. Imports `lib/geometry.js` (`shapeGeometryValid`, `polygonCentroid`), `js/model/model.js` (`ROOT_UID`), `js/model/queries.js` (`referencesTo`, `selectedBodies`) and `js/commands/delete.js` (`deletionPlan`).
 
-**Bodies of the selection** (private, shared by the three plans): every uid must exist (`Error` for an unknown uid); the result is the given bodies plus the parent body of every given shape, deduplicated, in `bodies` order. Other node types are ignored.
+**Bodies of the selection** (`readSelection`, shared by the three plans): `selectedBodies(model, uids)` from `js/model/queries.js`, also used by `duplicatePlan`. Every uid must exist (`Error` for an unknown uid); the result is the given bodies plus the parent body of every given shape, deduplicated, in `bodies` order. Other node types are ignored. `readSelection` also records which of the uids are bodies and which are shapes.
 
 **Frames.** A body's transform reads as in `manipulationParts` ([Commands and undo](commands-and-undo.md#commands-and-undo)): a missing `position` is (0, 0), a missing `angle` 0. A shape's **center** is its `shape.center` for circles and boxes and `polygonCentroid(shape.vertices)` for polygons, body-local. Computed angles are wrapped to (−π, π]; no result holds `-0`. A `set` whose value is JSON-equal to the current prop is skipped (as `placeParts` does), so a merge between bodies with the same transform issues no geometry ops. A plan is **`invalid`** when a shape it re-expresses fails `shapeGeometryValid`, or a body whose transform it reads has a `position` that is present and not a finite pair or an `angle` that is present and not finite.
 
@@ -49,6 +49,28 @@ SplitPart { body: number, shapes: number[] }   source body; shapes moved to one 
   `splitShapes` returns the moved shapes; `ungroupBodies` returns every fixture of the ungrouped bodies and of their new bodies; both in `bodies` order, then fixture order, read after the ops. Neither touches joints, tracks or `rootBody`.
 - **Undo and redo** are exact and need no history feature: every `move` op records both slots, `add` and `remove` carry their snapshots, and redo re-applies the recorded ops with the same ids and uids ([Commands and undo](commands-and-undo.md#commands-and-undo)). A body added with no fixtures is momentarily empty inside the transaction; the model does not enforce `fixtures` ≥ 1 ([Document model](document-model.md#document-model)).
 - They read no mode, selection or confirmation: the actions do.
+
+## `js/commands/duplicate.js`
+
+Core. Behavior: [`DESIGN.md` §5.6](../design/05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels) (Duplicate). Imports `js/model/model.js` (`ROOT_UID`) and `js/model/queries.js` (`selectedBodies`, `parentJoints`, `bodySubtree`, `jointChildBody`).
+
+```
+DuplicatePlan {
+  bodies: number[]   copied bodies (whole branches), `bodies` order
+  joints: number[]   copied joints: both bodies copied, or selected with only its child body copied; `joints` order
+  empty:  boolean    bodies.length === 0
+}
+```
+
+- **`duplicatePlan(model, uids) → DuplicatePlan`** (frozen; reads only; `Error` for an unknown uid). Rules:
+  - the bodies are the union of `bodySubtree` (body plus descendants through parent joints) of each `selectedBodies` result (selected bodies and bodies of selected shapes) and of the `jointChildBody` of each selected joint; a loop joint has no child body, so alone it copies nothing;
+  - a joint is copied when both its bodies are copied (internal), or when it is selected and only its child body is copied (it is re-attached to the uncopied parent body);
+  - other node types are ignored.
+- **`duplicateSelection(uids, offset, label = 'Duplicate') → Command`.** `run(tx)` throws `Error` when the plan is `empty`, before mutating. Per body, appended to `bodies`: a new `b` id, the props of the source with `name` and `position` shifted by `offset` (a missing or non-finite `position` reads (0, 0)), and a copy of each fixture with a new `f` id and the same props and sprite. Then per joint, appended to `joints`: a new `j` id, `bodyA` and `bodyB` mapped to the copies (an uncopied body keeps its id), `anchor` shifted by `offset`. Tracks are not copied and `rootBody` is unchanged.
+- **Names.** `<base>_copy`, or `<base>_copy<k>` with the smallest `k ≥ 2` not taken among the names of the same kind (bodies, shapes, joints); a trailing `_copy` or `_copy<k>` (`k ≥ 2`) of the source is stripped first.
+- `run` returns the copies of the given bodies, shapes and joints that were copied, in the given order, deduplicated; the action selects them. A copied shape is selected as itself, not as its body; bodies copied only as part of a branch are not selected.
+- Tests: `tests/duplicate.test.js` covers the plan (branches, joint child side, loops, root), the command (ids, fields, order, re-attached joints, names, one undo step, exact undo and redo, nothing copied) and the action (offset, root angle, availability).
+- One undo step; the offset is computed by the `duplicate` action (`js/editor.js`), not here.
 
 ## `lib/geometry.js`: `polygonCentroid(vertices) → Vec2`
 

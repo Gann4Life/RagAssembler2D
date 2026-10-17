@@ -40,7 +40,7 @@
 - [x] #27 Canonical .rag.json serializer and loader with migration
 - [x] #28 Header Save/Load of .rag.json files
 - [ ] #29 Autosave draft and recovery on startup
-- [ ] #63 Duplicate selection with Ctrl+D
+- [x] #63 Duplicate selection with Ctrl+D
 - [x] #70 Deploy the editor to GitHub Pages on every merge to main
 - [ ] #71 Keep header controls reachable on narrow windows
 - [ ] #72 Show a visible error when vendored libraries are missing
@@ -77,6 +77,7 @@
 - [x] #153 Lock the root transform, name it root and let the user rename it
 - [x] #156 Change the Pose tool hotkey from P to D
 - [ ] #158 Sprite folder resolution on Load and image export on Save
+- [ ] #165 Copy and paste selection with Ctrl+C / Ctrl+V, including across documents
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
@@ -128,3 +129,4 @@
 - [x] #95 Keep commit messages and descriptions concise
 - [x] #97 Document version tags and release branches in CLAUDE.md
 - [x] #98 Extend read-only PowerShell permission allowlist
+- [ ] #166 Spike: import a rag file into the current document (limbs as prefabs)
