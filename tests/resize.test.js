@@ -116,7 +116,8 @@ test('resizeShapes lists the circles and boxes of the selection in resize order'
   assert.deepEqual(ids(['f_6', 'f_7']), []);
   assert.deepEqual(ids(['j_1']), []);
   assert.deepEqual(ids(['j_1', 'f_1']), ['f_1']);
-  assert.deepEqual(ids(['f_1', 'root']), []);
+  assert.deepEqual(ids(['f_1', 'root']), ['f_1']);
+  assert.deepEqual(ids(['root']), []);
   assert.deepEqual(ids([]), []);
   assert.ok(Object.isFrozen(resizeShapes(model, [uid('b_1')])));
 });

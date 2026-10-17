@@ -67,8 +67,8 @@ function oneDecimal(value) {
 }
 
 /**
- * The joint whose limits the Select gizmo edits: the one selected joint when the selection holds no root and no
- * body, the joint has a zero direction and a placed anchor, and its limits (missing values read as schema defaults)
+ * The joint whose limits the Select gizmo edits: the one joint of the target when it holds no body (the root is
+ * ignored), the joint has a zero direction and a placed anchor, and its limits (missing values read as schema defaults)
  * are finite with `lower ≤ 0 ≤ upper`. Pure.
  * @param {import('../model/model.js').Model} model Document model.
  * @param {number[]} objects Selected uids, in selection order.
@@ -76,7 +76,7 @@ function oneDecimal(value) {
  */
 export function limitJoint(model, objects) {
   const target = manipulationTarget(model, objects);
-  if (target.root || target.bodies.length > 0 || target.joints.length !== 1) return null;
+  if (target.bodies.length > 0 || target.joints.length !== 1) return null;
   const uid = target.joints[0];
   const place = placement(model);
   const zero = place.zero.get(uid);
