@@ -2,7 +2,7 @@ import { TOOL_SPECS } from './tools/tool.js';
 
 /**
  * Default key binding. `keys` is `[Ctrl+][Shift+][Alt+]<key>`, where `<key>` is an upper-case letter,
- * a digit, `.`, `Space`, `Del`, `Esc` or `Home`.
+ * a digit, `.`, `Space`, `Del`, `Esc`, `Home` or `F2`.
  * @typedef {object} Hotkey
  * @property {string} keys Key combination, e.g. `Ctrl+Shift+Z`.
  * @property {import('./actions.js').ActionId} action Action run by the combination.
@@ -34,6 +34,7 @@ export const HOTKEYS = Object.freeze(
     { keys: 'Home', action: 'frame-all' },
     { keys: 'Esc', action: 'escape' },
     { keys: 'Z', action: 'pivot-mode' },
+    { keys: 'F2', action: 'rename' },
   ].map((row) => Object.freeze(row)),
 );
 

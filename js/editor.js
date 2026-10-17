@@ -4,6 +4,7 @@ import { createJoint, createShapeBody } from './commands/create.js';
 import { deleteObjects, deletionPlan } from './commands/delete.js';
 import { groupBodies, groupPlan, splitParts, splitShapes, ungroupBodies, ungroupParts } from './commands/group.js';
 import { Selection } from './model/selection.js';
+import { Rename } from './model/rename.js';
 import { History } from './commands/history.js';
 import { Modes } from './modes.js';
 import { ActionRegistry } from './actions.js';
@@ -30,6 +31,7 @@ import { hingeTool } from './tools/hinge.js';
  * @property {Settings} settings Editor settings; not undoable.
  * @property {Camera} camera Viewport camera; not undoable.
  * @property {ToolRegistry} tools Viewport tool registry; not undoable.
+ * @property {Rename} rename Rename session (F2); not undoable.
  * @property {() => string} editorVersion Version of the running editor; `dev` until known.
  * @property {(read: () => Promise<string|null>) => Promise<boolean>} loadFrom Loads the text `read` supplies
  *   (`null`: nothing chosen), confirming first when there are unsaved changes; resolves whether the document was
@@ -217,19 +219,19 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * actions. The tool registry is the first `mode` listener, so a mode change cancels the operation in progress
  * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
  * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
- * and the `delete`, `group`, `ungroup`, `split`, `add-shape`, `add-joint`, `new` actions, plus `load` and `save`
- * when `files` is given.
+ * and the `delete`, `group`, `ungroup`, `split`, `rename`, `add-shape`, `add-joint`, `new` actions, plus `load` and
+ * `save` when `files` is given.
  * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null,
  *   confirm?: (request: ConfirmRequest) => Promise<boolean>, notify?: (notice: Notice) => Promise<void>,
- *   files?: FileService|null, editorVersion?: () => string }} [options] Restored editor settings, defaults when
+ *   files?: FileService|null, editorVersion?: () => string, uiBusy?: () => boolean }} [options] Restored editor settings, defaults when
  *   omitted; physics service for the Pose tool, `null` when omitted; how actions ask before a destructive step,
  *   always confirming when omitted; how actions report to the user, ignoring notices when omitted; file picker and
  *   download, `null` when omitted (`load` and `save` are then not registered); getter of the running editor's
- *   version, `dev` when omitted.
+ *   version, `dev` when omitted; whether a UI menu or dialog is open, which disables `rename`, never when omitted.
  * @returns {Readonly<Editor>} The editor.
  * @throws {TypeError} When `settings` is given and is not a `Settings` instance, `confirm` or `notify` is given
  *   and is not a function, `files` is neither `null` nor an object with `openText` and `saveText` functions, or
- *   `editorVersion` is given and is not a function.
+ *   `editorVersion` or `uiBusy` is given and is not a function.
  */
 export function createEditor({
   settings = Settings.restore(undefined).settings,
@@ -238,6 +240,7 @@ export function createEditor({
   notify = () => Promise.resolve(),
   files = null,
   editorVersion = () => DEV_VERSION,
+  uiBusy = () => false,
 } = {}) {
   if (!(settings instanceof Settings)) throw new TypeError('settings must be a Settings instance');
   if (typeof confirm !== 'function') throw new TypeError('confirm must be a function');
@@ -246,6 +249,7 @@ export function createEditor({
     throw new TypeError('files must be null or provide openText and saveText functions');
   }
   if (typeof editorVersion !== 'function') throw new TypeError('editorVersion must be a function');
+  if (typeof uiBusy !== 'function') throw new TypeError('uiBusy must be a function');
   const model = new Model();
   const history = new History(model);
   const selection = new Selection(model);
@@ -256,6 +260,7 @@ export function createEditor({
     TOOLS.map((createTool) => createTool()),
   );
   const actions = new ActionRegistry();
+  const rename = new Rename({ model, history, selection, modes });
 
   const modeReason = (capability) => (modes.can(capability) ? null : `not available in ${MODE_NAMES[modes.mode]} mode`);
 
@@ -395,6 +400,11 @@ export function createEditor({
     isEnabled: () => !confirming && canShapeEdit() && splittable(readPlan(splitParts, selection.objects)),
     reason: shapeEditReason(partsReason(splitParts, 'select some, not all, shapes of a body')),
   });
+  actions.register('rename', {
+    run: () => rename.start(),
+    isEnabled: () => !confirming && !uiBusy() && rename.canStart(),
+    reason: () => modeReason('edit.rest'),
+  });
   let loading = false;
   let saving = false;
   const canFile = () => modes.can('file') && !history.inGesture && !confirming && !loading && !saving;
@@ -501,5 +511,5 @@ export function createEditor({
     reason: () => modeReason('edit.rest'),
   });
 
-  return Object.freeze({ model, history, selection, modes, actions, settings, camera, tools, editorVersion, loadFrom });
+  return Object.freeze({ model, history, selection, modes, actions, settings, camera, tools, rename, editorVersion, loadFrom });
 }
