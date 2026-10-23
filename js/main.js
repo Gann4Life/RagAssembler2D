@@ -10,6 +10,7 @@ import { PANELS } from './panels/layout.js';
 import { createHierarchy } from './panels/hierarchy.js';
 import { createTimeline } from './panels/timeline.js';
 import { TimelinePlayer } from './timeline-player.js';
+import { bindAnimatePreview } from './model/animate-preview.js';
 import { openMenu } from './menu.js';
 import { Settings } from './settings.js';
 import { openSettings } from './settings-dialog.js';
@@ -186,6 +187,8 @@ const viewport = await createViewport(PIXI, viewportHost, {
   insets: () => framingInsets(toolbar.width()),
   onSpaceTap: () => actions.run('toggle-play'),
 });
+
+bindAnimatePreview(model, modes, (pose) => viewport.setBasePose(pose));
 
 actions.register('settings', { run: toggleSettings, isEnabled: () => modes.can('settings.editor') });
 actions.register('frame-selection', { run: () => viewport.frame(selection.objects), isEnabled: () => modes.can('camera') });

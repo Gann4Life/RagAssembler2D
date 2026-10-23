@@ -16,6 +16,8 @@ import { COLORS, LABEL_SIZE } from './viewport/style.js';
  *   top-left), topmost first, in the displayed pose.
  * @property {(uids: Iterable<number>|null) => void} frame Fits the given objects into the view, or everything for
  *   `null` or when they have nothing to frame.
+ * @property {(pose: import('./viewport/bounds.js').Pose|null) => void} setBasePose Sets the pose shown when no tool sets one,
+ *   e.g. the FK pose in Animate mode; `null` is the rest pose.
  * @property {() => void} destroy Stops resizing and input, unbinds the tools, and destroys the application and its
  *   canvas.
  */
@@ -96,6 +98,12 @@ export async function createViewport(
   toolOverlay.addChild(toolGraphics, readoutText);
   app.stage.addChild(grid.view, scene.view, gizmos.view, toolOverlay);
 
+  let basePose = null;
+  const showPose = (pose) => {
+    scene.setPose(pose);
+    gizmos.invalidate();
+  };
+
   const hitTestAt = (screen) => hitTest(model, camera, screen, { pose: scene.pose() });
 
   const placeReadout = () => {
@@ -147,10 +155,7 @@ export async function createViewport(
     boxTest: (box) => boxTest(model, box, { pose: scene.pose() }),
     setCursor: (css) => host.style.setProperty(TOOL_CURSOR_PROPERTY, css),
     invalidateOverlay,
-    setPose: (pose) => {
-      scene.setPose(pose);
-      gizmos.invalidate();
-    },
+    setPose: (pose) => showPose(pose ?? basePose),
   });
   const tickTools = (ticker) => tools.tick(ticker.deltaMS / 1000);
   PIXI.Ticker.shared.add(tickTools, undefined, PIXI.UPDATE_PRIORITY.HIGH);
@@ -184,6 +189,11 @@ export async function createViewport(
     gizmos,
     hitTest: hitTestAt,
     frame,
+    setBasePose(pose) {
+      basePose = pose ?? null;
+      showPose(basePose);
+      invalidateOverlay();
+    },
     destroy() {
       detachInput();
       PIXI.Ticker.shared.remove(tickTools);
