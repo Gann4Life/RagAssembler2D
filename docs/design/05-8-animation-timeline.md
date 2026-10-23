@@ -37,6 +37,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
 - **Playhead / scrub:**
   - Click or drag on the ruler.
   - Scrubbing updates the FK preview and the sprites live.
+  - In Simulate mode (playing or paused) the ruler stays enabled, because the runtime cannot seek: pressing or dragging it, or using Left / Right / Home / End on it, first stops the simulation as Stop does, then scrubs the restored clip in Animate mode at that time. With no clip open it only stops.
   - The snap step defaults to 1/30 s.
 - **Loop toggle and length field** mirror the clip properties.
 - **Autokey (●):** while it is on, Pose and Select rotation changes in Animate mode create keys automatically.

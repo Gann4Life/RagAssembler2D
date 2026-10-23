@@ -24,7 +24,7 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 | Asset import | ✓ | ✓ | — |
 | Asset delete | ✓ | — | — |
 | Clip selector, New clip | ✓ | ✓ | — |
-| Scrub | — | ✓ | — |
+| Scrub | — | ✓ | ✓ (stops the simulation first) |
 | Preview stack | — | ✓ | ✓ |
 | Procedural preview | — | — | ✓ |
 | New, Load, Save; Undo, Redo | ✓ | ✓ | — |
