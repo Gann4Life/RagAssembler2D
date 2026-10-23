@@ -149,6 +149,29 @@ test('pose() equals the rest pose right after start with a rotated root, and gra
   }
 });
 
+test('options.start places the listed bodies at their root-local transforms before the grab', () => {
+  const json = ragFile();
+  const moved = json.bodies[1];
+  const placed = { x: moved.position[0] + 0.2, y: moved.position[1] - 0.1, angle: moved.angle + 0.7 };
+  const point = transformPoint(ROOT, { x: placed.x, y: placed.y });
+  const session = create(Box2D, json, { root: ROOT, bodyId: moved.id, point, start: new Map([[moved.id, placed]]) });
+  try {
+    const pose = session.pose();
+    near(pose.get(moved.id).x, placed.x, 'x');
+    near(pose.get(moved.id).y, placed.y, 'y');
+    near(pose.get(moved.id).angle, placed.angle, 'angle');
+    for (const body of json.bodies) {
+      if (body.id === moved.id) continue;
+      near(pose.get(body.id).angle, body.angle, `${body.id} angle`);
+    }
+    const { anchor } = session.grab();
+    near(anchor.x, point.x, 'anchor x');
+    near(anchor.y, point.y, 'anchor y');
+  } finally {
+    session.destroy();
+  }
+});
+
 test('every body is damped, every motor is off and the grabbed body is pulled by a mouse joint', () => {
   const json = ragFile();
   capturingSpawn((spawned) => {

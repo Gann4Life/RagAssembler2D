@@ -135,7 +135,7 @@ function createEnvAndPress(options) {
   return env;
 }
 
-test('presses that start nothing: empty space, a joint, the root, a right press, modifiers, no physics, Animate', () => {
+test('presses that start nothing: empty space, a joint, the root, a right press, modifiers, no physics', () => {
   const cases = [
     (env) => {
       env.view.hits = [];
@@ -173,16 +173,97 @@ test('presses that start nothing: empty space, a joint, the root, a right press,
   send(noPhysics.tools, 'up', 10, 10);
   assert.notEqual(noPhysics.view.cursor.at(-1), 'grab');
   assert.deepEqual(noPhysics.view.poses, []);
+});
 
-  const animate = environment();
-  animate.modes.openClip(addClip(animate));
-  assert.equal(animate.tools.active?.id, 'pose');
-  const before = animate.snapshot();
-  animate.view.hits = [animate.shapes[0]];
-  send(animate.tools, 'down', 10, 10);
-  send(animate.tools, 'up', 10, 10);
-  assert.equal(animate.physics.starts.length, 0);
-  assert.deepEqual(animate.snapshot(), before);
+function animateEnvironment({ playhead = 0.5, turn = 0.3 } = {}) {
+  const physics = fakePhysics();
+  const env = environment({ physics });
+  const clip = addClip(env);
+  env.modes.openClip(clip);
+  env.modes.setPlayhead(playhead);
+  const ids = env.bodies.map((uid) => env.model.prop(uid, 'id'));
+  const original = physics.startPose.bind(physics);
+  physics.startPose = (json, options) => {
+    const session = original(json, options);
+    session.pose = () => {
+      const pose = new Map(options.start);
+      const child = pose.get(ids[1]);
+      pose.set(ids[1], { ...child, angle: child.angle + turn });
+      return pose;
+    };
+    return session;
+  };
+  env.view.hits = [env.shapes[1]];
+  return { ...env, clip, ids, before: env.snapshot() };
+}
+
+function angleKeys(env) {
+  return env.model.children(env.clip, 'tracks').map((track) => ({
+    target: env.model.prop(track, 'target'),
+    channel: env.model.prop(track, 'channel'),
+    keys: env.model.children(track, 'keys').map((key) => [env.model.prop(key, 't'), env.model.prop(key, 'v')]),
+  }));
+}
+
+test('Animate: the press starts from the FK pose at the playhead', () => {
+  const env = animateEnvironment();
+  env.history.execute({
+    label: 'seed',
+    run: (tx) => tx.add(env.clip, 'tracks', undefined, {
+      type: 'track',
+      props: { target: env.model.prop(env.joint, 'id'), channel: 'angle' },
+      children: { keys: [{ type: 'key', props: { t: 0, v: 0.4, interp: 'linear' } }] },
+    }),
+  });
+  send(env.tools, 'down', 260, 190);
+  assert.equal(env.physics.starts.length, 1);
+  const { start } = env.physics.starts[0].options;
+  assert.ok(start instanceof Map);
+  const restAngle = env.model.prop(env.bodies[1], 'angle');
+  assert.ok(Math.abs(start.get(env.ids[1]).angle - (restAngle + 0.4)) < 1e-9);
+  env.actions.run('escape');
+});
+
+test('Animate: release keys the changed joint angle at the snapped playhead as one undo step', () => {
+  const env = animateEnvironment({ playhead: 0.51, turn: 0.3 });
+  send(env.tools, 'down', 260, 190);
+  env.tools.tick(1 / 60);
+  send(env.tools, 'up', 260, 190);
+  const tracks = angleKeys(env);
+  assert.equal(tracks.length, 1);
+  assert.equal(tracks[0].target, env.model.prop(env.joint, 'id'));
+  assert.equal(tracks[0].channel, 'angle');
+  assert.equal(tracks[0].keys.length, 1);
+  const [t, v] = tracks[0].keys[0];
+  assert.ok(Math.abs(t - 0.5) < 1e-9, `t ${t}`);
+  assert.ok(Math.abs(v - 0.3) < 1e-9, `v ${v}`);
+  assert.equal(env.history.inGesture, false);
+  assert.equal(env.history.state.undoLabel, 'Pose');
+  assert.equal(env.view.poses.at(-1), null);
+  env.history.undo();
+  assert.equal(env.snapshot().json, env.before.json);
+  assert.notEqual(env.history.state.undoLabel, 'Pose');
+});
+
+test('Animate: changes under 0.1 degree and cancelled drags create no keys', () => {
+  const small = animateEnvironment({ turn: (0.05 * Math.PI) / 180 });
+  send(small.tools, 'down', 260, 190);
+  send(small.tools, 'up', 260, 190);
+  assert.deepEqual(small.snapshot(), small.before);
+
+  const cancelled = animateEnvironment({ turn: 0.5 });
+  send(cancelled.tools, 'down', 260, 190);
+  cancelled.actions.run('escape');
+  send(cancelled.tools, 'up', 260, 190);
+  assert.deepEqual(cancelled.snapshot(), cancelled.before);
+  assert.equal(cancelled.physics.sessions[0].destroyed, 1);
+});
+
+test('Edit: release discards the result and the press starts from the rest pose', () => {
+  const env = createEnvAndPress();
+  assert.equal(env.physics.starts[0].options.start, null);
+  send(env.tools, 'up', 260, 190);
+  assertUnchanged(env);
 });
 
 test('hover shows grab over a shape and the default cursor elsewhere', () => {
