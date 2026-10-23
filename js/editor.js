@@ -250,11 +250,15 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * `save` when `files` is given.
  * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null,
  *   confirm?: (request: ConfirmRequest) => Promise<boolean>, notify?: (notice: Notice) => Promise<void>,
- *   files?: FileService|null, editorVersion?: () => string, uiBusy?: () => boolean }} [options] Restored editor settings, defaults when
+ *   files?: FileService|null, editorVersion?: () => string, uiBusy?: () => boolean,
+ *   playback?: import('./tools/tool.js').PlaybackService, autokey?: () => boolean, status?: (text: string) => void }} [options]
+ *   Restored editor settings, defaults when
  *   omitted; physics service for the Pose tool, `null` when omitted; how actions ask before a destructive step,
  *   always confirming when omitted; how actions report to the user, ignoring notices when omitted; file picker and
  *   download, `null` when omitted (`load` and `save` are then not registered); getter of the running editor's
- *   version, `dev` when omitted; whether a UI menu or dialog is open, which disables `rename`, never when omitted.
+ *   version, `dev` when omitted; whether a UI menu or dialog is open, which disables `rename`, never when omitted;
+ *   Animate playback for the tools, never playing when omitted; whether autokey is on, on when omitted; status line
+ *   messages, ignored when omitted.
  * @returns {Readonly<Editor>} The editor.
  * @throws {TypeError} When `settings` is given and is not a `Settings` instance, `confirm` or `notify` is given
  *   and is not a function, `files` is neither `null` nor an object with `openText` and `saveText` functions, or
@@ -268,6 +272,9 @@ export function createEditor({
   files = null,
   editorVersion = () => DEV_VERSION,
   uiBusy = () => false,
+  playback = undefined,
+  autokey = () => true,
+  status = () => {},
 } = {}) {
   if (!(settings instanceof Settings)) throw new TypeError('settings must be a Settings instance');
   if (typeof confirm !== 'function') throw new TypeError('confirm must be a function');
@@ -283,7 +290,7 @@ export function createEditor({
   const modes = new Modes(model);
   const camera = new Camera();
   const tools = new ToolRegistry(
-    { model, history, selection, modes, settings, camera, physics, editorVersion },
+    { model, history, selection, modes, settings, camera, physics, editorVersion, playback, autokey, status },
     TOOLS.map((createTool) => createTool()),
   );
   const actions = new ActionRegistry();

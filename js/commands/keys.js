@@ -100,12 +100,14 @@ export function deleteKeys(keys, label = 'Delete keys') {
  * @param {number} time Time in seconds.
  * @param {number} angle Joint angle relative to rest, radians.
  * @param {string} [label] Undo step label.
+ * @param {{ snap?: boolean }} [options] `snap: false` keeps the time as given (only clamped), e.g. a simulation
+ *   step time; snapped by default.
  * @returns {import('./history.js').Command} The command.
  * @throws {Error} When `run` finds `clip` or `joint` of the wrong type; nothing is mutated then.
  * @throws {TypeError} When `run` finds `time` or `angle` not finite; nothing is mutated then.
  */
-export function setJointAngleKey(clip, joint, time, angle, label = 'Key joint angle') {
-  return angleKeyCommand(clip, joint, 'joint', 'angle', time, angle, label);
+export function setJointAngleKey(clip, joint, time, angle, label = 'Key joint angle', { snap = true } = {}) {
+  return angleKeyCommand(clip, joint, 'joint', 'angle', time, angle, label, snap);
 }
 
 /**
@@ -115,15 +117,20 @@ export function setJointAngleKey(clip, joint, time, angle, label = 'Key joint an
  * @param {number} time Time in seconds.
  * @param {number} angle Root `bodyAngle`, radians relative to the rest orientation.
  * @param {string} [label] Undo step label.
+ * @param {{ snap?: boolean }} [options] As in `setJointAngleKey`.
  * @returns {import('./history.js').Command} The command.
  * @throws {Error} When `run` finds `clip` of the wrong type; nothing is mutated then.
  * @throws {TypeError} When `run` finds `time` or `angle` not finite; nothing is mutated then.
  */
-export function setRootBodyAngleKey(clip, time, angle, label = 'Key body angle') {
-  return angleKeyCommand(clip, ROOT_UID, 'root', 'bodyAngle', time, angle, label);
+export function setRootBodyAngleKey(clip, time, angle, label = 'Key body angle', { snap = true } = {}) {
+  return angleKeyCommand(clip, ROOT_UID, 'root', 'bodyAngle', time, angle, label, snap);
 }
 
-function angleKeyCommand(clip, node, type, channel, time, angle, label) {
+function clampTime(time, length) {
+  return Math.min(Math.max(time, 0), Number.isFinite(length) && length > 0 ? length : 0) + 0;
+}
+
+function angleKeyCommand(clip, node, type, channel, time, angle, label, snap) {
   return Object.freeze({
     label,
     run(tx) {
@@ -131,7 +138,8 @@ function angleKeyCommand(clip, node, type, channel, time, angle, label) {
       requireType(model, clip, 'clip');
       requireType(model, node, type);
       if (!Number.isFinite(time) || !Number.isFinite(angle)) throw new TypeError('Key time and angle must be finite numbers');
-      const t = snapTime(time, model.prop(clip, 'length'));
+      const length = model.prop(clip, 'length');
+      const t = snap ? snapTime(time, length) : clampTime(time, length);
       const target = model.prop(node, 'id');
       const v = angle + 0;
       const track = model

@@ -35,7 +35,13 @@ function allFinite(...values) {
   return values.every(Number.isFinite);
 }
 
-function shapeOutline(shape) {
+/**
+ * Outline of a shape in its body's frame, meters: a circle, or the points of a box or polygon.
+ * @param {object} shape The shape's `shape` prop.
+ * @returns {{ circle: { x: number, y: number, radius: number } }|{ points: Array<{ x: number, y: number }> }|null}
+ *   `null` when its geometry is not valid.
+ */
+export function shapeOutline(shape) {
   switch (shape?.type) {
     case 'circle': {
       const center = vec(shape.center);

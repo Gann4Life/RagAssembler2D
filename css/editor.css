@@ -1076,6 +1076,45 @@ body.dock-resizing-column * {
   line-height: 16px;
 }
 
+.timeline-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  pointer-events: none;
+}
+
+.timeline-progress-current,
+.timeline-progress-previous {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.timeline-progress-current {
+  left: 0;
+  background: #5b9cf5;
+}
+
+.timeline-progress-previous {
+  background: repeating-linear-gradient(135deg, #5b9cf5 0 2px, transparent 2px 4px);
+}
+
+.timeline-cycle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.timeline-cycle[hidden] {
+  display: none;
+}
+
+.timeline-button[aria-disabled="true"] {
+  opacity: 0.5;
+}
+
 .timeline-playhead {
   position: absolute;
   top: 0;

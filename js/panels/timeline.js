@@ -69,7 +69,15 @@ export function createTimeline(element_, editor, player) {
   const loopInput = element(doc, 'input', 'timeline-loop');
   loopInput.type = 'checkbox';
   loopLabel.append(loopInput, ' loop');
-  header.append(select, playButton, newButton, deleteButton, lengthLabel, loopLabel);
+  const cycleGroup = element(doc, 'span', 'timeline-cycle');
+  cycleGroup.setAttribute('role', 'group');
+  const cyclePrev = button(doc, '‹');
+  cyclePrev.setAttribute('aria-label', 'Previous cycle');
+  const cycleLabel = element(doc, 'span', 'timeline-cycle-label');
+  const cycleNext = button(doc, '›');
+  cycleNext.setAttribute('aria-label', 'Next cycle');
+  cycleGroup.append(cyclePrev, cycleLabel, cycleNext);
+  header.append(playButton, select, newButton, deleteButton, lengthLabel, loopLabel, cycleGroup);
 
   const body = element(doc, 'div', 'timeline-body');
   const labels = element(doc, 'div', 'timeline-labels');
@@ -81,7 +89,12 @@ export function createTimeline(element_, editor, player) {
   ruler.setAttribute('aria-valuemin', '0');
   const ticks = element(doc, 'div', 'timeline-ticks');
   const playhead = element(doc, 'div', 'timeline-playhead');
-  ruler.append(ticks, playhead);
+  const progress = element(doc, 'div', 'timeline-progress');
+  progress.setAttribute('aria-hidden', 'true');
+  const progressCurrent = element(doc, 'div', 'timeline-progress-current');
+  const progressPrevious = element(doc, 'div', 'timeline-progress-previous');
+  progress.append(progressCurrent, progressPrevious);
+  ruler.append(ticks, progress, playhead);
   const lanes = element(doc, 'div', 'timeline-lanes');
   main.append(ruler, lanes);
   body.append(labels, main);
@@ -95,7 +108,8 @@ export function createTimeline(element_, editor, player) {
 
   const canOpen = () => modes.can('clip.open') && !history.inGesture;
   const canEditClip = () => modes.clip !== null && modes.can('edit.animation') && !history.inGesture;
-  const canScrub = () => player.simulating || (modes.clip !== null && modes.can('timeline.scrub'));
+  const canScrub = () => modes.mode === 'animate' && modes.clip !== null;
+  const showsCycle = () => modes.mode === 'animate' && modes.clip !== null && model.prop(modes.clip, 'loop') === true;
 
   function clipLength() {
     return modes.clip === null ? 0 : model.prop(modes.clip, 'length');
@@ -134,6 +148,46 @@ export function createTimeline(element_, editor, player) {
     ruler.setAttribute('aria-valuenow', String(modes.playhead));
     ruler.setAttribute('aria-valuetext', `${formatSeconds(modes.playhead)} s`);
     ruler.setAttribute('aria-disabled', String(!canScrub()));
+    if (canScrub()) ruler.removeAttribute('title');
+    else ruler.title = 'Scrub: only in Animate mode';
+    renderProgress();
+  }
+
+  function renderProgress() {
+    const state = player.progress();
+    const length = clipLength();
+    progress.hidden = state === null || !(length > 0);
+    if (progress.hidden) {
+      ruler.removeAttribute('aria-description');
+      return;
+    }
+    const current = state.current ?? 0;
+    const previous = Math.max(state.previous ?? 0, current);
+    progressCurrent.style.width = `${fractionOfTime(current, length) * 100}%`;
+    progressPrevious.style.left = `${fractionOfTime(current, length) * 100}%`;
+    progressPrevious.style.width = `${(fractionOfTime(previous, length) - fractionOfTime(current, length)) * 100}%`;
+    if (state.pending) {
+      const where = state.loop ? `cycle ${state.cycle}, ${formatSeconds(current)} s` : `${formatSeconds(current)} s`;
+      ruler.setAttribute('aria-description', `simulated to ${where}`);
+    } else {
+      ruler.removeAttribute('aria-description');
+    }
+  }
+
+  function setReason(node, reason) {
+    node.setAttribute('aria-disabled', String(reason !== null));
+    if (reason === null) node.removeAttribute('title');
+    else node.title = `${node.getAttribute('aria-label')}: ${reason}`;
+  }
+
+  function renderCycle() {
+    cycleGroup.hidden = !showsCycle();
+    const cycle = player.cycle;
+    const limit = player.cycleLimit;
+    cycleLabel.textContent = `cycle ${cycle}`;
+    cycleGroup.setAttribute('aria-label', `Cycle ${cycle} of ${limit}`);
+    setReason(cyclePrev, cycle <= 1 ? 'first cycle' : null);
+    setReason(cycleNext, cycle >= limit ? 'cycle limit reached' : null);
   }
 
   function renderControls() {
@@ -141,6 +195,7 @@ export function createTimeline(element_, editor, player) {
     playButton.textContent = player.playing ? 'Pause' : 'Play';
     playButton.setAttribute('aria-label', playButton.textContent);
     playButton.setAttribute('aria-disabled', String(!player.canPlay()));
+    renderCycle();
     select.disabled = !canOpen();
     for (const [node, enabled] of [[newButton, canOpen()], [deleteButton, canOpen() && open]]) {
       node.setAttribute('aria-disabled', String(!enabled));
@@ -343,6 +398,13 @@ export function createTimeline(element_, editor, player) {
     }
   };
 
+  const stepCycle = (delta) => {
+    const node = delta < 0 ? cyclePrev : cycleNext;
+    if (node.getAttribute('aria-disabled') === 'true') return;
+    player.setCycle(player.cycle + delta);
+  };
+  cyclePrev.addEventListener('click', () => stepCycle(-1));
+  cycleNext.addEventListener('click', () => stepCycle(1));
   select.addEventListener('change', onSelect);
   playButton.addEventListener('click', togglePlay);
   newButton.addEventListener('click', addClip);
@@ -369,6 +431,8 @@ export function createTimeline(element_, editor, player) {
     modes.on('mode', render),
     modes.on('playhead', renderPlayhead),
     player.on('playing', renderControls),
+    player.on('cycle', renderCycle),
+    player.on('progress', renderProgress),
     history.on('history', renderControls),
   ];
   render();

@@ -58,8 +58,32 @@ function addClip(editor) {
   });
 }
 
-function environment({ physics = fakePhysics(), withPhysics = true } = {}) {
-  const editor = createEditor(withPhysics ? { physics } : {});
+function fakePlayback() {
+  const playback = {
+    playing: false,
+    pauses: 0,
+    holds: [],
+    onPause: () => {},
+    pause() {
+      playback.pauses++;
+      playback.playing = false;
+      playback.onPause();
+    },
+    hold(pose) {
+      playback.holds.push(pose);
+    },
+  };
+  return playback;
+}
+
+function environment({ physics = fakePhysics(), withPhysics = true, playback = fakePlayback(), autokey = true } = {}) {
+  const statuses = [];
+  const editor = createEditor({
+    ...(withPhysics ? { physics } : {}),
+    playback,
+    autokey: () => autokey,
+    status: (text) => statuses.push(text),
+  });
   const { model, history, camera, tools, selection } = editor;
   camera.setSize(400, 400);
   camera.zoomAt({ x: 200, y: 200 }, 100 / camera.scale);
@@ -70,7 +94,7 @@ function environment({ physics = fakePhysics(), withPhysics = true } = {}) {
   const bodies = shapes.map((uid) => model.get(uid).parent);
   const joint = history.execute(createJoint({ bodyA: bodies[0], bodyB: bodies[1], anchor: { x: 0.5, y: 0 } }));
   selection.set([bodies[1]]);
-  const view = { hits: [], cursor: [], poses: [], invalidations: 0 };
+  const view = { hits: [], cursor: [], poses: [], invalidations: 0, displayed: null };
   tools.bindView({
     hitTest: () => view.hits,
     boxTest: () => [],
@@ -79,6 +103,7 @@ function environment({ physics = fakePhysics(), withPhysics = true } = {}) {
       view.invalidations++;
     },
     setPose: (pose) => view.poses.push(pose),
+    displayedPose: () => view.displayed,
   });
   assert.equal(tools.activate('pose'), true);
   const snapshot = () => ({
@@ -86,7 +111,8 @@ function environment({ physics = fakePhysics(), withPhysics = true } = {}) {
     selection: [...selection.objects],
     history: JSON.stringify(history.state),
   });
-  return { ...editor, physics, view, shapes, bodies, joint, snapshot, before: snapshot() };
+  const poseStatuses = () => statuses.filter((text) => text.startsWith('Pose:'));
+  return { ...editor, physics, playback, statuses: { all: statuses, get pose() { return poseStatuses(); } }, view, shapes, bodies, joint, snapshot, before: snapshot() };
 }
 
 function send(tools, type, x, y, extra = {}) {
@@ -175,9 +201,9 @@ test('presses that start nothing: empty space, a joint, the root, a right press,
   assert.deepEqual(noPhysics.view.poses, []);
 });
 
-function animateEnvironment({ playhead = 0.5, turn = 0.3 } = {}) {
+function animateEnvironment({ playhead = 0.5, turn = 0.3, playback, autokey = true } = {}) {
   const physics = fakePhysics();
-  const env = environment({ physics });
+  const env = environment({ physics, playback, autokey });
   const clip = addClip(env);
   env.modes.openClip(clip);
   env.modes.setPlayhead(playhead);
@@ -205,7 +231,26 @@ function angleKeys(env) {
   }));
 }
 
-test('Animate: the press starts from the FK pose at the playhead', () => {
+function drag(env) {
+  send(env.tools, 'down', 260, 190);
+  send(env.tools, 'move', 270, 190);
+  env.tools.tick(1 / 60);
+  send(env.tools, 'up', 270, 190);
+}
+
+test('Animate: the press starts from exactly the displayed bodies', () => {
+  const env = animateEnvironment();
+  env.view.displayed = new Map(env.bodies.map((uid, index) => [uid, { x: index, y: 0.25, angle: 0.7 + index }]));
+  send(env.tools, 'down', 260, 190);
+  const { start, holdRoot } = env.physics.starts[0].options;
+  assert.deepEqual(start, new Map(env.ids.map((id, index) => [id, { x: index, y: 0.25, angle: 0.7 + index }])));
+  assert.equal(holdRoot, true);
+  env.actions.run('escape');
+  assert.equal(env.view.poses.at(-1), null);
+  assert.deepEqual(env.playback.holds, []);
+});
+
+test('Animate: without a displayed pose the press starts from the FK pose at the playhead', () => {
   const env = animateEnvironment();
   env.history.execute({
     label: 'seed',
@@ -224,31 +269,84 @@ test('Animate: the press starts from the FK pose at the playhead', () => {
   env.actions.run('escape');
 });
 
-test('Animate: release keys the changed joint angle at the snapped playhead as one undo step', () => {
+test('Animate: a drag release keys the changed joint angle at the playhead, unsnapped, as one undo step', () => {
   const env = animateEnvironment({ playhead: 0.51, turn: 0.3 });
-  send(env.tools, 'down', 260, 190);
-  env.tools.tick(1 / 60);
-  send(env.tools, 'up', 260, 190);
+  drag(env);
   const tracks = angleKeys(env);
   assert.equal(tracks.length, 1);
   assert.equal(tracks[0].target, env.model.prop(env.joint, 'id'));
   assert.equal(tracks[0].channel, 'angle');
   assert.equal(tracks[0].keys.length, 1);
   const [t, v] = tracks[0].keys[0];
-  assert.ok(Math.abs(t - 0.5) < 1e-9, `t ${t}`);
+  assert.ok(Math.abs(t - 0.51) < 1e-9, `t ${t}`);
   assert.ok(Math.abs(v - 0.3) < 1e-9, `v ${v}`);
   assert.equal(env.history.inGesture, false);
   assert.equal(env.history.state.undoLabel, 'Pose');
   assert.equal(env.view.poses.at(-1), null);
+  assert.equal(env.playback.holds.length, 1);
+  assert.ok(Math.abs(env.playback.holds[0].get(env.bodies[1]).angle - 0.3) < 1e-9);
   env.history.undo();
   assert.equal(env.snapshot().json, env.before.json);
   assert.notEqual(env.history.state.undoLabel, 'Pose');
 });
 
+test('Animate: keys compare the measured angles with the evaluated values, not with the start', () => {
+  const env = animateEnvironment({ turn: 0 });
+  const fk = new Map(env.bodies.map((uid) => [uid, { x: env.model.prop(uid, 'position')[0], y: 0, angle: 0 }]));
+  fk.set(env.bodies[1], { ...fk.get(env.bodies[1]), angle: 0.2 });
+  env.view.displayed = fk;
+  drag(env);
+  const tracks = angleKeys(env);
+  assert.equal(tracks.length, 1);
+  assert.ok(Math.abs(tracks[0].keys[0][1] - 0.2) < 1e-9);
+});
+
+test('Animate: a click writes nothing but still holds the released bodies', () => {
+  const env = animateEnvironment({ turn: 0.5 });
+  send(env.tools, 'down', 260, 190);
+  send(env.tools, 'move', 262, 191);
+  send(env.tools, 'up', 262, 191);
+  assert.deepEqual(env.snapshot(), env.before);
+  assert.equal(env.playback.holds.length, 1);
+  assert.deepEqual(env.statuses.pose, []);
+});
+
+test('Animate: with autokey off a drag writes no keys and the status line says so', () => {
+  const env = animateEnvironment({ turn: 0.5, autokey: false });
+  drag(env);
+  assert.deepEqual(env.snapshot(), env.before);
+  assert.deepEqual(env.statuses.pose, ['Pose: autokey is off, no keys written']);
+  assert.equal(env.playback.holds.length, 1);
+  const quiet = animateEnvironment({ turn: 0, autokey: false });
+  drag(quiet);
+  assert.deepEqual(quiet.statuses.pose, []);
+});
+
+test('Animate: a press while playing pauses at the displayed step and grabs in the same press', () => {
+  const playback = fakePlayback();
+  const env = animateEnvironment({ playback, playhead: 0.4, turn: 0.3 });
+  const displayed = new Map(env.bodies.map((uid) => [uid, { x: 0, y: 0, angle: 0 }]));
+  env.view.displayed = displayed;
+  playback.playing = true;
+  playback.onPause = () => env.modes.setPlayhead(0.45);
+  env.view.hits = [];
+  send(env.tools, 'down', 10, 10);
+  send(env.tools, 'up', 10, 10);
+  assert.equal(playback.pauses, 0);
+  env.view.hits = [env.shapes[1]];
+  send(env.tools, 'down', 260, 190);
+  assert.equal(playback.pauses, 1);
+  assert.equal(env.physics.starts.length, 1);
+  assert.equal(env.physics.starts[0].options.start.size, 2);
+  send(env.tools, 'move', 280, 190);
+  send(env.tools, 'up', 280, 190);
+  const [t] = angleKeys(env)[0].keys[0];
+  assert.ok(Math.abs(t - 0.45) < 1e-9, `t ${t}`);
+});
+
 test('Animate: changes under 0.1 degree and cancelled drags create no keys', () => {
   const small = animateEnvironment({ turn: (0.05 * Math.PI) / 180 });
-  send(small.tools, 'down', 260, 190);
-  send(small.tools, 'up', 260, 190);
+  drag(small);
   assert.deepEqual(small.snapshot(), small.before);
 
   const cancelled = animateEnvironment({ turn: 0.5 });
@@ -397,9 +495,8 @@ test('Animate: the session holds rootBody and release keys the root bodyAngle wi
     };
     return session;
   };
-  send(env.tools, 'down', 260, 190);
+  drag(env);
   assert.equal(env.physics.starts[0].options.holdRoot, true);
-  send(env.tools, 'up', 260, 190);
   const root = angleKeys(env).find((track) => track.channel === 'bodyAngle');
   assert.equal(root.target, 'root');
   assert.equal(root.keys.length, 1);

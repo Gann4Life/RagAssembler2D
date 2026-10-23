@@ -21,7 +21,12 @@ const ESCAPE_KEYS = new Set(['Escape', 'Esc']);
  * @property {import('../viewport/camera.js').Camera} camera Viewport camera.
  * @property {import('./tool.js').PhysicsService|null} [physics] Physics service; `null` when omitted.
  * @property {() => string} [editorVersion] Version of the running editor; dev when omitted.
+ * @property {import('./tool.js').PlaybackService} [playback] Animate playback; never playing when omitted.
+ * @property {() => boolean} [autokey] Whether autokey is on; on when omitted.
+ * @property {(text: string) => void} [status] Shows a status line message; ignored when omitted.
  */
+
+const IDLE_PLAYBACK = Object.freeze({ playing: false, pause() {}, hold() {} });
 
 /**
  * Viewport tool registry: activation under the mode policy, pointer and key routing, one history gesture
@@ -280,8 +285,12 @@ export class ToolRegistry {
       },
       invalidateOverlay: () => this.#invalidate(),
       setPose: (pose) => this.#view?.setPose?.(pose ?? null),
+      displayedPose: () => this.#view?.displayedPose?.() ?? null,
       physics: this.#core.physics ?? null,
       editorVersion: this.#core.editorVersion ?? (() => DEV_VERSION),
+      playback: this.#core.playback ?? IDLE_PLAYBACK,
+      autokey: this.#core.autokey ?? (() => true),
+      status: this.#core.status ?? (() => {}),
     });
   }
 

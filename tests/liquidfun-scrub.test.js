@@ -2,11 +2,9 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { RagImporter } from '../lib/ragimporter.js';
-import { createEditor } from '../js/editor.js';
-import { ROOT_UID } from '../js/model/model.js';
-import { loadJson } from '../js/model/io.js';
 import { createSimulateSession } from '../js/physics/simulate-session.js';
-import { SIMULATE_STEP, TimelinePlayer } from '../js/timeline-player.js';
+import { ClipSimulation } from '../js/physics/clip-simulation.js';
+import { SIMULATE_STEP } from '../js/timeline-player.js';
 import { ragFile } from './helpers/rag-file.js';
 
 const require = createRequire(import.meta.url);
@@ -36,8 +34,8 @@ class Container {
 
 after(() => RagImporter.configure({ Box2D: null, PIXI: null }));
 
-function continuousPoses(json, clip, stepCounts) {
-  const session = createSimulateSession(Box2D, json, { clip });
+function continuousPoses(json, options, stepCounts) {
+  const session = createSimulateSession(Box2D, json, options);
   const poses = new Map();
   try {
     let steps = 0;
@@ -51,51 +49,39 @@ function continuousPoses(json, clip, stepCounts) {
   return poses;
 }
 
-function scrubbedPose(player, frames, t) {
-  let pose = null;
-  const off = player.on('pose', (value) => {
-    pose = value;
-  });
-  try {
-    player.scrub(t);
-    while (frames.length > 0) frames.shift()();
-  } finally {
-    off();
-  }
-  return pose;
+function settled(json, loop) {
+  const frames = [];
+  const clock = { request: (callback) => frames.push(callback), cancel: () => {}, now: () => 0 };
+  const sim = new ClipSimulation((document, options) => createSimulateSession(Box2D, document, options), clock);
+  sim.open({ json, clip: 'walk', length: 2, speed: 1, loop });
+  for (let i = 0; i < 100 && frames.length > 0; i++) frames.shift()();
+  return sim;
 }
 
-test('scrubbing back re-simulates to the exact pose continuous stepping reaches', () => {
+test('the clip simulation stores exactly the poses continuous stepping reaches, read back in any order', () => {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const json = ragFile();
-  const editor = createEditor();
-  assert.equal(loadJson(editor.model, JSON.stringify(json)).ok, true);
-  const clip = editor.model.children(ROOT_UID, 'clips').find((uid) => editor.model.prop(uid, 'key') === 'walk');
-  editor.modes.openClip(clip);
-  const frames = [];
-  const clock = {
-    request: (callback) => frames.push(callback),
-    cancel: () => {
-      frames.length = 0;
-    },
-  };
-  const player = new TimelinePlayer(editor.model, editor.modes, clock, (document, options) =>
-    createSimulateSession(Box2D, document, options),
-  );
-  const length = editor.model.prop(clip, 'length');
-  const late = Math.round(length / SIMULATE_STEP);
-  const early = Math.round(late / 3);
-  const expected = continuousPoses(json, 'walk', [early, late]);
-  assert.notDeepEqual(expected.get(early), expected.get(late));
+  json.clips[0].loop = false;
+  const sim = settled(json, false);
+  const expected = continuousPoses(json, { clip: 'walk', pose: null }, [40, 120]);
+  assert.deepEqual(sim.pose(1, 2).pose, expected.get(120));
+  assert.deepEqual(sim.pose(1, 40 * SIMULATE_STEP).pose, expected.get(40));
+  assert.deepEqual(sim.pose(1, 2).pose, expected.get(120));
+  sim.close();
+});
 
-  const forward = scrubbedPose(player, frames, late * SIMULATE_STEP);
-  const back = scrubbedPose(player, frames, early * SIMULATE_STEP);
-  editor.modes.openClip(null);
-
-  for (const [steps, pose] of [[late, forward], [early, back]]) {
-    assert.ok(pose instanceof Map, `no pose at step ${steps}`);
-    for (const [id, transform] of expected.get(steps)) {
-      assert.deepEqual(pose.get(editor.model.uidOf(id)), transform, `${id} at step ${steps}`);
-    }
-  }
+test('a looping clip runs continuously from its pose at 0: cycle 2 starts where cycle 1 ended, not at the spawn', () => {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const json = ragFile();
+  json.clips[0].tracks[0].keys = [{ t: 0, v: 0.15, interp: 'linear' }];
+  const sim = settled(json, true);
+  const expected = continuousPoses(json, { clip: 'walk', pose: 'walk' }, [0, 120, 180]);
+  assert.deepEqual(sim.pose(1, 0).pose, expected.get(0));
+  assert.deepEqual(sim.pose(2, 0).pose, expected.get(120));
+  assert.deepEqual(sim.pose(1, 2).pose, sim.pose(2, 0).pose);
+  assert.deepEqual(sim.pose(2, 1).pose, expected.get(180));
+  assert.notDeepEqual(sim.pose(2, 0).pose, sim.pose(1, 0).pose);
+  const ghost = continuousPoses(json, { clip: 'walk', pose: null }, [60]);
+  assert.deepEqual(sim.ghostPose(1).pose, ghost.get(60));
+  sim.close();
 });

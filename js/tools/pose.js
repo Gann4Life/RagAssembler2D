@@ -1,15 +1,16 @@
-import { jointAngleForBody } from '../../lib/evaluate.js';
+import { jointAngleForBody, resolveChannels } from '../../lib/evaluate.js';
 import { setJointAngleKey, setRootBodyAngleKey } from '../commands/keys.js';
 import { animatePose } from '../model/animate-preview.js';
 import { toJson } from '../model/io.js';
 import { ROOT_UID } from '../model/model.js';
 import { jointTree } from '../model/queries.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../viewport/style.js';
-import { defineTool } from './tool.js';
+import { DRAG_THRESHOLD, defineTool } from './tool.js';
 
 const PRIMARY = 0;
 const PREVIEW_VERSION = 'preview';
 const KEY_THRESHOLD = (0.1 * Math.PI) / 180;
+const AUTOKEY_OFF = 'Pose: autokey is off, no keys written';
 
 function rootTransform(json) {
   const position = Array.isArray(json.ragdoll?.position) ? json.ragdoll.position : [0, 0];
@@ -20,39 +21,45 @@ function byId(model, pose) {
   return new Map([...pose].map(([uid, transform]) => [model.prop(uid, 'id'), transform]));
 }
 
-function changedRootAngle(model, from, to) {
-  const id = model.prop(ROOT_UID, 'rootBody');
-  const uid = typeof id === 'string' ? model.uidOf(id) : null;
-  if (uid === null || uid === undefined || !from.has(uid) || !to.has(uid)) return null;
-  const angle = to.get(uid).angle - model.prop(uid, 'angle');
-  const turned = to.get(uid).angle - from.get(uid).angle;
-  return Number.isFinite(angle) && Math.abs(turned) > KEY_THRESHOLD ? angle : null;
+function evaluated(model, def, clip, time) {
+  const clipDef = def.clips[model.children(ROOT_UID, 'clips').indexOf(clip)];
+  return resolveChannels(def, clipDef ? [{ clip: clipDef, time }] : []);
 }
 
-function changedJointAngles(model, from, to) {
-  const def = toJson(model, PREVIEW_VERSION);
-  const fromIds = byId(model, from);
-  const toIds = byId(model, to);
-  const changes = [];
+function rootKey(model, resolved, result) {
+  const id = model.prop(ROOT_UID, 'rootBody');
+  const uid = typeof id === 'string' ? model.uidOf(id) : null;
+  if (uid === null || uid === undefined || !result.has(uid)) return null;
+  const angle = result.get(uid).angle - model.prop(uid, 'angle');
+  const base = Number.isFinite(resolved.root.bodyAngle) ? resolved.root.bodyAngle : 0;
+  return Number.isFinite(angle) && Math.abs(angle - base) > KEY_THRESHOLD ? angle : null;
+}
+
+function jointKeys(model, def, resolved, result) {
+  const resultIds = byId(model, result);
+  const keys = [];
   for (const [body, joint] of jointTree(model).parent) {
-    if (!from.has(body) || !to.has(body)) continue;
+    if (!result.has(body)) continue;
     const jointId = model.prop(joint, 'id');
-    const base = jointAngleForBody(def, jointId, from.get(body).angle, fromIds);
-    const angle = jointAngleForBody(def, jointId, to.get(body).angle, toIds);
-    if (base === null || angle === null || !Number.isFinite(angle)) continue;
-    if (Math.abs(angle - base) > KEY_THRESHOLD) changes.push([joint, angle]);
+    const angle = jointAngleForBody(def, jointId, result.get(body).angle, resultIds);
+    if (angle === null || !Number.isFinite(angle)) continue;
+    const base = resolved.joints.get(jointId)?.angle ?? 0;
+    if (Math.abs(angle - (Number.isFinite(base) ? base : 0)) > KEY_THRESHOLD) keys.push([joint, angle]);
   }
-  return changes;
+  return keys;
 }
 
 /**
  * Builds the Pose tool: a left press on a shape starts a physics test through `ctx.physics`, pulling the shape's
  * body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`. In Edit mode the
- * result is discarded on release. In Animate mode the test starts from the FK pose at the playhead with `rootBody`
- * held to what FK can show, and on release every joint whose angle changed by more than 0.1° gets an `angle` key at
- * the playhead, and the root `bodyAngle` too when `rootBody` turned by more than 0.1°, in the press's undo step.
- * Cancel always discards. A press the physics service refuses shows `not-allowed` until the release. Never changes
- * the selection.
+ * test starts from the rest pose and the result is discarded on release. In Animate mode it starts from exactly the
+ * displayed bodies (`ctx.displayedPose`, the FK pose when nothing is shown) with `rootBody` held; a press while
+ * playing pauses first (`ctx.playback.pause`, the playhead at the displayed step) and grabs in the same press. On a
+ * release after a drag, with autokey on, every joint whose measured angle differs from its evaluated `angle` at the
+ * playhead by more than 0.1° gets a key there, and the root `bodyAngle` likewise, in the press's undo step; with
+ * autokey off nothing is written and the status line says so. A click writes nothing. Every Animate release hands the
+ * released bodies to `ctx.playback.hold`. Cancel always discards. A press the physics service refuses shows
+ * `not-allowed` until the release. Never changes the selection.
  * @returns {Readonly<import('./tool.js').Tool>} The tool.
  */
 export function poseTool() {
@@ -87,7 +94,7 @@ export function poseTool() {
     const mapped = new Map();
     for (const [id, transform] of pose) {
       const uid = ctx.model.uidOf(id);
-      if (uid !== null) mapped.set(uid, transform);
+      if (uid !== null && uid !== undefined) mapped.set(uid, transform);
     }
     return mapped;
   }
@@ -110,16 +117,37 @@ export function poseTool() {
     return true;
   }
 
-  function keyResult() {
+  function release() {
     if (session === null || animate === null) return;
-    const { clip, time, from } = animate;
+    const { clip, time, dragged } = animate;
     if (ctx.model.get(clip)?.type !== 'clip') return;
     const result = uidPose(session.pose());
-    for (const [joint, angle] of changedJointAngles(ctx.model, from, result)) {
-      ctx.history.execute(setJointAngleKey(clip, joint, time, angle, 'Pose'));
+    if (dragged) {
+      const def = toJson(ctx.model, PREVIEW_VERSION);
+      const resolved = evaluated(ctx.model, def, clip, time);
+      const joints = jointKeys(ctx.model, def, resolved, result);
+      const bodyAngle = rootKey(ctx.model, resolved, result);
+      const keying = joints.length > 0 || bodyAngle !== null;
+      if (keying && !ctx.autokey()) {
+        ctx.status(AUTOKEY_OFF);
+      } else if (keying) {
+        for (const [joint, angle] of joints) {
+          ctx.history.execute(setJointAngleKey(clip, joint, time, angle, 'Pose', { snap: false }));
+        }
+        if (bodyAngle !== null) ctx.history.execute(setRootBodyAngleKey(clip, time, bodyAngle, 'Pose', { snap: false }));
+      }
     }
-    const bodyAngle = changedRootAngle(ctx.model, from, result);
-    if (bodyAngle !== null) ctx.history.execute(setRootBodyAngleKey(clip, time, bodyAngle, 'Pose'));
+    ctx.playback.hold(result);
+  }
+
+  function startPose(json, body, e, keying) {
+    session = ctx.physics.startPose(json, {
+      root: rootTransform(json),
+      bodyId: body.props.id,
+      point: { x: e.world.x, y: e.world.y },
+      start: keying === null ? null : byId(ctx.model, keying.from),
+      holdRoot: keying !== null,
+    });
   }
 
   return defineTool({
@@ -140,19 +168,16 @@ export function poseTool() {
       const shape = shapeAt(e.screen);
       if (shape === null) return;
       const body = ctx.model.get(ctx.model.get(shape).parent);
-      const keying = ctx.modes.can('edit.rest')
-        ? null
-        : { clip: ctx.modes.clip, time: ctx.modes.playhead, from: null };
+      let keying = null;
       try {
-        if (keying !== null) keying.from = animatePose(ctx.model, keying.clip, keying.time);
-        const json = toJson(ctx.model, ctx.editorVersion());
-        session = ctx.physics.startPose(json, {
-          root: rootTransform(json),
-          bodyId: body.props.id,
-          point: { x: e.world.x, y: e.world.y },
-          start: keying === null ? null : byId(ctx.model, keying.from),
-          holdRoot: keying !== null,
-        });
+        if (!ctx.modes.can('edit.rest')) {
+          const clip = ctx.modes.clip;
+          const displayed = ctx.displayedPose();
+          if (ctx.playback.playing) ctx.playback.pause();
+          const time = ctx.modes.playhead;
+          keying = { clip, time, from: displayed ?? animatePose(ctx.model, clip, time), screen: e.screen, dragged: false };
+        }
+        startPose(toJson(ctx.model, ctx.editorVersion()), body, e, keying);
       } catch {
         session = null;
         refused = true;
@@ -167,6 +192,9 @@ export function poseTool() {
     },
     pointerMove(e) {
       if (session !== null) {
+        if (animate !== null && !animate.dragged) {
+          animate.dragged = Math.hypot(e.screen.x - animate.screen.x, e.screen.y - animate.screen.y) >= DRAG_THRESHOLD;
+        }
         session.drag({ x: e.world.x, y: e.world.y });
         ctx.invalidateOverlay();
         return;
@@ -177,7 +205,7 @@ export function poseTool() {
     pointerUp(e) {
       if (e.button !== PRIMARY) return;
       try {
-        keyResult();
+        release();
       } finally {
         end();
       }

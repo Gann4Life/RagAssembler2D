@@ -1,4 +1,5 @@
 import { framingBounds } from './viewport/bounds.js';
+import { createGhosts } from './viewport/ghosts.js';
 import { createGizmos } from './viewport/gizmos.js';
 import { createGrid } from './viewport/grid.js';
 import { boxTest, hitTest } from './viewport/hit.js';
@@ -18,6 +19,8 @@ import { COLORS, LABEL_SIZE } from './viewport/style.js';
  *   `null` or when they have nothing to frame.
  * @property {(pose: import('./viewport/bounds.js').Pose|null) => void} setBasePose Sets the pose shown when no tool sets one,
  *   e.g. the FK pose in Animate mode; `null` is the rest pose.
+ * @property {(ghosts: ReadonlyArray<{ side: 'ahead'|'behind', pose: import('./viewport/bounds.js').Pose }>) => void} setGhosts
+ *   Replaces the ghosts drawn between the grid and the scene.
  * @property {() => void} destroy Stops resizing and input, unbinds the tools, and destroys the application and its
  *   canvas.
  */
@@ -79,6 +82,7 @@ export async function createViewport(
   camera.setSize(hostWidth(host), hostHeight(host));
 
   const grid = createGrid(PIXI, { camera, settings });
+  const ghosts = createGhosts(PIXI, { model, camera });
   const scene = createScene(PIXI, { model, camera, settings });
   const gizmos = createGizmos(PIXI, { model, camera, selection, modes, settings, scene });
   const toolOverlay = new PIXI.Container();
@@ -96,9 +100,10 @@ export async function createViewport(
   readoutText.label = 'readout';
   readoutText.visible = false;
   toolOverlay.addChild(toolGraphics, readoutText);
-  app.stage.addChild(grid.view, scene.view, gizmos.view, toolOverlay);
+  app.stage.addChild(grid.view, ghosts.view, scene.view, gizmos.view, toolOverlay);
 
   let basePose = null;
+  let toolPose = null;
   const showPose = (pose) => {
     scene.setPose(pose);
     gizmos.invalidate();
@@ -155,7 +160,11 @@ export async function createViewport(
     boxTest: (box) => boxTest(model, box, { pose: scene.pose() }),
     setCursor: (css) => host.style.setProperty(TOOL_CURSOR_PROPERTY, css),
     invalidateOverlay,
-    setPose: (pose) => showPose(pose ?? basePose),
+    setPose: (pose) => {
+      toolPose = pose ?? null;
+      showPose(toolPose ?? basePose);
+    },
+    displayedPose: () => scene.pose(),
   });
   const tickTools = (ticker) => tools.tick(ticker.deltaMS / 1000);
   PIXI.Ticker.shared.add(tickTools, undefined, PIXI.UPDATE_PRIORITY.HIGH);
@@ -191,9 +200,10 @@ export async function createViewport(
     frame,
     setBasePose(pose) {
       basePose = pose ?? null;
-      showPose(basePose);
+      showPose(toolPose ?? basePose);
       invalidateOverlay();
     },
+    setGhosts: (list) => ghosts.setGhosts(list),
     destroy() {
       detachInput();
       PIXI.Ticker.shared.remove(tickTools);
@@ -209,6 +219,7 @@ export async function createViewport(
       host.style.removeProperty(TOOL_CURSOR_PROPERTY);
       gizmos.destroy();
       scene.destroy();
+      ghosts.destroy();
       grid.destroy();
       app.destroy({ removeView: true }, { children: true });
     },

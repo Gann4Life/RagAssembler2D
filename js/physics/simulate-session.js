@@ -65,19 +65,20 @@ function createGround(Box2D, world, { top, centerX }) {
 
 /**
  * Starts a Simulate mode run: a LiquidFun world with the document's `preview.gravity`, the ragdoll spawned through RagImporter at its root
- * transform in rest pose, a static ground whose top touches the lowest point of the rest pose, and the clip with
- * key `options.clip` playing from 0 (none when `null`: the motors hold the rest pose). Owns every native object it
- * creates until `destroy`.
+ * transform in rest pose, or in the pose of clip `options.pose` at time 0 (RagImporter's posed spawn), a static
+ * ground whose top touches the lowest point of the spawned bodies, and the clip with key `options.clip` playing from
+ * 0 (none when `null`: the motors hold the rest pose). Owns every native object it creates until `destroy`.
  * @param {*} Box2D The liquidfun.js namespace.
  * @param {object} json A `.rag.json` document.
- * @param {{ clip: string|null }} options Key of the clip to play.
+ * @param {{ clip: string|null, pose?: string|null }} options Key of the clip to play, and key of the clip whose pose
+ *   at time 0 the bodies spawn in (`null` or omitted: the rest pose).
  * @returns {import('../timeline-player.js').SimulationSession} The session; `step(dt)` runs `rag.update(dt)` then
  *   `world.Step(dt)`, `pose()` returns root-local body transforms by body id.
  * @throws {import('../../lib/ragimporter.js').RagFormatError} When the document has validation errors; nothing
  *   native is created.
  * @throws {Error} When the clip key is unknown or a native call fails; everything built is released first.
  */
-export function createSimulateSession(Box2D, json, { clip }) {
+export function createSimulateSession(Box2D, json, { clip, pose = null }) {
   const def = RagImporter.parse(json);
   const root = rootTransform(json);
   const gravity = new Box2D.b2Vec2(...gravityOf(json));
@@ -93,7 +94,7 @@ export function createSimulateSession(Box2D, json, { clip }) {
   };
 
   try {
-    rag = def.spawn(world, { x: root.x, y: root.y, angle: root.angle, flipX: false });
+    rag = def.spawn(world, { x: root.x, y: root.y, angle: root.angle, flipX: false, ...(pose === null ? {} : { pose }) });
     ground = createGround(Box2D, world, restBounds(Box2D, rag, root));
     if (clip !== null) rag.play(clip, { restart: true });
   } catch (error) {

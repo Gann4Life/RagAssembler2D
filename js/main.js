@@ -10,7 +10,8 @@ import { PANELS } from './panels/layout.js';
 import { createHierarchy } from './panels/hierarchy.js';
 import { createTimeline } from './panels/timeline.js';
 import { TimelinePlayer } from './timeline-player.js';
-import { bindAnimatePreview } from './model/animate-preview.js';
+import { bindAnimateView } from './model/animate-preview.js';
+import { ClipSimulation } from './physics/clip-simulation.js';
 import { openMenu } from './menu.js';
 import { Settings } from './settings.js';
 import { openSettings } from './settings-dialog.js';
@@ -38,9 +39,20 @@ for (const warning of restored.warnings) console.warn(warning);
 RagImporter.configure({ Box2D, PIXI });
 const physics = Object.freeze({ startPose: (json, options) => createPoseSession(Box2D, json, options) });
 let editorVersion = DEV_VERSION;
+let player = null;
+const reportStatus = () => {};
+const playback = Object.freeze({
+  get playing() {
+    return player?.playing ?? false;
+  },
+  pause: () => player?.pauseAtStep(),
+  hold: (pose) => player?.hold(pose),
+});
 const editor = createEditor({
   settings: restored.settings,
   physics,
+  playback,
+  status: (text) => reportStatus(text),
   editorVersion: () => editorVersion,
   confirm: (request) => confirmDialog(document, request),
   notify: (notice) => noticeDialog(document, notice),
@@ -60,16 +72,21 @@ const dock = createDock(document.getElementById('workspace'), {
   viewportElement: document.getElementById('panel-viewport'),
 });
 const hierarchy = createHierarchy(dock.panelElement('hierarchy'), editor);
-const player = new TimelinePlayer(
+const frameClock = Object.freeze({
+  request: (callback) => requestAnimationFrame(callback),
+  cancel: (handle) => cancelAnimationFrame(handle),
+  now: () => performance.now(),
+});
+const simulator = (json, options) => createSimulateSession(Box2D, json, options);
+player = new TimelinePlayer({
   model,
   modes,
-  {
-    request: (callback) => requestAnimationFrame(callback),
-    cancel: (handle) => cancelAnimationFrame(handle),
-    now: () => performance.now(),
-  },
-  (json, options) => createSimulateSession(Box2D, json, options),
-);
+  history,
+  clock: frameClock,
+  simulator,
+  clipSimulation: new ClipSimulation(simulator, frameClock),
+  status: (text) => reportStatus(text),
+});
 
 function startPlayback(run) {
   try {
@@ -80,21 +97,33 @@ function startPlayback(run) {
   }
 }
 
-const simulateReason = () => (player.simulating ? null : 'only in Simulate mode');
+const transportReason = (enabled, stateReason) => () => {
+  if (enabled()) return null;
+  if (modes.mode === 'edit') return 'only in Animate and Simulate modes';
+  return stateReason();
+};
 actions.register('toggle-play', { run: () => startPlayback(() => player.toggle()), isEnabled: () => player.canPlay() });
 actions.register('play', {
   run: () => startPlayback(() => player.play()),
   isEnabled: () => player.canPlay() && !player.playing,
   reason: () => (player.playing ? 'already playing' : null),
 });
-actions.register('pause', { run: () => player.pause(), isEnabled: () => player.playing, reason: simulateReason });
+actions.register('pause', {
+  run: () => player.pause(),
+  isEnabled: () => player.playing,
+  reason: transportReason(() => player.playing, () => 'not playing'),
+});
 actions.register('next-frame', {
   run: () => player.nextFrame(),
-  isEnabled: () => player.simulating,
-  reason: simulateReason,
+  isEnabled: () => player.canNextFrame(),
+  reason: transportReason(() => player.canNextFrame(), () => (modes.clip === null ? 'open a clip' : 'at the end of the clip')),
   repeatable: true,
 });
-actions.register('stop', { run: () => player.stop(), isEnabled: () => player.simulating, reason: simulateReason });
+actions.register('stop', {
+  run: () => player.stop(),
+  isEnabled: () => player.canStop(),
+  reason: transportReason(() => player.canStop(), () => 'not playing'),
+});
 const timeline = createTimeline(dock.panelElement('timeline'), editor, player);
 attachFileDrop(document.getElementById('panel-viewport'), (read) => editor.loadFrom(read), () => actions.isEnabled('load'));
 blockFileNavigation(document);
@@ -231,18 +260,18 @@ const viewport = await createViewport(PIXI, viewportHost, {
   onSpaceTap: () => actions.run('toggle-play'),
 });
 
-let authoredPose = null;
-let simulatedPose = null;
-const showBasePose = () => viewport.setBasePose(simulatedPose ?? authoredPose);
-bindAnimatePreview(model, modes, (pose) => {
-  authoredPose = pose;
-  showBasePose();
-});
-player.on('pose', (pose) => {
-  simulatedPose = pose;
-  showBasePose();
+bindAnimateView({
+  model,
+  modes,
+  player,
+  clock: frameClock,
+  apply: (pose) => viewport.setBasePose(pose),
+  applyGhosts: (ghosts) => viewport.setGhosts(ghosts),
 });
 player.on('playing', refreshHeader);
+player.on('view', ({ instant }) => {
+  if (instant) refreshHeader();
+});
 
 actions.register('settings', { run: toggleSettings, isEnabled: () => modes.can('settings.editor') });
 actions.register('frame-selection', { run: () => viewport.frame(selection.objects), isEnabled: () => modes.can('camera') });
