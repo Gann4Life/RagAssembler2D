@@ -9,7 +9,7 @@ These rules hold everywhere in the editor ([§5.1](05-1-modes.md#51-editor-modes
 - **No hidden actions.** Every action, tool, mode and toggle has a visible control: a button, menu item, segment, checkbox or field in the header, a panel or the Tools overlay. A hotkey is only an accelerator for a visible control: the control's tooltip shows it (menu items also show it right-aligned), and [§5.9](05-9-hotkeys.md#59-hotkeys-defaults) names the control of every hotkey. Esc, the universal cancel key, is the only exception. An action is specified together with its control; an action without one is not built.
 - **The user decides tools and modes.**
   - The active tool changes only when the user chooses a tool (its Tools overlay button or its hotkey). A mode change never changes it: when the new mode disables the active tool, it stays active and is shown disabled ([§5.5](05-5-tools.md#55-tools)).
-  - The mode changes only through explicit controls: the header mode switch ([§5.3](05-3-header.md#53-header)), Play and Stop, the Timeline clip selector and New clip ([§5.8](05-8-animation-timeline.md#58-animation-timeline)). Two document events also return to Edit mode, each stated where it happens: New and Load (a new document), and the removal of the open clip, which leaves nothing to animate and reports it in the status line ([§5.1](05-1-modes.md#51-editor-modes)).
+  - The mode changes only through explicit controls: the header mode switch ([§5.3](05-3-header.md#53-header)), Play in Edit mode and Stop in Simulate (in Animate, Play, Pause, Stop and scrubbing never change the mode), the Timeline clip selector and New clip ([§5.8](05-8-animation-timeline.md#58-animation-timeline)). Two document events also return to Edit mode, each stated where it happens: New and Load (a new document), and the removal of the open clip, which leaves nothing to animate and reports it in the status line ([§5.1](05-1-modes.md#51-editor-modes)).
 - **Disabled controls explain themselves.** A disabled control stays visible and focusable (`aria-disabled`), and its tooltip ends with the reason in parentheses:
   - "(not available yet)" for an action that is not built;
   - "(only in Edit mode)", "(only in Edit and Animate modes)", "(only in Simulate mode)", …, naming the modes that allow it, for an action the mode policy refuses ([§5.1](05-1-modes.md#51-editor-modes));
@@ -25,7 +25,10 @@ These rules hold everywhere in the editor ([§5.1](05-1-modes.md#51-editor-modes
 |---|---|---|
 | Undo, Redo | the stack has no step that way | "nothing to undo", "nothing to redo" |
 | Play | already playing | "already playing" |
-| Pause | Simulate is paused | "already paused" |
+| Play in Edit mode, mode switch Simulate | the document has validation errors ([§6.4](06-file-format.md#64-validation)) | "fix the errors in Problems" |
+| Pause | not playing (Animate), or the live run is paused (Simulate) | "not playing"; "already paused" |
+| Stop | Animate mode and not playing | "not playing" |
+| Next frame | Animate mode, a non-looping clip with the playhead at `length` | "at the end of the clip" |
 | Delete | no body, shape or joint is selected | "select a body, shape or joint" |
 | Delete | only the root is selected | "the ragdoll root cannot be deleted" |
 | Duplicate | nothing duplicable is selected ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | "select a body, shape or non-loop joint" |

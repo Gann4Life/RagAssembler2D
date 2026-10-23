@@ -36,11 +36,11 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
   - Events are drawn as markers with their name, can be dragged, and are edited in the inspector.
 - **Playhead / scrub:**
   - Click or drag on the ruler.
-  - Scrubbing (pointer or Left / Right / Home / End on the ruler) shows the physics simulation of the clip at the playhead, re-simulated from 0 when going back ([§5.1](05-1-modes.md#51-editor-modes), physics scrub preview); the sprites follow the playhead live.
-  - In Simulate mode (playing or paused) the playhead shows the simulation time and the ruler cannot be scrubbed ("only in Animate mode"): scrubbing never changes the mode. To continue from the simulation, the user presses Animate in the mode switch, which keeps the simulation as the scrub simulation at the time it reached, so scrubbing forward then continues it ([§5.1](05-1-modes.md#51-editor-modes)).
+  - Scrubbing (pointer or Left / Right / Home / End on the ruler) is always allowed in Animate mode and only moves the playhead (pausing playback): the view shows the Animate view at the new time, the clip simulation, or the FK pose while Pose is active ([§5.1](05-1-modes.md#51-editor-modes)); the sprites follow the playhead live. It never changes the mode or the tool.
+  - In Simulate mode the playhead shows the simulation time and the ruler cannot be scrubbed ("only in Animate mode").
   - The snap step defaults to 1/30 s.
 - **Loop toggle and length field** mirror the clip properties.
 - **Autokey (●):** while it is on, Pose releases in Animate mode create keys automatically ([§5.5](05-5-tools.md#55-tools)). Select never keys.
 - **Key selected (K):** keys the `angle` of all selected joints, or of all joints of the selected bodies, at the playhead.
-- **Preview stack:** checkboxes for other clips to evaluate together with the open clip, in both FK preview and Simulate mode (e.g. `alive` + `pain`). During Simulate, clicking a clip name calls `play(key)` on the running instance, so the user can rehearse how game code will trigger clips.
+- **Preview stack:** checkboxes for other clips to evaluate together with the open clip, in both FK preview and Simulate mode (e.g. `alive` + `pain`); the clip simulation and its ghosts play the open clip alone ([§5.1](05-1-modes.md#51-editor-modes)). During Simulate, clicking a clip name calls `play(key)` on the running instance, so the user can rehearse how game code will trigger clips.
 - **Procedural preview** (Simulate mode): *Look at cursor* applies `lookAt` to the selected joints toward the mouse, with a weight slider and an optional strength value. It runs the same RagImporter code as production and is used to tune `aimAxis`, limits and motor values.

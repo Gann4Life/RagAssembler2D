@@ -12,7 +12,7 @@ Dated log of design and technical decisions, split by area. Within each file the
 | Viewport | [viewport.md](decisions/viewport.md) | Camera, grid, display modes, overlays and settings popover. |
 | Commands and history | [commands-history.md](decisions/commands-history.md) | Command transactions, undo steps and history behavior. |
 | Editor core | [editor-core.md](decisions/editor-core.md) | Actions, hotkeys, modes and editor composition. |
-| Visible controls | [visible-controls.md](decisions/visible-controls.md) | No hotkey-only actions, mode switch, Rig and View menus, user-decided tools and modes, disabled reasons, status line, Pose as the animation tool. |
+| Visible controls | [visible-controls.md](decisions/visible-controls.md) | No hotkey-only actions, mode switch, Rig and View menus, user-decided tools and modes, disabled reasons, status line, Pose as the animation tool, the Animate loop (clip simulation, playback in Animate, ghosts). |
 | Tooling and tests | [tooling.md](decisions/tooling.md) | Conformance checks and test infrastructure. |
 | Dock and layout | [dock-layout.md](decisions/dock-layout.md) | Panel layout, dock behavior, header and keyboard navigation. |
 | Model and schema | [model-schema.md](decisions/model-schema.md) | Document model, ids, uids, schema and defaults. |

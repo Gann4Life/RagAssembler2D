@@ -3,22 +3,34 @@
 | Mode | Entered by | Viewport shows | Edits affect |
 |---|---|---|---|
 | **Edit** | Mode switch *Edit* ([§5.3](05-3-header.md#53-header)), or "(rest pose)" in the Timeline clip selector | Rest pose | Rest pose / object properties |
-| **Animate** | Mode switch *Animate*, or choosing a clip in the Timeline clip selector, or New clip | FK pose and sprites of the evaluated clip (plus the preview stack) at the playhead; after a scrub, the physics simulation of the clip at the playhead; after a Pose release, the posed pose (below) | Keys of the open clip |
-| **Simulate** | Play (header, Timeline, or mode switch *Simulate*) | Live physics through RagImporter | Nothing (read-only). Stop returns to the previous mode |
+| **Animate** | Mode switch *Animate*, or choosing a clip in the Timeline clip selector, or New clip | The clip simulation at the playhead, or the FK pose while Pose is the active tool (Animate view, below), plus the ghosts; sprites of the evaluated clip | Keys of the open clip |
+| **Simulate** | Mode switch *Simulate*, or Play in Edit mode | Live physics through RagImporter | Nothing (read-only). Stop returns to the previous mode |
 
-The header mode switch always shows the current mode, also while the Timeline is folded or closed; the Timeline clip selector shows the same state ("(rest pose)" in Edit mode, the open clip otherwise). Modes change only through these controls, Play and Stop ([§5](05-editor.md#visible-controls-and-feedback)).
+The header mode switch always shows the current mode, also while the Timeline is folded or closed; the Timeline clip selector shows the same state ("(rest pose)" in Edit mode, the open clip otherwise). Modes change only through these controls, Play in Edit mode and Stop in Simulate ([§5](05-editor.md#visible-controls-and-feedback)).
 
-**FK preview:** in Animate mode the viewport places bodies by forward kinematics:
+**Animating loop.** Animate is where clips are made and watched: the user plays or scrubs the clip and sees its physics, poses what looks wrong with Pose, and plays again. Play, Pause, Stop and scrubbing never change the mode or the tool. Simulate is not part of this loop: it is the live physics test (rest pose from Edit, the open clip from Animate) with the inputs a precomputed run cannot have: procedural preview, triggering clips on the running instance, contacts.
+
+**FK preview:** in Animate mode, while Pose is the active tool and nothing plays (Animate view, below), the viewport places bodies by forward kinematics:
 - `rootBody` is rotated by the evaluated root `bodyAngle` ([§4.2](04-animation-model.md#42-channels)) around its **center of mass** in the rest pose (`bodyMassData`, root-local; the body origin when its mass is 0), which stays fixed: a free body turned by a pure torque, as the balance controller does at runtime ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). At `bodyAngle = 0` it is at its rest transform;
 - each child is rotated around its joint anchor by the evaluated `angle`, carried by its parent's FK transform, so the whole ragdoll follows `rootBody`. The angle is bodyB relative to bodyA, so through a reversed joint ([§2.4](02-object-model.md#24-joints)) the child turns by −`angle`.
 
 Multiplier channels don't move anything. They are shown as the fill of the joint gizmo (grey 0 % → saturated 100 %). Sprite channels swap images live.
 
-**Physics scrub preview:** scrubbing the playhead ([§5.8](05-8-animation-timeline.md#58-animation-timeline)) shows the ragdoll as Simulate would have it at that clip time: the same world (gravity, ground, motors following the clip) stepped at the same fixed 60 Hz step from 0. The runtime cannot seek, so a scrub simulation is kept while the preview lasts: scrubbing forward steps it on, scrubbing back rebuilds it from 0. Stepping is capped per frame, and the viewport shows the latest state reached until it catches up. The preview stays after the scrub ends and is dropped on any document change (keys from Pose, undo, …), on opening another clip and on leaving Animate. It never changes the document. A Pose press starts from it, exactly as displayed ([§5.5](05-5-tools.md#55-tools), Pose).
+**Clip simulation.** In Animate mode the editor keeps a physics run of the open clip: the same world as Simulate (rest-pose spawn, gravity, ground, motors following the open clip alone, without the preview stack or procedural inputs) stepped at the fixed 60 Hz step from clip time 0 to the clip's `length` (a looping clip is run once, not wrapped). It is deterministic, so the pose at a clip time is the pose of the step at that time, whatever the order in which times are viewed.
+- **Computed in the background**, within a per-frame budget, from 0 forward, keeping every step's body transforms, so scrubbing back reads the stored step instead of simulating again. It starts when Animate opens a clip and again 250 ms after the last committed document change (the end of an undo step: a Pose release, an inspector commit, Undo, Redo, …; never during a drag). Until the new run reaches a time, that time shows the previous run's pose, if any (no flicker on edits). It never changes the document.
+- **Dropped** on opening another clip and on leaving Animate.
+- **Not available** when the document cannot be simulated (validation errors, [§6.4](06-file-format.md#64-validation)): Animate then shows the FK pose with every tool, and no ghosts.
 
-**Posed preview:** after a Pose release in Animate mode the viewport shows the bodies exactly where the release left them, whether or not keys were written, so the release never makes the view jump. It is dropped, returning to the FK pose, when the playhead moves (a scrub then starts the physics scrub preview), on opening another clip, on leaving Animate, and on any document change other than the release's own keys (undo of those keys included). A Pose press starts from it. The FK pose of the written keys matches it in every joint angle and in `rootBody`'s angle; it can differ only in position, since FK keeps `rootBody`'s center of mass at its rest position (no root position channel, [§13](13-out-of-scope.md#13-out-of-scope-for-v1-backlog)).
+**Animate view.** What the main figure shows, by the active tool and the transport:
+- **Playing** (Play in Animate, [§5.3](05-3-header.md#53-header)): the clip simulation at the playhead, with every tool.
+- **Not playing, Pose active:** the **FK pose** at the playhead (FK preview, above); during a Pose drag, the drag's simulated bodies ([§5.5](05-5-tools.md#55-tools)). Choosing Pose is what turns the view to the keyed pose, and choosing another tool turns it back.
+- **Not playing, any other tool** (Select, Select Box, or a tool the mode disables): the clip simulation at the playhead. When the run has not reached the playhead yet, the latest step reached is shown until it catches up.
 
-**Displayed pose.** Tools, gizmos and hit testing in Animate mode use the pose shown: the posed preview, else the physics scrub preview, else the FK pose.
+Sprites follow the evaluated clip at the playhead in every case.
+
+**Ghosts (onion skins).** In Animate mode, with every tool, the clip simulation is also drawn at the **key times** of the open clip: every distinct time in `[0, length]` that holds a key in any of its tracks (events are not keys). A key time is skipped while it maps to the same simulation step as the playhead. A ghost is **green** for a key time after the playhead and **red** for one before it, so the colors flip as the playhead passes. Ghosts draw shapes only (no sprites, gizmos, names, joints or overlays), are never hit, hovered or selected, and appear as the run reaches their time ([§5.4](05-4-viewport.md#54-viewport), Ghosts). They follow the keys at once (a removed key time loses its ghost), and their poses follow the run, so in this version they update after a committed edit, not during a Pose drag ([§12](12-open-items.md#12-open-items--to-verify), post-MVP).
+
+**Displayed pose.** Tools, gizmos and hit testing in Animate mode use the main figure of the Animate view; ghosts are never part of it.
 
 **Mode policy.** What each mode allows (✓) or disables (—). Disabled controls stay visible, use `aria-disabled` and give the mode reason ([§5](05-editor.md#visible-controls-and-feedback)); disabled inspector fields are read-only.
 
@@ -37,8 +49,8 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 | Preview stack | — | ✓ | ✓ |
 | Procedural preview | — | — | ✓ |
 | New, Load, Save; Undo, Redo | ✓ | ✓ | — |
-| Play | ✓ | ✓ | — |
-| Pause, Next frame, Stop | — | — | ✓ |
+| Play (Edit: enters Simulate; Animate: plays the clip in Animate; Simulate: resumes) | ✓ | ✓ | ✓ |
+| Pause, Next frame, Stop | — | ✓ | ✓ |
 | Editor settings (grid, snapping, display, pivot), panels, navigation | ✓ | ✓ | ✓ |
 
 - In Animate mode, inspector fields that are not animatable are shown read-only, and animatable ones show the evaluated value with their key button. **Pose is the animation tool.** Select only selects in Animate and Simulate mode: no gizmo, and every drag draws a selection box ([§5.5](05-5-tools.md#55-tools)); it never writes keys.
@@ -46,6 +58,5 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 - **Playhead and open clip.** Opening a different clip puts the playhead at 0; the playhead always stays within `[0, length]` of the open clip, also when `length` changes. The editor remembers the **last opened clip** of the session (forgotten by New and Load) for the mode switch.
   - When the open clip stops existing (deleted, or its creation undone) the editor returns to Edit mode and the status line shows "Clip *name* removed: Edit mode" (the clip's name, or its key when the name is empty).
   - New and Load return to Edit mode with the playhead at 0.
-  - Play continues the physics scrub preview when there is one, from the time it reached; otherwise it plays the open clip from 0.
-  - Stop restores the mode, clip and playhead that were active before Play.
-- **Leaving Simulate through the mode switch** ([§5.3](05-3-header.md#53-header)): *Edit* stops (as Stop) and then enters Edit mode. *Animate* with a clip open in the simulation enters Animate on that clip **at the time the simulation reached**, and the simulation becomes the physics scrub preview, so the view does not change and scrubbing forward continues it; a Pose press then starts from that pose. Without a clip open (Play from Edit mode) it stops and then enters Animate as from Edit mode.
+- **Playback in Animate** ([§5.3](05-3-header.md#53-header)). Play moves the playhead in real time (clip time, so at the clip's `speed`) from where it is, or from 0 when it is at `length`; the view shows the clip simulation (Animate view). At `length` a looping clip wraps to 0 and goes on, and a non-looping one pauses there. Pause keeps the playhead where it is. Next frame pauses and moves the playhead one fixed step (1/60 s × `speed`), not past `length`. Stop pauses and puts the playhead back where the last Play started. A scrub while playing pauses playback and moves the playhead. Opening another clip, leaving Animate, New and Load stop playback. Document edits during playback (Undo included) do not stop it.
+- **Simulate** is a live run: from Edit mode of the rest pose with no clip, from Animate of the open clip from 0. Stop, or the mode switch's *Edit* or *Animate* segment, ends it and restores the mode, clip and playhead that were active before it; *Edit* or *Animate* then enters that mode if it is not the restored one ([§5.3](05-3-header.md#53-header)).

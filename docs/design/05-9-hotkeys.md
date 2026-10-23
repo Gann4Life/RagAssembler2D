@@ -16,7 +16,7 @@ Hotkeys are accelerators only ([§5](05-editor.md#visible-controls-and-feedback)
 | F2 | Rename the single selected object ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Rename |
 | Shift+R | Set as root body ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Set as root body |
 | Shift+M | Fit motor torque: selected joints, or all ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Fit motor torque |
-| Space | Play / Pause | Header Play, Pause; mode switch Simulate (Play); Timeline Play |
+| Space | Play / Pause | Header Play, Pause; Timeline Play |
 | . | Next frame | Header Next frame |
 | K | Key selected ([§5.8](05-8-animation-timeline.md#58-animation-timeline)) | Timeline ◆ Key selected |
 | F, Home | Frame selection, frame all ([§5.4](05-4-viewport.md#54-viewport)) | Header View › Frame selection, Frame all |
