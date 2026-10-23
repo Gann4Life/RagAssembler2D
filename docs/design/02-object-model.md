@@ -21,7 +21,7 @@ The root is a **parent object in the world**, not a physics body.
 - It owns the **global animation channels** `strength`, `gain` and `damping` ([§4.2](04-animation-model.md#42-channels)). They are **multipliers in 0–1, default 1**, and they never replace joint values. This is how a whole ragdoll can go limp from a single track, without keying every joint.
 - At runtime, the spawn transform (`x`, `y`, `angle`, `flipX`) is applied to the root. After spawning, `rag.position` / `rag.angle` follow `rootBody`.
 
-`rootBody` is the body from which the joint tree is built (usually the torso or pelvis). It is used for the Hierarchy tree, forward-kinematics preview and the runtime position. While it is `null` (a new ragdoll), the first body created becomes `rootBody`. Deleting the `rootBody` body sets it to the first remaining body in `bodies` order, or `null` when none is left.
+`rootBody` is the body from which the joint tree is built (any body of the creature). It is used for the Hierarchy tree, forward-kinematics preview and the runtime position. While it is `null` (a new ragdoll), the first body created becomes `rootBody`. Deleting the `rootBody` body sets it to the first remaining body in `bodies` order, or `null` when none is left.
 
 ## 2.2 Bodies and shapes
 - In the UI a **shape** is what the user draws. A **body** owns one or more shapes (Box2D fixtures).
