@@ -159,7 +159,7 @@ test('the suggested torque of the light creature matches the DESIGN §3.1 exampl
   assert.ok([...suggestions.values()].every((value) => typeof value === 'number' && value >= 0.001));
 });
 
-test('a light creature resting on the ground settles with every joint at its suggested torque', { todo: 'DESIGN §12: peak is about 0.10 J, driven by j_thigh (8.1 N·m) and j_neck (12 N·m)' }, () => {
+test('a light creature resting on the ground settles with every joint at its suggested torque', { todo: 'DESIGN §12: peak is about 0.7 J, driven by its 11–23 g foot pieces that now carry the body (about 14 N·m)' }, () => {
   const peak = peakKineticEnergy({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }, 8, true);
   assert.ok(peak < 0.05, `peak kinetic energy ${peak} J`);
 });
@@ -193,7 +193,7 @@ function balancedTilt(seconds) {
   }
 }
 
-test('a light creature with the suggested balance torque holds rootBody within 5° without chatter', { todo: 'DESIGN §12: in the last 5 s the error reaches about 38° and the angular velocity changes sign almost every step (294 of 300)' }, () => {
+test('a light creature with the suggested balance torque holds rootBody within 5° without chatter', { todo: 'DESIGN §12: the error stays under 2° but the trembling feet make the angular velocity change sign about 40 times in 5 s' }, () => {
   const { late, flips } = balancedTilt(10);
   assert.ok(late < 5 && flips < 10, `last 5 s ${late}°, ${flips} sign flips`);
 });
