@@ -47,3 +47,14 @@ test('update enables and writes the native revolute motors', () => {
     assert.equal(neck.GetMaxMotorTorque(), 0);
   });
 });
+
+test('a playing clip moves the native joint toward its target angle', () => {
+  withRag((rag, world) => {
+    rag.play('walk');
+    for (let i = 0; i < 120; i++) {
+      rag.update(1 / 60);
+      world.Step(1 / 60, 8, 3);
+    }
+    assert.ok(Math.abs(rag.joint('neck').GetJointAngle() - 0.1) < 0.02, `${rag.joint('neck').GetJointAngle()}`);
+  });
+});
