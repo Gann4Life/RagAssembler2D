@@ -2,6 +2,7 @@ import { ROOT_UID } from '../model/model.js';
 import { setProps } from '../commands/props.js';
 import { createClip } from '../commands/create.js';
 import { deleteClip } from '../commands/delete.js';
+import { jointAngleRows } from '../timeline-rows.js';
 import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '../timeline-time.js';
 
 const REST_POSE = '';
@@ -151,18 +152,39 @@ export function createTimeline(element_, editor, player) {
     select.value = open ? String(modes.clip) : REST_POSE;
   }
 
+  function renderRows(rows, length) {
+    labels.replaceChildren(...rows.map((row) => element(doc, 'div', 'timeline-row-label', `${row.label} · angle`)));
+    lanes.replaceChildren(
+      ...rows.map((row) => {
+        const lane = element(doc, 'div', 'timeline-lane');
+        lane.append(
+          ...row.keys.map((key) => {
+            const diamond = element(doc, 'span', 'timeline-key');
+            diamond.style.left = `${fractionOfTime(key.t, length) * 100}%`;
+            diamond.title = `${formatSeconds(key.t)} s`;
+            return diamond;
+          }),
+        );
+        return lane;
+      }),
+    );
+  }
+
   function render() {
     const clips = model.children(ROOT_UID, 'clips');
     const open = modes.clip;
+    const rows = jointAngleRows(model, open);
     const next = JSON.stringify([
       clips.map((uid) => [uid, clipLabel(model, uid)]),
       open,
       open === null ? 0 : model.prop(open, 'length'),
+      rows.map((row) => [row.joint, row.label, row.keys.map((key) => key.t)]),
     ]);
     if (next !== signature) {
       signature = next;
       renderOptions();
       renderTicks(clipLength());
+      renderRows(rows, clipLength());
     }
     renderControls();
     renderPlayhead();

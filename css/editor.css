@@ -1089,3 +1089,38 @@ body.dock-resizing-column * {
   flex: 1 1 auto;
   min-height: 0;
 }
+
+.timeline-labels {
+  padding-top: 25px;
+  overflow: hidden;
+}
+
+.timeline-row-label,
+.timeline-lane {
+  height: 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.timeline-row-label {
+  padding: 0 8px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-lane {
+  position: relative;
+}
+
+.timeline-key {
+  position: absolute;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  background: var(--focus);
+  transform: rotate(45deg) scale(0.8);
+}

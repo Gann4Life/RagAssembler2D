@@ -1,4 +1,6 @@
+import { animatePose } from '../model/animate-preview.js';
 import { placement } from '../viewport/placement.js';
+import { animateRotationPivot, animateRotationTarget, startAnimateRotation } from './animate-rotation.js';
 import { COLORS, HIT_RADIUS, LINE_WIDTH } from '../viewport/style.js';
 import { drawLimitHandles, drawLimitRange, limitJoint, limitLayout, limitRange, startLimitDrag } from './joint-limits.js';
 import { canRotate, gizmoPivot, manipulationTarget, startMove, startRotation } from './manipulation.js';
@@ -99,7 +101,8 @@ function pickCursor(pick) {
  * In Edit mode a drag on an object moves the selection (selecting the object first when it is not part of it),
  * the transform gizmo on the selection moves it along X, along Y or freely, or rotates it, and resize handles on
  * the selected circles and boxes resize one shape each; with one joint selected, limit handles and the ring edit its
- * limits. Each move, rotation, resize or limit drag is one undo step.
+ * limits. In Animate mode only the ring is offered, for one body with a parent joint, and a drag on it keys that
+ * joint's `angle` at the playhead. Each move, rotation, resize or limit drag is one undo step.
  * Default cursor, hover feedback shown.
  * @returns {Readonly<import('./tool.js').Tool>} The tool.
  */
@@ -110,6 +113,8 @@ export function selectTool() {
   let ctrl = false;
 
   const editing = () => ctx.modes.can('edit.rest');
+  const animating = () => ctx.modes.can('edit.animation') && ctx.modes.clip !== null;
+  const animateTarget = () => (animating() ? animateRotationTarget(ctx.model, ctx.selection.objects) : null);
   const pivotMode = () => ctx.settings.get('gizmo.pivot');
   const currentTarget = () => manipulationTarget(ctx.model, ctx.selection.objects);
   const currentPivot = (withCtrl) => gizmoPivot(ctx.model, ctx.selection.objects, { mode: pivotMode(), ctrl: withCtrl });
@@ -128,9 +133,22 @@ export function selectTool() {
     return range.max - range.min > 0;
   }
 
+  function animateLayout() {
+    let pivot = null;
+    if (press?.manipulation) {
+      pivot = press.manipulation.pivot();
+    } else {
+      const target = animateTarget();
+      const pose = target && animatePose(ctx.model, ctx.modes.clip, ctx.modes.playhead);
+      pivot = target && animateRotationPivot(ctx.model, pose, target.joint);
+    }
+    return pivot === null ? null : gizmoLayout(ctx.camera.worldToScreen(pivot), { ring: true, ringOnly: true });
+  }
+
   function layout() {
-    if (!ctx || !editing()) return null;
+    if (!ctx) return null;
     if (press?.dragging && press.kind !== 'handle' && !press.manipulation) return null;
+    if (!editing()) return animating() ? animateLayout() : null;
     const pivot = press?.manipulation ? press.manipulation.pivot() : currentPivot(ctrl);
     if (pivot === null) return null;
     const ring = canRotate(ctx.model, currentTarget()) || rangeRotates(limitEditor());
@@ -138,7 +156,7 @@ export function selectTool() {
   }
 
   function pointHandles(found) {
-    if (found === null) return [];
+    if (found === null || !editing()) return [];
     const editor = limitEditor();
     const limits = editor
       ? editor.layout.handles.map(({ id, screen }) => ({ id, key: id, screen, resize: null, limit: true }))
@@ -164,6 +182,7 @@ export function selectTool() {
     const found = layout();
     if (found === null) return null;
     const gizmo = gizmoHandleAt(found, screen);
+    if (!editing()) return gizmoPick(gizmo);
     if (gizmo === 'square') return gizmoPick(gizmo);
     const points = pointHandles(found);
     const index = nearestPoint(points, screen);
@@ -188,6 +207,10 @@ export function selectTool() {
   }
 
   function handlePress(e, pick) {
+    if (!editing()) {
+      const target = animateTarget();
+      return pick.id === 'ring' && target ? startAnimateRotation(ctx, { target, press: e }) : null;
+    }
     if (pick.resize) {
       return startResize(ctx, { shape: pick.resize.shape, handle: pick.id, press: e, pivot: currentPivot(e.ctrl) });
     }
@@ -318,7 +341,7 @@ export function selectTool() {
       const indexOf = (pick) => (pick?.resize ? resizes.findIndex((entry) => entry.key === pick.key) : -1);
       const gizmoId = (pick) => (pick && !pick.resize && !pick.limit ? pick.id : null);
       const state = { hover: indexOf(hover), active: indexOf(active) };
-      const editor = limitEditor();
+      const editor = editing() ? limitEditor() : null;
       drawGizmo(g, found, {
         hover: gizmoId(hover),
         active: gizmoId(active),
