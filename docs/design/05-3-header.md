@@ -1,17 +1,35 @@
 # 5.3 Header
-Location: top, full width. One toolbar row with four button groups divided by separators:
+Location: top, full width. One toolbar row with six button groups divided by separators:
 
 | Group | Buttons, in order | Alignment |
 |---|---|---|
 | File | New, Load, Save | Left |
 | History | Undo, Redo | Left, after File |
-| Playback | Play, Pause, Next frame, Stop | Left, after History |
-| Workspace | Window, Settings | Right end |
+| Rig | Rig (menu) | Left, after History |
+| Mode | Edit, Animate, Simulate (mode switch) | Left, after Rig |
+| Playback | Play, Pause, Next frame, Stop | Left, after Mode |
+| Workspace | View (menu), Window (menu), Settings | Right end |
 
 - **Buttons** are text-labelled. Each tooltip shows the label, plus the hotkey from [§5.9](05-9-hotkeys.md#59-hotkeys-defaults) if one exists. Buttons without a §5.9 hotkey show none.
-- **Keyboard:** the header is a single Tab stop (`role="toolbar"`, roving tabindex). Left/Right move between buttons and wrap around, and Home/End jump to the first/last button. These keys do not trigger global hotkeys ([§5.9](05-9-hotkeys.md#59-hotkeys-defaults)).
-- **Unavailable actions** use `aria-disabled` and stay focusable, so keyboard users can still reach them. The tooltip adds the reason: "(not available yet)" for an action that is not built, "(not available in *Mode* mode)" for one the mode policy disables ([§5.1](05-1-modes.md#51-editor-modes)), and nothing when only the current state disables it (e.g. Undo with nothing to undo).
+- **Keyboard:** the header is a single Tab stop (`role="toolbar"`, roving tabindex). Left/Right move between buttons (the mode segments included) and wrap around, and Home/End jump to the first/last button. These keys do not trigger global hotkeys ([§5.9](05-9-hotkeys.md#59-hotkeys-defaults)).
+- **Unavailable actions** use `aria-disabled` and stay focusable, so keyboard users can still reach them. The tooltip adds the reason, and activating them shows it in the status line, as [§5](05-editor.md#visible-controls-and-feedback) states for every control.
 - If the window is narrower than the row, the header scrolls horizontally. Buttons never wrap.
+
+**Mode switch.** A segmented control (`role="group"` labelled "Mode") of three text buttons, Edit, Animate and Simulate, joined without gaps. The segment of the current mode has `aria-pressed="true"` and the selected look, the others `"false"`; in Simulate mode, playing or paused, Simulate is pressed. It works the same whether the Timeline is expanded, folded or closed. Pressing the current mode's segment does nothing. Otherwise:
+- **Edit** enters Edit mode (as "(rest pose)" in the clip selector). From Simulate it stops first (as Stop) ([§5.1](05-1-modes.md#51-editor-modes)). Tooltip "Edit mode: rest pose and rig".
+- **Animate** enters Animate mode on a clip, chosen in this order: the **last opened clip** when it still exists ([§5.1](05-1-modes.md#51-editor-modes)); else the first clip in `clips` order; else a **new clip**, created as New clip does ([§5.8](05-8-animation-timeline.md#58-animation-timeline)), one undo step ("New clip"), with the status message "Created clip *name*". From Simulate it continues from the time the simulation reached ([§5.1](05-1-modes.md#51-editor-modes), Leaving Simulate). The tooltip says what it will do: "Animate mode: opens *name*" or "Animate mode: creates a new clip"; in Animate mode "Animate mode: *name*".
+- **Simulate** runs Play, with Play's enabled rule and reason; tooltip "Simulate mode: Play (Space)".
+- Edit and Animate are unavailable, with no reason, while a drag or scrub is in progress or a confirmation is open.
+
+**Rig menu.** A menu button, always enabled, that opens below the button aligned to its left edge, kept inside the window, with the Window menu's keyboard rules (below). Items, with separators between groups:
+1. Rename (F2), Duplicate (Ctrl+D), Delete (Del) ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels));
+2. Group (Ctrl+G), Ungroup (Ctrl+Shift+G), Split (Alt+G) ([§2.2](02-object-model.md#22-bodies-and-shapes));
+3. Set as root body (Shift+R), Fit motor torque (Shift+M) ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels));
+4. Sprite edit (S), a checkbox item, checked while sprite edit is on ([§5.5](05-5-tools.md#55-tools)).
+
+Each item runs the same action as its hotkey, with the same enabled rule, and shows the hotkey right-aligned in the muted text color. Enabled state is read when the menu opens. A disabled item is dimmed, stays focusable and has the reason as its accessible description; while it is hovered (after 400 ms) or focused from the keyboard, the custom tooltip ([§5.5](05-5-tools.md#55-tools)) shows "*Label* (*Key*) (*reason*)" 8 px to its right. Choosing a disabled item keeps the menu open and shows the reason in the status line. Choosing Rename opens the rename popup ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)), and Enter or Esc in it return focus to the Rig button.
+
+**View menu.** Items Frame selection (F) and Frame all (Home) ([§5.4](05-4-viewport.md#54-viewport)), available in every mode, built like the Rig menu items; it opens below the button, aligned to its right edge.
 
 - **Unsaved changes** means the document differs from its state at the last Save, New or Load (Undo back to that state clears it).
 - **Messages** (load errors, load notes, save errors) open in a modal message dialog with a title, a sentence, a list and a single OK button; Enter, Esc or OK close it. The list shows at most 50 lines, then "and *N* more". A problem line reads `<path>: <message>`, or only the message when the path is empty ([§6.4](06-file-format.md#64-validation)).
@@ -37,6 +55,7 @@ Location: top, full width. One toolbar row with four button groups divided by se
   - **Snapping:** Snap to grid (checkbox, default off);
   - **Display:** Shapes / Sprites / Both (radio group, default Both);
   - **Overlays:** Names, Centers of mass, Contacts (checkboxes, default off; Contacts only draws in Simulate mode) ([§5.4](05-4-viewport.md#54-viewport));
+  - **Gizmo:** Pivot: Center / Last selected (radio group, default Center; the Select tool's pivot mode, also toggled with Z, [§5.5](05-5-tools.md#55-tools));
   - **Document:** Pixels per meter (the root's `units.pixelsPerMeter`, [§5.7](05-7-inspector.md#57-inspector--properties-panel)).
 
-  Grid size is shown in px at the current `pixelsPerMeter` and stored in meters. Checkboxes and radios apply at once; number fields apply on commit (Enter or blur), and an invalid value is marked `aria-invalid` and reverted on blur. Closing the popover with the Settings button or a press outside commits a pending number like blur does; Esc reverts the field being edited, then closes. Pixels per meter is a document edit: one undo step per commit, read-only outside Edit mode ([§5.1](05-1-modes.md#51-editor-modes)). Every other control is an **editor setting**: per browser, saved at once, restored on load (a stored value that is missing or invalid falls back to its default, with a console warning for invalid ones; a stored record of another or no version is ignored as a whole, with one warning), not undoable, available in every mode. If browser storage is unavailable, settings live only for the session. The Select tool's pivot mode ([§5.5](05-5-tools.md#55-tools)) is an editor setting under the same rules, toggled with Z and not shown in the popover.
+  Grid size is shown in px at the current `pixelsPerMeter` and stored in meters. Checkboxes and radios apply at once; number fields apply on commit (Enter or blur), and an invalid value is marked `aria-invalid` and reverted on blur. Closing the popover with the Settings button or a press outside commits a pending number like blur does; Esc reverts the field being edited, then closes. Pixels per meter is a document edit: one undo step per commit, read-only outside Edit mode ([§5.1](05-1-modes.md#51-editor-modes)). Every other control is an **editor setting**: per browser, saved at once, restored on load (a stored value that is missing or invalid falls back to its default, with a console warning for invalid ones; a stored record of another or no version is ignored as a whole, with one warning), not undoable, available in every mode. If browser storage is unavailable, settings live only for the session. The Select tool's pivot mode (Gizmo, above) is one of them; Z changes it while the popover is closed too, and an open popover follows.

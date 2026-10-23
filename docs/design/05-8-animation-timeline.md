@@ -18,7 +18,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
 └──────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Clip selector:** "(rest pose)" = Edit mode, plus every clip. New / Duplicate / Delete buttons. The selected clip's properties appear in the inspector.
+- **Clip selector:** "(rest pose)" = Edit mode, plus every clip; it mirrors the header mode switch ([§5.3](05-3-header.md#53-header)). New / Duplicate / Delete buttons. New creates a clip and opens it, entering Animate mode: its tooltip says so ("New clip: creates and opens it in Animate mode"). The selected clip's properties appear in the inspector.
 - **Tracks:**
   - The root track group always comes first.
   - Then one group per joint, with sub-tracks for the channels that have keys.
@@ -28,7 +28,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
 - **Keys:**
   - Shown as diamonds, styled by interpolation.
   - Click selects, SHIFT / box select multi-selects, and dragging moves them (snapped).
-  - Ctrl+C / Ctrl+V copy and paste at the playhead; Del deletes.
+  - Copy, Paste (at the playhead) and Delete keys buttons in the Timeline header act on the selected keys; Ctrl+C, Ctrl+V and Del are their hotkeys while the keys hold the selection focus.
   - Double-clicking an empty spot in a track inserts a key with the evaluated value.
   - Dropping an asset from the Assets panel onto a sprite track inserts a key with that image.
 - **Events track:**
@@ -37,10 +37,10 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
 - **Playhead / scrub:**
   - Click or drag on the ruler.
   - Scrubbing (pointer or Left / Right / Home / End on the ruler) shows the physics simulation of the clip at the playhead, re-simulated from 0 when going back ([§5.1](05-1-modes.md#51-editor-modes), physics scrub preview); the sprites follow the playhead live.
-  - In Simulate mode (playing or paused) the ruler stays enabled: scrubbing first returns to the restored clip in Animate mode, as Stop does, and the running simulation becomes the scrub simulation, so scrubbing forward continues it. With no clip open it only stops.
+  - In Simulate mode (playing or paused) the playhead shows the simulation time and the ruler cannot be scrubbed ("only in Animate mode"): scrubbing never changes the mode. To continue from the simulation, the user presses Animate in the mode switch, which keeps the simulation as the scrub simulation at the time it reached, so scrubbing forward then continues it ([§5.1](05-1-modes.md#51-editor-modes)).
   - The snap step defaults to 1/30 s.
 - **Loop toggle and length field** mirror the clip properties.
-- **Autokey (●):** while it is on, Pose and Select rotation changes in Animate mode create keys automatically.
+- **Autokey (●):** while it is on, Pose releases in Animate mode create keys automatically ([§5.5](05-5-tools.md#55-tools)). Select never keys.
 - **Key selected (K):** keys the `angle` of all selected joints, or of all joints of the selected bodies, at the playhead.
 - **Preview stack:** checkboxes for other clips to evaluate together with the open clip, in both FK preview and Simulate mode (e.g. `alive` + `pain`). During Simulate, clicking a clip name calls `play(key)` on the running instance, so the user can rehearse how game code will trigger clips.
 - **Procedural preview** (Simulate mode): *Look at cursor* applies `lookAt` to the selected joints toward the mouse, with a weight slider and an optional strength value. It runs the same RagImporter code as production and is used to tune `aimAxis`, limits and motor values.

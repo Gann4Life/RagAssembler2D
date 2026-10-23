@@ -1,16 +1,30 @@
 # 5.9 Hotkeys (defaults)
 
-| Key | Action | Key | Action |
-|---|---|---|---|
-| V / B / D | Select / Select box / Pose | C / R / N / H | Circle / Box / Polygon / Hinge |
-| S | Toggle sprite edit (Select) | Del | Delete |
-| Ctrl+Z / Ctrl+Shift+Z, Ctrl+Y | Undo / Redo | Ctrl+S / Ctrl+O | Save / Load |
-| Ctrl+G / Ctrl+Shift+G / Alt+G | Group / Ungroup / Split ([§2.2](02-object-model.md#22-bodies-and-shapes)) | Ctrl+D | Duplicate selection ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) |
-| Space | Play / Pause | . | Next frame |
-| K | Key selected | F / Home | Frame selection / all |
-| Esc | Abort tool / clear selection | Z | Pivot mode: center / last selected (Select) |
-| F2 | Rename the single selected object ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Shift+M | Fit motor torque: selected joints, or all ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) |
-| Shift+R | Set as root body ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | | |
+Hotkeys are accelerators only ([§5](05-editor.md#visible-controls-and-feedback)): every hotkey runs an action that also has the visible control listed here, and that control's tooltip shows the hotkey. Esc is the only hotkey without a control of its own: it is the universal cancel key, and what it does is also reachable with the pointer (choosing another tool aborts the operation, a click on empty space clears the selection).
+
+| Key | Action | Visible control |
+|---|---|---|
+| V, B, D | Select, Select Box, Pose tools | Tools overlay ([§5.5](05-5-tools.md#55-tools)) |
+| C, R, N, H | Circle, Box, Polygon, Hinge Joint tools | Tools overlay |
+| S | Toggle sprite edit (Select) | Header Rig › Sprite edit ([§5.3](05-3-header.md#53-header)) |
+| Del | Delete ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Hierarchy Delete button; Rig › Delete |
+| Ctrl+Z | Undo | Header Undo |
+| Ctrl+Shift+Z, Ctrl+Y | Redo | Header Redo |
+| Ctrl+S, Ctrl+O | Save, Load | Header Save, Load |
+| Ctrl+G, Ctrl+Shift+G, Alt+G | Group, Ungroup, Split ([§2.2](02-object-model.md#22-bodies-and-shapes)) | Rig › Group, Ungroup, Split |
+| Ctrl+D | Duplicate selection ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Duplicate |
+| F2 | Rename the single selected object ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Rename |
+| Shift+R | Set as root body ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Set as root body |
+| Shift+M | Fit motor torque: selected joints, or all ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Fit motor torque |
+| Space | Play / Pause | Header Play, Pause; mode switch Simulate (Play); Timeline Play |
+| . | Next frame | Header Next frame |
+| K | Key selected ([§5.8](05-8-animation-timeline.md#58-animation-timeline)) | Timeline ◆ Key selected |
+| F, Home | Frame selection, frame all ([§5.4](05-4-viewport.md#54-viewport)) | Header View › Frame selection, Frame all |
+| Z | Pivot mode: center / last selected (Select) | Settings › Gizmo › Pivot |
+| Esc | Abort tool / clear selection | none (cancel key, above) |
+
+- A hotkey whose action is unavailable shows "*Label*: *reason*" in the status line ([§5](05-editor.md#visible-controls-and-feedback)), except while a drag or scrub is in progress or a confirmation is open.
+- Navigation keys are not hotkeys and are not listed: Space + drag, `+`, `=` and `-` in the viewport ([§5.4](05-4-viewport.md#54-viewport)), and the keys a focused control handles itself (toolbars, tab lists, trees, menus, the ruler, text fields).
 
 - Z (without modifiers) and Ctrl+Z (Undo) are different hotkeys, since modifiers must match exactly. While CTRL is held during a Select rotation to force the body origin, pressing Z is therefore Undo, which aborts the drag ([§5.5](05-5-tools.md#55-tools)).
 - Hotkeys are ignored while focus is in a text field. Space also goes to a focused button or control instead of Play/Pause.
