@@ -132,7 +132,7 @@ In default names (`body_<n>`, `<type>_<n>`, `joint_<n>`), `<n>` is the number of
 | `limits.enabled` | boolean | `false` | — | — | |
 | `limits.lower` | number | `0` | ≤0 | rad | |
 | `limits.upper` | number | `0` | ≥0 | rad | |
-| `motor.maxTorque` | number | `80` | ≥0 | N·m | |
+| `motor.maxTorque` | number | `80` (the Hinge tool writes the suggested torque, `DESIGN.md` §3.1) | ≥0 | N·m | |
 | `motor.gain` | number | `10` | ≥0 | 1/s | |
 | `motor.damping` | number | `0.5` | ≥0 | — | |
 | `motor.maxSpeed` | number | `20` | ≥0 | rad/s | |

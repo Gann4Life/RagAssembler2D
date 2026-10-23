@@ -52,7 +52,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | anchor | Root-local. |
 | collideConnected | Default false. |
 | limits: enabled, lower, upper | Degrees in the UI, `lower ≤ 0 ≤ upper`. |
-| motor: maxTorque, gain, damping, maxSpeed | Base values ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)). |
+| motor: maxTorque, gain, damping, maxSpeed | Base values ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)). maxTorque shows the suggested torque next to it ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)) and offers Fit motor torque for the selected joints. |
 | aimAxis | Degrees in the UI ([§4.8](04-animation-model.md#48-procedural-joint-control)). |
 | angle ◆, strength ◆, gain ◆, damping ◆ | Animated channels at the playhead. |
 

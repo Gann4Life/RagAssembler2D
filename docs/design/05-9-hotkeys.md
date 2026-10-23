@@ -9,7 +9,7 @@
 | Space | Play / Pause | . | Next frame |
 | K | Key selected | F / Home | Frame selection / all |
 | Esc | Abort tool / clear selection | Z | Pivot mode: center / last selected (Select) |
-| F2 | Rename the single selected object ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | | |
+| F2 | Rename the single selected object ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Shift+M | Fit motor torque: selected joints, or all ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) |
 
 - Z (without modifiers) and Ctrl+Z (Undo) are different hotkeys, since modifiers must match exactly. While CTRL is held during a Select rotation to force the body origin, pressing Z is therefore Undo, which aborts the drag ([§5.5](05-5-tools.md#55-tools)).
 - Hotkeys are ignored while focus is in a text field. Space also goes to a focused button or control instead of Play/Pause.

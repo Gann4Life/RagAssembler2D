@@ -14,7 +14,7 @@
                                │ imports
 ┌──────────────────────────────▼──── lib/ ──────────────────────────────────┐
 │  Pure:    emitter · schema · geometry · validate · serialize · migrate ·  │
-│           evaluate                                                        │
+│           evaluate · motor                                                │
 │  Runtime: ragimporter (public entry) · def · instance · render · collision│
 └──────────────┬──────────────────────────────────────┬─────────────────────┘
                │ Box2D global / configure()           │ PIXI global / configure()

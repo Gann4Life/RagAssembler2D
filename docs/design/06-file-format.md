@@ -190,6 +190,7 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 | `W_JOINT_LOOP` | A loop joint ([§2.4](02-object-model.md#24-joints)). | `/joints/i` |
 | `W_ANCHOR_OUTSIDE` | The anchor is farther than 0.001 m from every shape of both bodies, in rest pose. | `/joints/i/anchor` |
 | `W_BODY_ZERO_MASS` | A body with fixtures and no errors in them whose total mass is 0. | `/bodies/i` |
+| `W_MOTOR_OVERPOWERED` | `motor.maxTorque` is more than 1000 × the joint's suggested torque ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)), which makes light bodies gain energy on contact. Skipped when the suggestion is `null`, and when the document has any error in `bodies` or in that joint (no cascades). The message names Fit motor torque ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) and quotes no values. | `/joints/i/motor/maxTorque` |
 | `W_CLIP_EMPTY` | A clip with no tracks and no events. | `/clips/i` |
 | `W_SPRITE_UNUSED` | A sprite asset referenced by no `sprite.asset` and no `sprite` key value. | `/sprites/i` |
 | `W_SPRITE_IMAGE_MISSING` | Editor only: `hasImage(asset)` returned `false`. | `/sprites/i/src` |
