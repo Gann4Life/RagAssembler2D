@@ -870,8 +870,10 @@ test('Animate and Simulate: no gizmo, object drags draw a box and nothing moves'
   modes.openClip(addClipTo(history));
   for (const mode of ['animate', 'simulate']) {
     if (mode === 'simulate') modes.startSimulate();
-    assert.deepEqual(overlay(tools), [], mode);
-    assert.equal(tools.handleAt({ x: 322, y: 200 }), null, mode);
+    const kinds = overlay(tools).map(([kind]) => kind);
+    assert.equal(kinds.includes('rect') || kinds.includes('poly'), false, mode);
+    if (mode === 'simulate') assert.deepEqual(kinds, [], mode);
+    assert.equal(tools.handleAt({ x: 322, y: 200 }), mode === 'animate' ? 'ring' : null, mode);
     hover(tools, 300, 232);
     assert.equal(calls.cursor.at(-1), 'default', mode);
     selection.set([shapes[1]]);
@@ -885,6 +887,30 @@ test('Animate and Simulate: no gizmo, object drags draw a box and nothing moves'
     path(tools, [[322, 200], [250, 128]]);
     assert.equal(snapshot(env), before, mode);
   }
+});
+
+test('Animate: dragging the ring keys the parent joint at the playhead in one undo step and leaves the rest pose', () => {
+  const env = chain();
+  const { model, tools, selection, modes, history, shapes, joints } = env;
+  const before = snapshot(env);
+  const clip = addClipTo(history);
+  modes.openClip(clip);
+  modes.setPlayhead(0.5);
+  selection.set([shapes[1]]);
+  const undoable = history.state.undoLabel;
+  path(tools, [[322, 200], [300, 150], [250, 128]]);
+  const [track] = model.children(clip, 'tracks');
+  assert.equal(model.prop(track, 'target'), model.prop(joints[0], 'id'));
+  const [key] = model.children(track, 'keys');
+  assert.equal(model.prop(key, 't'), 0.5);
+  assert.ok(Math.abs(model.prop(key, 'v') - Math.PI / 2) < 1e-6);
+  assert.equal(snapshot(env), before);
+  assert.equal(history.state.undoLabel, 'Rotate joint');
+  history.undo();
+  assert.equal(model.children(clip, 'tracks').length, 0);
+  assert.equal(history.state.undoLabel, undoable);
+  selection.set([shapes[0]]);
+  assert.equal(tools.handleAt({ x: 322, y: 200 }), null);
 });
 
 test('Select Box shows no gizmo and draws a box over the gizmo and objects', () => {
