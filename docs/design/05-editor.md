@@ -28,7 +28,8 @@ These rules hold everywhere in the editor ([§5.1](05-1-modes.md#51-editor-modes
 | Play in Edit mode, mode switch Simulate | the document has validation errors ([§6.4](06-file-format.md#64-validation)) | "fix the errors in Problems" |
 | Pause | not playing (Animate), or the live run is paused (Simulate) | "not playing"; "already paused" |
 | Stop | Animate mode and not playing | "not playing" |
-| Next frame | Animate mode, a non-looping clip with the playhead at `length` | "at the end of the clip" |
+| Next frame | Animate mode, a non-looping clip with the playhead at `length`, or a looping clip at `length` of the cycle limit | "at the end of the clip"; "cycle limit reached" |
+| Cycle ‹, › ([§5.8](05-8-animation-timeline.md#58-animation-timeline)) | the playhead is in cycle 1; in the cycle limit | "first cycle"; "cycle limit reached" |
 | Delete | no body, shape or joint is selected | "select a body, shape or joint" |
 | Delete | only the root is selected | "the ragdoll root cannot be deleted" |
 | Duplicate | nothing duplicable is selected ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | "select a body, shape or non-loop joint" |
