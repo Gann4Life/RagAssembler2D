@@ -161,11 +161,14 @@ test('gizmoPivot works in world meters under a moved and rotated root', () => {
   assert.equal(gizmoPivot(model, [ROOT_UID], { mode: 'last', ctrl: true }), null);
 });
 
-test('canRotate: any body, or two joints', () => {
-  assert.equal(canRotate({ bodies: [3], joints: [] }), true);
-  assert.equal(canRotate({ bodies: [], joints: [4] }), false);
-  assert.equal(canRotate({ bodies: [], joints: [4, 5] }), true);
-  assert.equal(canRotate({ bodies: [], joints: [] }), false);
+test('canRotate: any body, two joints, or a joint with a child body', () => {
+  const { model, history, bodies, joints } = environment();
+  assert.equal(canRotate(model, { bodies: [bodies[1]], joints: [] }), true);
+  assert.equal(canRotate(model, { bodies: [], joints: [joints[0]] }), true);
+  assert.equal(canRotate(model, { bodies: [], joints: [joints[0], joints[1]] }), true);
+  assert.equal(canRotate(model, { bodies: [], joints: [] }), false);
+  const loopJoint = history.execute(createJoint({ bodyA: bodies[0], bodyB: bodies[3], anchor: { x: 0, y: 1 } }));
+  assert.equal(canRotate(model, { bodies: [], joints: [loopJoint] }), true);
 });
 
 test('startMove moves along X, Y or freely; the pivot follows the move', () => {
@@ -317,7 +320,7 @@ test('startRotation of two bodies with overlapping subtrees turns each body once
   assert.equal(drag.readout(), 'Δθ: 15.0°');
 });
 
-test('startRotation of two joints turns only their anchors; Last selected uses the last one alone', () => {
+test('startRotation of two joints turns their anchors and the child subtrees; Last selected uses the last one alone', () => {
   const env = environment();
   const { model, ctx, selection, bodies, joints } = env;
   selection.set([joints[0], joints[2]]);
@@ -328,7 +331,7 @@ test('startRotation of two joints turns only their anchors; Last selected uses t
   nearPair(anchor(model, joints[0]), [2.5, 0]);
   nearPair(anchor(model, joints[2]), [0.5, 0]);
   assert.deepEqual(anchor(model, joints[1]), [1.5, 0]);
-  for (const [index, x] of [[0, 0], [1, 1], [2, 2], [3, 3]]) assert.deepEqual(position(model, bodies[index]), [x, 0]);
+  for (const [index, x] of [[0, 0], [1, 2], [2, 1], [3, 0]]) nearPair(position(model, bodies[index]), [x, 0]);
   env.history.undo();
   env.history.undo();
   const last = startRotation(ctx, { target, press: event(env, { x: 3.5, y: 0 }), mode: 'last' });

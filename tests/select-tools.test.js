@@ -766,7 +766,7 @@ test('#127: the joint at the pivot is pressed as an object; a child joint under 
   path(tools, [[252, 200], [252, 230]]);
   assert.deepEqual(selection.objects, [joints[0]]);
   nearPair(model.prop(joints[0], 'anchor'), [0.5, -0.3]);
-  assert.deepEqual(model.prop(bodies[1], 'position'), [1, 0]);
+  nearPair(model.prop(bodies[1], 'position'), [1, -0.3]);
   env.history.undo();
   env.history.execute(setProps([shapes[1]], { 'shape.radius': 0.2 }));
   camera.zoomAt({ x: 200, y: 200 }, 0.4);
@@ -900,7 +900,7 @@ test('Select Box shows no gizmo and draws a box over the gizmo and objects', () 
   assert.deepEqual(selection.objects, [env.joints[1]]);
 });
 
-test('overlay: no gizmo for the root alone, the gizmo for one body, one joint without a ring, and several objects with each pivot mark', () => {
+test('overlay: no gizmo for the root alone, the gizmo for one body, one joint with a ring, and several objects with each pivot mark', () => {
   const env = chain();
   const { tools, selection, actions, history, shapes, joints } = env;
   assert.deepEqual(overlay(tools), []);
@@ -916,8 +916,7 @@ test('overlay: no gizmo for the root alone, the gizmo for one body, one joint wi
   selection.set([joints[1]]);
   const joint = overlay(tools);
   assert.deepEqual(joint.slice(0, 3), [['moveTo', 356, 200], ['lineTo', 422, 200], ['stroke', { width: LINE_WIDTH.outline, color: COLORS.gizmo }]]);
-  assert.equal(ringAt(joint.slice(3)), null);
-  assert.deepEqual(xArrowStart(joint.slice(3)), { x: 350, y: 200 });
+  assert.deepEqual(ringAt(joint.slice(3)), { x: 350, y: 200 });
   selection.set([shapes[2], shapes[1], joints[2]]);
   near(ringAt(overlay(tools)).x, 200 + (100 * (2 + 1 + 2.5)) / 3);
   actions.run('pivot-mode');
@@ -1173,11 +1172,11 @@ function limitDegrees(env) {
   return [Math.round((lower * 180) / Math.PI * 1e6) / 1e6 + 0, Math.round((upper * 180) / Math.PI * 1e6) / 1e6 + 0];
 }
 
-test('limits: one joint shows the ring only when its range can rotate', () => {
+test('limits: one joint with a child body shows the ring, which edits the limits only when the range can rotate', () => {
   const cases = [
     [{ enabled: true, lower: -Math.PI / 6, upper: Math.PI / 4 }, 'ring'],
-    [{ enabled: false, lower: 0, upper: 0 }, null],
-    [{ enabled: true, lower: -Math.PI, upper: Math.PI }, null],
+    [{ enabled: false, lower: 0, upper: 0 }, 'ring'],
+    [{ enabled: true, lower: -Math.PI, upper: Math.PI }, 'ring'],
   ];
   for (const [limits, expected] of cases) {
     const { tools } = limitChain(limits);

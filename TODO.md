@@ -78,6 +78,8 @@
 - [x] #156 Change the Pose tool hotkey from P to D
 - [ ] #158 Sprite folder resolution on Load and image export on Save
 - [ ] #165 Copy and paste selection with Ctrl+C / Ctrl+V, including across documents
+- [x] #168 Move a joint with its hierarchy by default and only the joint with Alt
+- [ ] #169 Snap while holding Ctrl instead of the Snap to grid setting
 
 ## Phase 2 – Editor: animation
 - [ ] #30 Evaluator: track sampling, interpolation and channel defaults
