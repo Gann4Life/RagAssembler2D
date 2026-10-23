@@ -7,8 +7,8 @@
 | **Simulate** | Play | Live physics through RagImporter | Nothing (read-only). Stop returns to the previous mode |
 
 **FK preview:** in Animate mode the viewport places bodies by forward kinematics:
-- `rootBody` stays at its rest transform;
-- each child is rotated around its joint anchor by the evaluated `angle`.
+- `rootBody` is rotated by the evaluated root `bodyAngle` ([§4.2](04-animation-model.md#42-channels)) around its **center of mass** in the rest pose (`bodyMassData`, root-local; the body origin when its mass is 0), which stays fixed: a free body turned by a pure torque, as the balance controller does at runtime ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). At `bodyAngle = 0` it is at its rest transform;
+- each child is rotated around its joint anchor by the evaluated `angle`, carried by its parent's FK transform, so the whole ragdoll follows `rootBody`.
 
 Multiplier channels don't move anything. They are shown as the fill of the joint gizmo (grey 0 % → saturated 100 %). Sprite channels swap images live.
 
@@ -20,7 +20,7 @@ Multiplier channels don't move anything. They are shown as the fill of the joint
 | Pose | ✓ | ✓ (into keys, below) | — |
 | Creation tools: Circle, Box, Polygon, Hinge | ✓ | — | — |
 | Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add, rename and delete; Group, Ungroup, Split, Duplicate, Fit motor torque; Select move and rest-pose rotate (objects and transform gizmo), joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
-| Animation edits: clip properties, tracks, keys, events, key buttons ◆, autokey, Key selected (K), Select rotation ring → parent joint `angle`, Pose → keys | — | ✓ | — |
+| Animation edits: clip properties, tracks, keys, events, key buttons ◆, autokey, Key selected (K), Select rotation ring → parent joint `angle` (root `bodyAngle` for `rootBody`), Pose → keys | — | ✓ | — |
 | Asset import | ✓ | ✓ | — |
 | Asset delete | ✓ | — | — |
 | Clip selector, New clip | ✓ | ✓ | — |

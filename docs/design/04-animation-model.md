@@ -28,7 +28,11 @@ A clip contains **tracks** (one per `target + channel`) and **events**.
 | root | `strength` | global multiplier 0–1 | `ragdoll.channels.strength` (default 1) |
 | root | `gain` | global multiplier 0–1 | `ragdoll.channels.gain` (default 1) |
 | root | `damping` | global multiplier 0–1 | `ragdoll.channels.damping` (default 1) |
+| root | `bodyAngle` | radians, world orientation of `rootBody` relative to its rest orientation in the root frame | `0` (rest orientation) |
 | shape | `sprite` | **discrete**: sprite asset id, or `null` (hidden) | the shape's `sprite.asset` |
+
+- **`bodyAngle`** is the target of the balance controller at runtime ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)) and the rotation of `rootBody` in the FK preview ([§5.1](05-1-modes.md#51-editor-modes)). Positive is counter-clockwise; `0.3` means "`rootBody` turned 0.3 rad counter-clockwise from how it was spawned". It is an angle channel like a joint's `angle`: same interpolation, same additive rule, no base field in `ragdoll.channels`. It is not the root's own `ragdoll.angle` (the locked editor placement, [§2.1](02-object-model.md#21-root-the-ragdoll-itself)), hence the distinct name.
+- There is no root position channel: under physics the ragdoll's position comes from its legs and contacts, never from an animated offset ([§13](13-out-of-scope.md#13-out-of-scope-for-v1-backlog)).
 
 Body and shape physics are never animated. The only animatable property of a shape is which image its sprite shows (e.g. a face that swaps between `face_normal`, `face_pain` and `face_dead`).
 
@@ -50,14 +54,14 @@ Each channel of each target is resolved independently, every step:
 2. Walk the active layers from **lowest to highest** index. A layer only affects the channels its clip has a track for. There are **no masks**: the tracks *are* the mask.
    - **override:** `value = lerp(below, clipValue, w)`
    - **additive:**
-     - `angle`: `value = below + clipValue · w` (the clip stores offsets);
+     - `angle` and `bodyAngle`: `value = below + clipValue · w` (the clip stores offsets);
      - multipliers: `value = below · lerp(1, clipValue, w)`.
    - **discrete** (`sprite`): always override, regardless of `blend`. The clip's value is taken when `w ≥ 0.5`, so the image switches at the middle of a fade.
 
    `w` is the clip's effective weight: fade progress × runtime weight.
 3. Apply **procedural overrides** ([§4.8](#48-procedural-joint-control)) on top of all layers.
 4. Clamp multiplier channels to 0–1.
-5. Apply the root multipliers to every joint ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)). **The root never replaces joint values, it only scales them.**
+5. Apply the root multipliers to every joint ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)) and to the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). **The root never replaces joint values, it only scales them.** Root `bodyAngle` is not a multiplier: it feeds only the balance controller and FK. Procedural overrides never touch it.
 
 **Crossfade on the same layer.** When a clip enters a layer that already has an active clip, both are evaluated against the same `below`:
 

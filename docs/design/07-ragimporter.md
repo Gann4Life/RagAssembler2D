@@ -57,7 +57,7 @@ app.ticker.add(() => {
 | `RagImporter.parse(json) → RagDef` | Validates with `validate(json)` and builds an immutable definition. Throws `RagFormatError` when there is at least one error; warnings never throw. The definition copies what it needs: later changes to `json` do not affect it, and unknown and editor-only fields are dropped (except `editor.color`, for `debug`). |
 | `RagFormatError` | Exported next to `RagImporter`. Extends `Error`; `name` is `"RagFormatError"`; `errors` and `warnings` are frozen copies of the arrays `validate` returned. `message`: for an unsupported `version`, `Unsupported .rag.json version <v>; supported: <list>`; otherwise `Invalid .rag.json: <n> error(s); first: <code> at <path>`. |
 | `RagImporter.validate(json) → { errors, warnings }` | Validation without throwing: two arrays of problems `{ severity, code, message, path, target }` ([§6.4](06-file-format.md#64-validation)). |
-| `RagImporter.supportedVersions` | Frozen array of the format versions `parse` and `validate` accept, e.g. `[1]`. |
+| `RagImporter.supportedVersions` | Frozen array of the format versions `parse` and `validate` accept: `[2]` ([§6.3](06-file-format.md#63-versioning)). |
 
 **`RagDef`** (one per file; can spawn many instances)
 
@@ -87,12 +87,13 @@ app.ticker.add(() => {
 | `isPlaying(key)` | Whether the clip is active. |
 | `activeClip(layer)` | Key of the clip active on a layer. |
 | `setStrength(v)` / `setGain(v)` / `setDamping(v)` | Runtime global multipliers, 0–1, default 1. |
+| `setBalance(enabled)` | Per-instance switch of the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)), default `true`. The controller runs only when this switch and the file's `balance.enabled` are both on, so `true` never enables a ragdoll whose file disables it. A non-boolean throws a `TypeError`. |
 | `lookAt(jointName, worldPoint, { weight, strength, fadeIn })` | Procedural aim ([§4.8](04-animation-model.md#48-procedural-joint-control)). Calling it again updates the target and options. |
 | `setJointAngle(jointName, angle, { weight, strength, fadeIn })` | Procedural override with a direct angle (radians, relative to rest). |
 | `clearJointOverride(jointName, { fadeOut })` / `clearAllOverrides()` | Removes overrides. |
 | `toWorld(pixiPoint) → { x, y }` / `toPixi(worldPoint)` | Coordinate conversion through `pixelsPerMeter` and the view's parent transform. |
 | `on(type, fn)` / `off(type, fn)` | Types: `event` (custom), `start`, `loop`, `complete`, `stop`. `on` returns a function that removes the listener. |
-| `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors and sprite images. Call it once per physics step, **before** `world.Step`. |
+| `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors, applies the balance torque to `rootBody` and swaps sprite images. Call it once per physics step, **before** `world.Step`, with that step's `dt` (the balance torque is sized for it, [§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). |
 | `sync()` | Copies body transforms to the sprites. Call it **after** `world.Step`. |
 | `view` | The instance's `PIXI.Container`, with `sortableChildren` on and sprite `zIndex = z`. |
 | `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun (`Box2D.b2Body`, `Box2D.b2RevoluteJoint`, `Box2D.b2Fixture`) / PIXI objects, looked up by name; `undefined` for an unknown name. When names repeat (warning `W_DUPLICATE_NAME`), the first in file order wins. |
@@ -113,7 +114,7 @@ app.ticker.add(() => {
 4. Joints: `b2RevoluteJointDef.Initialize(bodyA, bodyB, anchorWorld)`, then `collideConnected`, `enableLimit = limits.enabled`, `lowerAngle` / `upperAngle` (mirrored with `flipX`), `enableMotor = false`; `world.CreateJoint`, cast once (below).
 5. View: `new PIXI.Container()` with `sortableChildren = true`, added to `parent` when given; sprites per [§7.3](#73-sprites-and-rendering).
 
-**Motors start off.** `update()` enables and drives them ([§3](03-physics-drive-model.md)). An instance whose `update()` is never called is a passive ragdoll held only by its joint limits.
+**Motors start off.** `update()` enables and drives them ([§3](03-physics-drive-model.md)) and applies the balance torque ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). An instance whose `update()` is never called is a passive ragdoll held only by its joint limits. Spawn records `θ₀`, `rootBody`'s world angle as created (`S.angle + L′.angle`), as the balance reference; `I_root` and `I_tot` are part of the `RagDef`, computed once by `parse`.
 
 **Spawn memory** ([§7.4](#74-native-memory)). Spawn uses one scratch `b2Vec2` for every position, center and anchor (each setter copies it), destroys each def and shape right after the `Create*` call that used it, and destroys the scratch vector before returning. A polygon's vertices go through one native buffer: `Box2D._malloc(8 × count)`, written as float32 `x, y` pairs through `Box2D.HEAPF32`, passed as `Box2D.wrapPointer(ptr, Box2D.b2Vec2)` and released with `Box2D._free(ptr)` right after `Set`. After `spawn` returns, only world-owned objects remain.
 
@@ -127,7 +128,7 @@ app.ticker.add(() => {
   - root-local and body-local x coordinates and body, box and joint-relative angles are negated;
   - polygon vertex order is reversed (to stay CCW);
   - limits become `(−upper, −lower)` (a joint angle `θ` of the original is `−θ` in the mirror);
-  - `angle` channel values are negated during evaluation;
+  - `angle` and root `bodyAngle` channel values are negated during evaluation;
   - `aimAxis` becomes `π − aimAxis`;
   - each sprite's horizontal scale and its offset x are negated.
 - Self-collision is set up at spawn time following [§2.5](02-object-model.md#25-collision-rules) and [§7.5](#75-contact-filter-and-host-integration): each fixture is registered right after `CreateFixture`, before any `world.Step` can pair it.

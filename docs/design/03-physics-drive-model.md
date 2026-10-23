@@ -43,3 +43,40 @@ suggestion  = roundUp2(I_eff · α + M_L · g · r_L),  at least τ_min
 - No suggestion (`null`) for a joint whose `bodyA` or `bodyB` is not a body id, whose bodies are the same, or whose side A or side B has zero mass. `doc` is `{ bodies, joints }` in file shape; the function never throws and skips bodies and fixtures it cannot read.
 - Examples (density 1): a 6 g fingertip circle (radius 0.044 m, center 0.036 m from the anchor) on a 1.6 kg creature gives 0.0036 N·m; that creature's hip (leg side 0.48 kg, I ≈ 0.14 kg·m²; rest I ≈ 0.41 kg·m²) about 13 N·m; a humanoid of 0.3–1.4 kg bodies gets about 4–70 N·m.
 - Used by the Hinge tool for new joints ([§5.5](05-5-tools.md#55-tools)), by Fit motor torque ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) and by `W_MOTOR_OVERPOWERED` ([§6.4](06-file-format.md#64-validation)).
+
+## 3.2 Balance controller (rootBody orientation)
+Joint motors only drive relative angles, so nothing in §3 sets the world orientation of `rootBody`: under gravity the whole ragdoll tips over. The **balance controller** tracks the root `bodyAngle` channel ([§4.2](04-animation-model.md#42-channels)) by applying a torque to `rootBody` every step, in `update()`, after the joint motors:
+
+```
+target   = resolved root bodyAngle (rad, relative to rest; negated with flipX)
+θ*       = θ₀ + target                     θ₀ = rootBody's world angle right after spawn
+error    = wrapToPi(θ* − rootBody.GetAngle())
+ω        = rootBody.GetAngularVelocity()
+S        = rootStrength × runtimeStrength
+G        = rootGain     × runtimeGain     × balance.gain
+D        = rootDamping  × runtimeDamping  × balance.damping
+I_ctrl   = lerp(I_root, I_tot, S)
+
+ω*       = clamp(G · error − D · ω, −balance.maxSpeed, balance.maxSpeed)
+torque   = clamp(I_ctrl · (ω* − ω) / dt, −S · balance.maxTorque, S · balance.maxTorque)
+apply    = balance.enabled and the instance's balance switch is on and S > 0 and dt > 0
+           → rootBody.ApplyTorque(torque, true)
+```
+
+- `balance.gain` (1/s), `balance.damping` (unitless), `balance.maxSpeed` (rad/s) and `balance.maxTorque` (N·m) are ragdoll-level base values (`ragdoll.balance`, [§6.2](06-file-format.md#62-field-reference)) with the same meaning as a joint's motor values: the controller is a motor between `rootBody` and the world frame. Root `strength`, `gain` and `damping` and the runtime multipliers scale it as they scale every joint, so `dead` (root `strength` → 0) also releases the balance. There are no joint-level multipliers here.
+- `I_root` is `rootBody`'s rotational inertia about its own center of mass; `I_tot` is the inertia of the bodies connected to `rootBody` (the §6.4 edge rule, `rootBody` included) about their common center of mass, rest pose. Both come from `bodyMassData` at `parse` and never change; no native getter is used (`b2Body.GetInertia` is about the body origin). `I_ctrl` blends between them by `S` because a stiff ragdoll turns as one piece while a loose one leaves `rootBody` to turn alone; the term `I_ctrl · Δω / dt` then reaches `ω*` in about one step without overshooting the inertia it actually drives.
+- The error is wrapped to (−π, π], so a ragdoll that tumbled while limp turns back the short way when it revives. A keyed full turn still works as long as the body follows its target within half a turn.
+- **This is an external torque, not a physical one.** Nothing pushes back on the ground or the world: it is the standard active-ragdoll trick (an invisible hand keeping the pelvis oriented). It does not move the ragdoll, so it never holds it up against gravity by itself: legs and contacts do that. Turn it off per ragdoll with `balance.enabled = false` (a passive ragdoll driven only by joint motors, as before format version 2) or per instance at runtime with `setBalance(false)` ([§7.1](07-ragimporter.md#71-api)).
+- The loop allocates nothing ([§7.4](07-ragimporter.md#74-native-memory)): `GetAngle`, `GetAngularVelocity` and `ApplyTorque` take and return numbers.
+- Without a `bodyAngle` track the target is `0`: the controller keeps `rootBody` at its spawn orientation.
+
+**Suggested balance torque.** `balanceTorqueSuggestion(doc)` (pure, `lib/motor.js`) uses the constants of [§3.1](#31-suggested-motor-torque):
+
+```
+bodies      R = rootBody and every body connected to it (§6.4 edge rule); O = R without rootBody
+M_O, C_O    mass and mass-weighted center of O; c_root = rootBody's center of mass
+I_tot       = Σ_{b∈R} (I_b + m_b · |c_b − C_R|²)       C_R = mass-weighted center of R
+suggestion  = roundUp2(I_tot · α + M_O · g · |C_O − c_root|),  at least τ_min
+```
+
+`null` when `rootBody` is not a body id or `R` has zero mass. Example (density 4): `rootBody` a 0.5 × 0.5 m box at (0, 0) and one jointed 0.5 × 0.5 m box at (0, 0.5), 1 kg each: `I_tot = 2 · (1/24 + 1 · 0.25²) ≈ 0.2083 kg·m²`, gravity term `1 · 10 · 0.5 = 5`, suggestion `roundUp2(20.83 + 5) = 26 N·m`. Used by Fit motor torque ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) and by the 1 → 2 migration ([§6.3](06-file-format.md#63-versioning)).

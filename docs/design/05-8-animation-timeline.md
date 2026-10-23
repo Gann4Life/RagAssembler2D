@@ -23,7 +23,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
   - The root track group always comes first.
   - Then one group per joint, with sub-tracks for the channels that have keys.
   - Then one group per shape that has a `sprite` track. Its keys are drawn as image thumbnails and always use `step`.
-  - "+ Track" adds a channel for the selected joint or shape.
+  - "+ Track" adds a channel for the selected joint or shape, or a root channel (`strength`, `gain`, `damping`, `bodyAngle`) when the root is selected.
   - Deleting a track removes its keys.
 - **Keys:**
   - Shown as diamonds, styled by interpolation.

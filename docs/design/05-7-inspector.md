@@ -15,6 +15,8 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | pixelsPerMeter | Editor and runtime render scale. |
 | preview gravity | Editor preview only. |
 | strength, gain, damping ◆ | Base global multipliers (0–100 %). Animatable as root channels. |
+| body angle ◆ | Animate mode only: the evaluated root `bodyAngle` at the playhead, in degrees ([§4.2](04-animation-model.md#42-channels)). No base field. |
+| balance | `enabled`, `maxTorque`, `gain`, `damping`, `maxSpeed` of the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)), shown like a joint's motor fields. |
 
 **Body**
 
