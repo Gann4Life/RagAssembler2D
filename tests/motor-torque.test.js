@@ -16,7 +16,74 @@ function joint(id, bodyA, bodyB, anchor) {
 
 test('MOTOR_TORQUE holds the frozen constants of DESIGN §3.1', () => {
   assert.ok(Object.isFrozen(MOTOR_TORQUE));
-  assert.deepEqual({ ...MOTOR_TORQUE }, { alpha: 100, gravity: 10, min: 0.001, overpoweredFactor: 1000 });
+  assert.deepEqual({ ...MOTOR_TORQUE }, { alpha: 100, gravity: 10, min: 0.001, overpoweredFactor: 1000, groundBand: 0.05 });
+});
+
+function need(a, b, load) {
+  return (a.inertia * b.inertia) / (a.inertia + b.inertia) * 100 + load.mass * 10 * load.reach;
+}
+
+function roundUp2(value) {
+  const scale = 10 ** (Math.floor(Math.log10(value)) - 1);
+  return Math.ceil(value / scale - 1e-9) * scale;
+}
+
+function standing() {
+  return {
+    bodies: [boxBody('foot', [0, 0.05], 0.4, 0.1), boxBody('body', [0, 1.15], 0.2, 2)],
+    joints: [joint('ankle', 'foot', 'body', [0, 0.1])],
+  };
+}
+
+test('a joint above a foot holds the side away from the ground, however heavy', () => {
+  const foot = { mass: 0.04, inertia: (0.04 * 0.17) / 12 + 0.04 * 0.05 ** 2, reach: 0.05 };
+  const body = { mass: 0.4, inertia: (0.4 * 4.04) / 12 + 0.4 * 1.05 ** 2, reach: 1.05 };
+  const value = motorTorqueSuggestions(standing()).get('ankle');
+  assert.ok(Math.abs(value - roundUp2(need(foot, body, body))) < 1e-9, `${value}`);
+  assert.ok(value > 2 * roundUp2(need(foot, body, foot)));
+});
+
+test('each foot of a biped holds the rest of the body; a joint inside one foot and a free arm do not', () => {
+  const doc = {
+    bodies: [
+      boxBody('heel', [-0.6, 0.05], 0.2, 0.1),
+      boxBody('toe', [-0.4, 0.05], 0.2, 0.1),
+      boxBody('right', [0.5, 0.05], 0.4, 0.1),
+      boxBody('legL', [-0.5, 0.6], 0.2, 1),
+      boxBody('legR', [0.5, 0.6], 0.2, 1),
+      boxBody('hip', [0, 1.2], 1.2, 0.2),
+      boxBody('arm', [0.8, 1.2], 0.4, 0.1),
+    ],
+    joints: [
+      joint('toes', 'heel', 'toe', [-0.5, 0.05]),
+      joint('ankleL', 'legL', 'heel', [-0.5, 0.1]),
+      joint('ankleR', 'legR', 'right', [0.5, 0.1]),
+      joint('hipL', 'hip', 'legL', [-0.5, 1.1]),
+      joint('hipR', 'hip', 'legR', [0.5, 1.1]),
+      joint('shoulder', 'hip', 'arm', [0.6, 1.2]),
+    ],
+  };
+  const result = motorTorqueSuggestions(doc);
+  assert.ok(result.get('ankleL') >= 0.72 * 10 * 0.906, `${result.get('ankleL')}`);
+  assert.ok(result.get('ankleR') >= 0.72 * 10 * 0.5, `${result.get('ankleR')}`);
+  assert.ok(result.get('toes') < 0.5, `${result.get('toes')}`);
+  assert.ok(result.get('shoulder') < 0.5, `${result.get('shoulder')}`);
+});
+
+test('a chain lying on the ground uses the lighter side at every joint', () => {
+  const bodies = [boxBody('a', [0, 0.05], 1, 0.1), boxBody('b', [1, 0.05], 1, 0.1), boxBody('c', [2, 0.05], 1, 0.1)];
+  const joints = [joint('ab', 'a', 'b', [0.5, 0.05]), joint('bc', 'b', 'c', [1.5, 0.05])];
+  assert.equal(motorTorqueSuggestions({ bodies, joints }).get('ab'), 3.5);
+});
+
+test('sensor shapes do not count as ground contact', () => {
+  const doc = standing();
+  const probe = { shape: { type: 'circle', center: [0, -1.1], radius: 0.2 }, density: 0.0001, isSensor: true };
+  doc.bodies[1].fixtures.push(probe);
+  const plain = motorTorqueSuggestions(standing()).get('ankle');
+  assert.ok(motorTorqueSuggestions(doc).get('ankle') >= plain * 0.99);
+  probe.isSensor = false;
+  assert.ok(motorTorqueSuggestions(doc).get('ankle') < plain / 2);
 });
 
 test('a two-body joint gets roundUp2(I_eff * alpha + M_L * g * r_L)', () => {
