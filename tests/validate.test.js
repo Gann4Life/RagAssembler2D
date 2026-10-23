@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PROBLEM_CODES, SUPPORTED_VERSIONS, validate } from '../lib/validate.js';
+import { balanceTorqueSuggestion } from '../lib/motor.js';
 import { RagImporter } from '../lib/ragimporter.js';
 import { shapeGeometryValid } from '../lib/geometry.js';
 import { defaultsOf } from '../lib/schema.js';
@@ -202,6 +203,7 @@ const cases = [
   { code: 'W_ANCHOR_OUTSIDE', mutate: (j) => void (j.joints[1].anchor = [5, 5]), path: '/joints/1/anchor' },
   { code: 'W_BODY_ZERO_MASS', mutate: (j) => void (j.bodies[1].fixtures[0].density = 0), path: '/bodies/1' },
   { code: 'W_MOTOR_OVERPOWERED', mutate: (j) => void (j.joints[2].motor.maxTorque = 1e6), path: '/joints/2/motor/maxTorque' },
+  { code: 'W_MOTOR_UNDERPOWERED', mutate: (j) => void (j.joints[2].motor.maxTorque = 0.001), path: '/joints/2/motor/maxTorque' },
   {
     code: 'W_CLIP_EMPTY',
     mutate: (j) => {
@@ -228,7 +230,7 @@ test('a complete valid file has no problems', () => {
 
 test('PROBLEM_CODES lists exactly the contract codes, frozen, with severity from the prefix', () => {
   assert.ok(Object.isFrozen(PROBLEM_CODES));
-  assert.equal(Object.keys(PROBLEM_CODES).length, 43);
+  assert.equal(Object.keys(PROBLEM_CODES).length, 44);
   for (const [code, severity] of Object.entries(PROBLEM_CODES)) {
     assert.equal(severity, code.startsWith('E_') ? 'error' : 'warning', code);
   }
@@ -578,7 +580,7 @@ test('W_MOTOR_OVERPOWERED fires only above 1000 times the suggestion, without va
   const [warning] = validate(json).warnings;
   assert.equal(warning.code, 'W_MOTOR_OVERPOWERED');
   assert.deepEqual(warning.target, { type: 'joint', id: 'j_neck' });
-  assert.match(warning.message, /Fit motor torque/);
+  assert.match(warning.message, /RagAssembler sets it automatically/);
   assert.doesNotMatch(warning.message, /\d/);
 });
 
@@ -680,4 +682,49 @@ test('RagImporter.validate delegates to validate and supportedVersions is the fr
   const calls = [];
   RagImporter.validate(validFile(), { hasImage: (asset) => calls.push(asset) });
   assert.deepEqual(calls, []);
+});
+
+test('W_MOTOR_UNDERPOWERED fires only below 0.1 times the suggestion, without values in the message', () => {
+  const json = validFile();
+  json.joints[2].motor.maxTorque = 0.1 * 0.47;
+  assert.deepEqual(validate(json).warnings, []);
+  json.joints[2].motor.maxTorque = 0.04;
+  const [warning] = validate(json).warnings;
+  assert.equal(warning.code, 'W_MOTOR_UNDERPOWERED');
+  assert.equal(warning.path, '/joints/2/motor/maxTorque');
+  assert.match(warning.message, /RagAssembler sets it automatically/);
+  assert.doesNotMatch(warning.message, /\d/);
+});
+
+test('the balance torque warns above 1000 and below 0.1 times its suggestion while enabled', () => {
+  const json = validFile();
+  const suggestion = balanceTorqueSuggestion(json);
+  assert.equal(typeof suggestion, 'number');
+  const balanceWarnings = (torque, enabled = true) => {
+    const copy = validFile();
+    copy.ragdoll.balance.maxTorque = torque;
+    copy.ragdoll.balance.enabled = enabled;
+    return summary(validate(copy).warnings).filter((problem) => problem.path === '/ragdoll/balance/maxTorque');
+  };
+  assert.deepEqual(balanceWarnings(suggestion), []);
+  assert.deepEqual(balanceWarnings(1001 * suggestion), [{ code: 'W_MOTOR_OVERPOWERED', path: '/ragdoll/balance/maxTorque' }]);
+  assert.deepEqual(balanceWarnings(0.09 * suggestion), [{ code: 'W_MOTOR_UNDERPOWERED', path: '/ragdoll/balance/maxTorque' }]);
+  assert.deepEqual(balanceWarnings(0.09 * suggestion, false), []);
+  const target = validate((() => {
+    const copy = validFile();
+    copy.ragdoll.balance.maxTorque = 0;
+    return copy;
+  })()).warnings.find((problem) => problem.path === '/ragdoll/balance/maxTorque').target;
+  assert.deepEqual(target, { type: 'root', id: 'root' });
+});
+
+test('the balance torque check is skipped on errors in bodies or in the ragdoll', () => {
+  const bodyError = validFile();
+  bodyError.ragdoll.balance.maxTorque = 0;
+  bodyError.bodies[1].fixtures[0].friction = -1;
+  assert.ok(!problemsOf(bodyError).some((problem) => problem.path === '/ragdoll/balance/maxTorque'));
+  const rootError = validFile();
+  rootError.ragdoll.balance.maxTorque = 0;
+  rootError.ragdoll.balance.gain = -1;
+  assert.ok(!problemsOf(rootError).some((problem) => problem.code.startsWith('W_MOTOR')));
 });
