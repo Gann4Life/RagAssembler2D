@@ -155,7 +155,7 @@ test('rotating a body in Animate mode keys the parent joint at the playhead as o
   assert.equal(history.state.undoLabel, undoDepth);
 });
 
-test('Animate rotation updates the existing key, adds from the evaluated angle and SHIFT snaps to 15 degrees', () => {
+test('Animate rotation updates the existing key, adds from the evaluated angle and CTRL snaps to 15 degrees', () => {
   const env = environment();
   const { model, history, modes, ctx, bodies, joints, clip } = env;
   history.execute(setJointAngleKey(clip, joints[0], 0, 0.3));
@@ -167,6 +167,9 @@ test('Animate rotation updates the existing key, adds from the evaluated angle a
   assert.equal(row.keys.length, 1);
   near(row.keys[0].v, 0.3 + 20 * DEG);
   drag.apply(pointer(env, { x: 0.5 + Math.cos(20 * DEG), y: Math.sin(20 * DEG) }, { shift: true }));
+  [row] = jointAngleRows(model, clip);
+  near(row.keys[0].v, 0.3 + 20 * DEG);
+  drag.apply(pointer(env, { x: 0.5 + Math.cos(20 * DEG), y: Math.sin(20 * DEG) }, { ctrl: true }));
   [row] = jointAngleRows(model, clip);
   near(row.keys[0].v, 30 * DEG);
   near(drag.sweep().angle, 30 * DEG - 0.3);

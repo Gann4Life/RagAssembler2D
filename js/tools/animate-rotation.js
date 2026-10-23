@@ -64,7 +64,7 @@ export function rotatedJointAngle(model, pose, target, turn) {
 
 /**
  * Starts a rotation drag in Animate mode: the pointer's sweep around the parent joint's anchor turns the body, and each
- * step sets the joint `angle` key at the playhead (SHIFT snaps the joint angle to 15°; CTRL and ALT do nothing).
+ * step sets the joint `angle` key at the playhead (CTRL snaps the joint angle to 15°; SHIFT and ALT do nothing).
  * Executes one command per step on `ctx.history`.
  * @param {import('./tool.js').ToolContext} ctx Tool context.
  * @param {{ target: AnimateTarget, press: import('./tool.js').ToolPointerEvent }} options Target and press event.
@@ -85,7 +85,7 @@ export function startAnimateRotation(ctx, { target, press }) {
   return Object.freeze({
     apply(e) {
       const raw = rotatedJointAngle(model, pose, target, tracker.update(e.world));
-      const angle = ctx.snapAngle(raw.angle, e.shift);
+      const angle = ctx.snapAngle(raw.angle, e.ctrl);
       applied = (angle - raw.base) * raw.direction + 0;
       ctx.history.execute(setJointAngleKey(clip, target.joint, time, angle, 'Rotate joint'));
     },
