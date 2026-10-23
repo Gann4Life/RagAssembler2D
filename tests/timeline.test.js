@@ -208,6 +208,52 @@ test('play in Animate mode plays the open clip from 0 and stop restores clip and
   assert.equal(editor.modes.playhead, 1.5);
 });
 
+test('scrub while paused stops the simulation and moves the playhead in Animate mode', () => {
+  const editor = editorWithBody();
+  const clip = editor.history.execute(createClip());
+  editor.history.execute(setProps([clip], { length: 2 }));
+  editor.modes.openClip(clip);
+  const { simulator, sessions } = fakeSimulator();
+  const { player, poses } = playerWithClock(editor, simulator);
+  player.play();
+  player.pause();
+  assert.equal(player.scrub(1.25), true);
+  assert.equal(sessions[0].destroyed, true);
+  assert.equal(player.simulating, false);
+  assert.equal(editor.modes.mode, 'animate');
+  assert.equal(editor.modes.clip, clip);
+  assert.equal(editor.modes.playhead, 1.25);
+  assert.equal(poses.at(-1), null);
+  assert.equal(player.scrub(5), true);
+  assert.equal(editor.modes.playhead, 2);
+});
+
+test('scrub while playing stops it and a later scrub does not need a simulation', () => {
+  const editor = editorWithBody();
+  const clip = editor.history.execute(createClip());
+  editor.modes.openClip(clip);
+  const { simulator, sessions } = fakeSimulator();
+  const { player } = playerWithClock(editor, simulator);
+  player.play();
+  assert.equal(player.scrub(0.5), true);
+  assert.equal(player.playing, false);
+  assert.equal(sessions.length, 1);
+  assert.equal(player.scrub(0.25), true);
+  assert.equal(editor.modes.playhead, 0.25);
+});
+
+test('scrub from a simulation started in Edit mode only stops it', () => {
+  const editor = editorWithBody();
+  const { simulator, sessions } = fakeSimulator();
+  const { player } = playerWithClock(editor, simulator);
+  player.play();
+  assert.equal(player.scrub(1), false);
+  assert.equal(sessions[0].destroyed, true);
+  assert.equal(editor.modes.mode, 'edit');
+  assert.equal(editor.modes.playhead, 0);
+  assert.equal(player.scrub(1), false);
+});
+
 test('a long frame runs at most the step cap and the playhead loops with the clip', () => {
   const editor = editorWithBody();
   const clip = editor.history.execute(createClip());
