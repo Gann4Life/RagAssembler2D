@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-23
+
+### Added
+- Moving or rotating a joint now carries the body it connects and that body's whole limb; hold Alt to move only the joint anchor. Joints that close a loop always move their anchor only.
+- The rotation ring appears for a single joint with a child body, and for a joint with limits only when its range can rotate.
+
 ## [0.13.0] - 2026-10-17
 
 ### Added
