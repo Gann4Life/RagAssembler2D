@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { RagImporter, RagFormatError } from '../lib/ragimporter.js';
 import { RagDef } from '../lib/def.js';
-import { transformPoint } from '../lib/geometry.js';
+import { bodyMassData, transformPoint } from '../lib/geometry.js';
 import { POSE, createPoseSession, poseTestJson } from '../js/physics/pose-session.js';
 import { ragFile } from './helpers/rag-file.js';
 
@@ -367,4 +367,41 @@ test('no heap growth over 500 start, drag, advance, destroy cycles', () => {
   const before = heapProbe();
   for (let i = 1; i <= 500; i++) cycle(i);
   assert.equal(heapProbe(), before);
+});
+
+test('holdRoot keeps rootBody center and angle while a limb is dragged and lets a grabbed rootBody only turn', () => {
+  const json = ragFile();
+  const rootId = json.ragdoll.rootBody;
+  const press = restWorld(json, 'b_head');
+  const rootCenter = (pose) => {
+    const body = json.bodies.find((item) => item.id === rootId);
+    const center = bodyMassData(body.fixtures).center;
+    return transformPoint(pose.get(rootId), center);
+  };
+  const limb = create(Box2D, json, { root: ROOT, bodyId: 'b_head', point: press, holdRoot: true });
+  try {
+    const before = limb.pose();
+    limb.drag({ x: press.x + 1, y: press.y - 0.5 });
+    run(limb, 1);
+    const after = limb.pose();
+    near(rootCenter(after).x, rootCenter(before).x, 'center x');
+    near(rootCenter(after).y, rootCenter(before).y, 'center y');
+    near(after.get(rootId).angle, before.get(rootId).angle, 'angle');
+    assert.ok(Math.hypot(after.get('b_head').x - before.get('b_head').x, after.get('b_head').y - before.get('b_head').y) > 0.05);
+  } finally {
+    limb.destroy();
+  }
+  const grab = restWorld(json, rootId);
+  const turned = create(Box2D, json, { root: ROOT, bodyId: rootId, point: grab, holdRoot: true });
+  try {
+    const before = turned.pose();
+    turned.drag({ x: grab.x + 0.3, y: grab.y + 0.3 });
+    run(turned, 1);
+    const after = turned.pose();
+    near(rootCenter(after).x, rootCenter(before).x, 'center x');
+    near(rootCenter(after).y, rootCenter(before).y, 'center y');
+    assert.ok(Math.abs(after.get(rootId).angle - before.get(rootId).angle) > 0.05, 'turned');
+  } finally {
+    turned.destroy();
+  }
 });

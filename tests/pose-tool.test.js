@@ -382,3 +382,35 @@ test('a press the physics service refuses shows not-allowed until the release', 
   assert.equal(cancelled.view.cursor.at(-1), 'default');
   assert.equal(cancelled.tools.cancel(), false);
 });
+
+test('Animate: the session holds rootBody and release keys the root bodyAngle with the joint angles', () => {
+  const env = animateEnvironment({ turn: 0 });
+  env.history.execute(setProps([ROOT_UID], { rootBody: env.ids[0] }));
+  const original = env.physics.startPose.bind(env.physics);
+  env.physics.startPose = (json, options) => {
+    const session = original(json, options);
+    session.pose = () => {
+      const pose = new Map(options.start);
+      const root = pose.get(env.ids[0]);
+      pose.set(env.ids[0], { ...root, angle: root.angle + 0.4 });
+      return pose;
+    };
+    return session;
+  };
+  send(env.tools, 'down', 260, 190);
+  assert.equal(env.physics.starts[0].options.holdRoot, true);
+  send(env.tools, 'up', 260, 190);
+  const root = angleKeys(env).find((track) => track.channel === 'bodyAngle');
+  assert.equal(root.target, 'root');
+  assert.equal(root.keys.length, 1);
+  assert.ok(Math.abs(root.keys[0][1] - 0.4) < 1e-9);
+  assert.equal(env.history.state.undoLabel, 'Pose');
+  env.history.undo();
+  assert.equal(env.snapshot().json, env.before.json);
+});
+
+test('Edit: the session does not hold rootBody', () => {
+  const env = createEnvAndPress();
+  assert.notEqual(env.physics.starts[0].options.holdRoot, true);
+  send(env.tools, 'up', 260, 190);
+});

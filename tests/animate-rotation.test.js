@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createEditor } from '../js/editor.js';
 import { ROOT_UID } from '../js/model/model.js';
 import { createClip, createJoint, createShapeBody } from '../js/commands/create.js';
-import { setJointAngleKey } from '../js/commands/keys.js';
+import { setJointAngleKey, setRootBodyAngleKey } from '../js/commands/keys.js';
 import { setProps } from '../js/commands/props.js';
 import { animateRotationPivot, animateRotationTarget, startAnimateRotation } from '../js/tools/animate-rotation.js';
 import { ToolRegistry } from '../js/tools/registry.js';
@@ -109,7 +109,7 @@ test('animateRotationTarget accepts exactly one body with a parent joint, also t
   const { model, shapes, bodies, joints } = environment();
   assert.deepEqual(animateRotationTarget(model, [bodies[1]]), { body: bodies[1], joint: joints[0] });
   assert.deepEqual(animateRotationTarget(model, [shapes[2]]), { body: bodies[2], joint: joints[1] });
-  assert.equal(animateRotationTarget(model, [bodies[0]]), null);
+  assert.deepEqual(animateRotationTarget(model, [bodies[0]]), { body: bodies[0], joint: null });
   assert.equal(animateRotationTarget(model, [bodies[1], bodies[2]]), null);
   assert.equal(animateRotationTarget(model, [joints[0]]), null);
   assert.equal(animateRotationTarget(model, []), null);
@@ -185,4 +185,37 @@ test('Animate rotation does not touch the rest pose', () => {
   drag.apply(pointer(env, { x: 0.5, y: 1 }));
   history.endGesture();
   assert.equal(JSON.stringify(model.prop(bodies[1], 'angle')), rest);
+});
+
+test('rotating rootBody in Animate mode keys the root bodyAngle about its center of mass', () => {
+  const env = environment();
+  const { model, history, modes, ctx, bodies, clip } = env;
+  modes.openClip(clip);
+  const target = animateRotationTarget(model, [bodies[0]]);
+  const drag = startAnimateRotation(ctx, { target, press: pointer(env, { x: 0.4, y: 0 }) });
+  near(drag.pivot().x, 0);
+  near(drag.pivot().y, 0);
+  history.beginGesture();
+  drag.apply(pointer(env, { x: 0, y: 0.4 }));
+  history.endGesture();
+  const [row] = jointAngleRows(model, clip);
+  assert.equal(row.joint, ROOT_UID);
+  assert.equal(row.label, 'Root body');
+  near(row.keys[0].v, Math.PI / 2);
+  near(drag.sweep().angle, Math.PI / 2);
+  assert.equal(model.prop(row.track, 'channel'), 'bodyAngle');
+  assert.equal(history.state.undoLabel, 'Rotate root body');
+  assert.equal(model.prop(bodies[0], 'angle'), 0);
+  history.undo();
+  assert.deepEqual(jointAngleRows(model, clip), []);
+});
+
+test('the root bodyAngle row comes before the joint rows', () => {
+  const env = environment();
+  const { model, history, joints, clip } = env;
+  history.execute(setJointAngleKey(clip, joints[0], 0, 0.2));
+  history.execute(setRootBodyAngleKey(clip, 0, 0.1));
+  const rows = jointAngleRows(model, clip);
+  assert.deepEqual(rows.map((row) => row.joint), [ROOT_UID, joints[0]]);
+  assert.equal(model.prop(rows[0].track, 'target'), 'root');
 });
