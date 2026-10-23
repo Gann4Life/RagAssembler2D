@@ -2,7 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { RagImporter } from '../lib/ragimporter.js';
-import { motorTorqueSuggestions } from '../lib/motor.js';
+import { balanceTorqueSuggestion, motorTorqueSuggestions } from '../lib/motor.js';
 
 const require = createRequire(import.meta.url);
 const Box2D = require('../vendor/liquidfun.js');
@@ -60,11 +60,11 @@ function fixtureOf(part) {
 function lightCreature(motor) {
   return {
     format: 'ragassembler',
-    version: 1,
+    version: 2,
     meta: { name: 'creature', editorVersion: '0.9.0' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
-    ragdoll: { id: 'root', name: 'creature', position: [0, 0], angle: 0, rootBody: 'b_trunk', channels: { strength: 1, gain: 1, damping: 1 } },
+    ragdoll: { id: 'root', name: 'creature', position: [0, 0], angle: 0, rootBody: 'b_trunk', channels: { strength: 1, gain: 1, damping: 1 }, balance: { enabled: false, maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 } },
     sprites: [],
     bodies: PARTS.map((part) => ({
       id: `b_${part.id}`,
@@ -99,8 +99,7 @@ function fitMotorTorque(json) {
   return suggestions;
 }
 
-function peakKineticEnergy(motor, seconds, fit = false) {
-  RagImporter.configure({ Box2D, PIXI: { Container } });
+function groundWorld() {
   const gravity = new Box2D.b2Vec2(0, -10);
   const world = new Box2D.b2World(gravity);
   Box2D.destroy(gravity);
@@ -113,6 +112,12 @@ function peakKineticEnergy(motor, seconds, fit = false) {
   ground.CreateFixture(box, 0);
   Box2D.destroy(center);
   Box2D.destroy(box);
+  return world;
+}
+
+function peakKineticEnergy(motor, seconds, fit = false) {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const world = groundWorld();
   const json = lightCreature(motor);
   if (fit) fitMotorTorque(json);
   const rag = RagImporter.parse(json).spawn(world, { x: 0, y: 0.1 });
@@ -157,4 +162,38 @@ test('the suggested torque of the light creature matches the DESIGN §3.1 exampl
 test('a light creature resting on the ground settles with every joint at its suggested torque', { todo: 'DESIGN §12: peak is about 0.10 J, driven by j_thigh (8.1 N·m) and j_neck (12 N·m)' }, () => {
   const peak = peakKineticEnergy({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }, 8, true);
   assert.ok(peak < 0.05, `peak kinetic energy ${peak} J`);
+});
+
+function balancedTilt(seconds) {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const world = groundWorld();
+  const json = lightCreature({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 });
+  fitMotorTorque(json);
+  json.ragdoll.balance = { enabled: true, maxTorque: balanceTorqueSuggestion(json), gain: 10, damping: 0.5, maxSpeed: 20 };
+  const rag = RagImporter.parse(json).spawn(world, { x: 0, y: 0.1 });
+  const root = rag.bodies.get('b_trunk');
+  const goal = root.GetAngle();
+  let late = 0;
+  let flips = 0;
+  let previous = 0;
+  try {
+    for (let i = 0; i < seconds / STEP; i++) {
+      rag.update(STEP);
+      world.Step(STEP, 8, 3);
+      if (i * STEP < seconds / 2) continue;
+      late = Math.max(late, Math.abs(root.GetAngle() - goal) * 180 / Math.PI);
+      const omega = root.GetAngularVelocity();
+      if (Math.abs(omega) > 0.05 && Math.sign(omega) !== Math.sign(previous)) flips++;
+      previous = omega;
+    }
+    return { late, flips };
+  } finally {
+    rag.destroy();
+    Box2D.destroy(world);
+  }
+}
+
+test('a light creature with the suggested balance torque holds rootBody within 5° without chatter', { todo: 'DESIGN §12: in the last 5 s the error reaches about 38° and the angular velocity changes sign almost every step (294 of 300)' }, () => {
+  const { late, flips } = balancedTilt(10);
+  assert.ok(late < 5 && flips < 10, `last 5 s ${late}°, ${flips} sign flips`);
 });

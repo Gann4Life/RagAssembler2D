@@ -120,7 +120,7 @@ const def = {
 
 test('resolveChannels with no layers returns defaults', () => {
   const pose = resolveChannels(def, []);
-  assert.deepEqual(pose.root, { strength: 0.5, gain: 1, damping: 1 });
+  assert.deepEqual(pose.root, { strength: 0.5, gain: 1, damping: 1, bodyAngle: 0 });
   assert.deepEqual(pose.joints.get('j1'), { angle: 0, strength: 1, gain: 1, damping: 1, S: 0.5, G: 10, D: 0.5 });
   assert.equal(pose.sprites.get('s1'), 'img');
   assert.equal(pose.sprites.get('s2'), null);

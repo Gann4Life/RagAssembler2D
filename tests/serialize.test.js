@@ -67,7 +67,7 @@ test('serialize uses 2-space indentation, \\n and one final newline, and writes 
   assert.equal(text.endsWith('}\n'), true);
   assert.equal(text.endsWith('\n\n'), false);
   assert.equal(text.includes('\r'), false);
-  assert.match(text, /^\{\n {2}"format": "ragassembler",\n {2}"version": 1,\n/);
+  assert.match(text, /^\{\n {2}"format": "ragassembler",\n {2}"version": 2,\n/);
   assert.equal(JSON.parse(text).bodies[3].fixtures[0].sprite, null);
 });
 

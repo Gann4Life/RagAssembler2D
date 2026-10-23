@@ -32,7 +32,7 @@ async function documentedTables() {
 
 test('schema declares the format constants', () => {
   assert.equal(FORMAT, 'ragassembler');
-  assert.equal(FORMAT_VERSION, 1);
+  assert.equal(FORMAT_VERSION, 2);
 });
 
 test('schema covers every object type and is frozen', () => {
@@ -104,7 +104,7 @@ test('fieldsOf filters shape variants and keeps canonical order', () => {
 test('defaultsOf returns the documented defaults per type', () => {
   assert.deepEqual(defaultsOf('document'), {
     format: 'ragassembler',
-    version: 1,
+    version: 2,
     meta: { name: 'root' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
@@ -120,6 +120,7 @@ test('defaultsOf returns the documented defaults per type', () => {
     angle: 0,
     rootBody: null,
     channels: { strength: 1, gain: 1, damping: 1 },
+    balance: { enabled: true, maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 },
   });
   assert.deepEqual(defaultsOf('spriteAsset'), {});
   assert.deepEqual(defaultsOf('body'), {
@@ -196,7 +197,8 @@ test('defaultsOf keeps canonical key order', () => {
 
 test('CHANNELS matches the DESIGN.md §4.2 table', () => {
   assert.deepEqual(Object.keys(CHANNELS), ['root', 'joint', 'shape']);
-  assert.deepEqual(Object.keys(CHANNELS.root), ['strength', 'gain', 'damping']);
+  assert.deepEqual(Object.keys(CHANNELS.root), ['strength', 'gain', 'damping', 'bodyAngle']);
+  assert.deepEqual(CHANNELS.root.bodyAngle, { kind: 'angle', unit: 'rad', default: 0, basePath: null });
   assert.deepEqual(Object.keys(CHANNELS.joint), ['angle', 'strength', 'gain', 'damping']);
   assert.deepEqual(Object.keys(CHANNELS.shape), ['sprite']);
   assert.equal(CHANNELS.root.gain.basePath, 'channels.gain');
