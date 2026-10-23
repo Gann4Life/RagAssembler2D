@@ -11,7 +11,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | name | Ragdoll name, default `root`; Save writes it as `meta.name` and suggests `<name>.rag.json` ([§5.3](05-3-header.md#53-header)). |
 | id | `root`, read-only. |
 | position, angle | Read-only: the locked root transform ([§2.1](02-object-model.md#21-root-the-ragdoll-itself)). |
-| rootBody | Dropdown of bodies. |
+| rootBody | Dropdown of bodies. Choosing one runs Set as root body ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)), so clips keep their look. |
 | pixelsPerMeter | Editor and runtime render scale. |
 | preview gravity | Editor preview only. |
 | strength, gain, damping ◆ | Base global multipliers (0–100 %). Animatable as root channels. |
@@ -28,6 +28,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | fixedRotation, bullet | bool. |
 | mass | Read-only, computed from shapes. |
 | shapes | List; clicking one selects it. |
+| Set as root body | Button, runs Set as root body on this body ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)); shown as "Root body" and disabled when it already is `rootBody`. |
 
 **Shape (fixture)**
 
