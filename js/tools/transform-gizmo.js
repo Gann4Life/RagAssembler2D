@@ -15,7 +15,6 @@ import { COLORS, GIZMO_SIZE, HIT_RADIUS, LINE_WIDTH } from '../viewport/style.js
  * @property {object} y Y arrow, pointing up, with the same members.
  * @property {{ x: number, y: number, size: number }} square Free-move square: top-left corner and side.
  * @property {number|null} ring Rotation ring radius, or `null` without a ring.
- * @property {boolean} [ringOnly] Present and `true` when the gizmo offers and draws the ring alone.
  */
 
 const WHITE = 0xffffff;
@@ -49,11 +48,10 @@ function arrow(pivot, dx, dy) {
  * Lays out the transform gizmo around a pivot: world-aligned arrows, the free-move square between them and,
  * when `ring`, the rotation ring. Constant size in CSS px.
  * @param {{ x: number, y: number }} pivot Pivot, screen CSS px.
- * @param {{ ring: boolean, ringOnly?: boolean }} options Whether the rotation ring is shown, and whether it is the
- *   only handle (arrows and square are neither hit nor drawn).
+ * @param {{ ring: boolean }} options Whether the rotation ring is shown.
  * @returns {Readonly<GizmoLayout>} Frozen layout.
  */
-export function gizmoLayout(pivot, { ring, ringOnly = false }) {
+export function gizmoLayout(pivot, { ring }) {
   const size = GIZMO_SIZE.squareSize;
   return Object.freeze({
     pivot: point(pivot.x, pivot.y),
@@ -61,7 +59,6 @@ export function gizmoLayout(pivot, { ring, ringOnly = false }) {
     y: arrow(pivot, 0, -1),
     square: Object.freeze({ x: pivot.x + GIZMO_SIZE.squareOffset, y: pivot.y - GIZMO_SIZE.squareOffset - size, size }),
     ring: ring ? GIZMO_SIZE.rotateRing : null,
-    ...(ringOnly ? { ringOnly: true } : {}),
   });
 }
 
@@ -96,11 +93,9 @@ function onArrow(entry, p) {
 export function gizmoHandleAt(layout, screen) {
   const fromPivot = Math.hypot(screen.x - layout.pivot.x, screen.y - layout.pivot.y);
   if (fromPivot <= HIT_RADIUS.root) return null;
-  if (!layout.ringOnly) {
-    if (onSquare(layout.square, screen)) return 'square';
-    if (onArrow(layout.x, screen)) return 'x';
-    if (onArrow(layout.y, screen)) return 'y';
-  }
+  if (onSquare(layout.square, screen)) return 'square';
+  if (onArrow(layout.x, screen)) return 'x';
+  if (onArrow(layout.y, screen)) return 'y';
   if (layout.ring !== null && Math.abs(fromPivot - layout.ring) <= HIT_RADIUS.gizmo) return 'ring';
   return null;
 }
@@ -208,17 +203,13 @@ export function drawGizmo(g, layout, { hover, active, mode, points, sweep, under
     drawDashedRing(g, pivot, layout.ring);
     g.stroke({ width: ring.width, color: ring.color });
   }
-  if (!layout.ringOnly) {
-    drawArrow(g, layout.x, look('x', COLORS.gizmoX, LINE_WIDTH.gizmo, state));
-    drawArrow(g, layout.y, look('y', COLORS.gizmoY, LINE_WIDTH.gizmo, state));
-  }
+  drawArrow(g, layout.x, look('x', COLORS.gizmoX, LINE_WIDTH.gizmo, state));
+  drawArrow(g, layout.y, look('y', COLORS.gizmoY, LINE_WIDTH.gizmo, state));
   points?.(g);
-  if (!layout.ringOnly) {
-    const free = look('square', COLORS.gizmoFree, LINE_WIDTH.outline, state);
-    g.rect(square.x, square.y, square.size, square.size);
-    g.fill({ color: free.color, alpha: SQUARE_FILL_ALPHA });
-    g.stroke({ width: free.width, color: free.color });
-  }
+  const free = look('square', COLORS.gizmoFree, LINE_WIDTH.outline, state);
+  g.rect(square.x, square.y, square.size, square.size);
+  g.fill({ color: free.color, alpha: SQUARE_FILL_ALPHA });
+  g.stroke({ width: free.width, color: free.color });
   drawPivotMark(g, pivot, mode);
 }
 
