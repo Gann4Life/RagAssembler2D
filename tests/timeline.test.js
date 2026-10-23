@@ -6,7 +6,13 @@ import { loadJson, saveJson, toJson } from '../js/model/io.js';
 import { createClip, createShapeBody } from '../js/commands/create.js';
 import { deleteClip } from '../js/commands/delete.js';
 import { setProps } from '../js/commands/props.js';
-import { SIMULATE_MAX_STEPS, SIMULATE_STEP, TimelinePlayer } from '../js/timeline-player.js';
+import {
+  SCRUB_FRAME_BUDGET,
+  SCRUB_MAX_STEPS,
+  SIMULATE_MAX_STEPS,
+  SIMULATE_STEP,
+  TimelinePlayer,
+} from '../js/timeline-player.js';
 import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '../js/timeline-time.js';
 
 const clipsOf = (editor) => editor.model.children(ROOT_UID, 'clips');
@@ -208,38 +214,185 @@ test('play in Animate mode plays the open clip from 0 and stop restores clip and
   assert.equal(editor.modes.playhead, 1.5);
 });
 
-test('scrub while paused stops the simulation and moves the playhead in Animate mode', () => {
+function bodyUid(editor, session) {
+  return editor.model.uidOf(session.json.bodies[0].id);
+}
+
+test('scrub while paused leaves Simulate and keeps its simulation for the scrub', () => {
   const editor = editorWithBody();
   const clip = editor.history.execute(createClip());
   editor.history.execute(setProps([clip], { length: 2 }));
   editor.modes.openClip(clip);
   const { simulator, sessions } = fakeSimulator();
-  const { player, poses } = playerWithClock(editor, simulator);
+  const { player, tick, poses } = playerWithClock(editor, simulator);
   player.play();
   player.pause();
+  for (let i = 0; i < 10; i++) player.nextFrame();
   assert.equal(player.scrub(1.25), true);
-  assert.equal(sessions[0].destroyed, true);
   assert.equal(player.simulating, false);
+  assert.equal(player.previewing, true);
   assert.equal(editor.modes.mode, 'animate');
   assert.equal(editor.modes.clip, clip);
   assert.equal(editor.modes.playhead, 1.25);
-  assert.equal(poses.at(-1), null);
+  tick(0);
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].destroyed, false);
+  assert.equal(sessions[0].steps.length, 75);
+  assert.deepEqual(poses.at(-1).get(bodyUid(editor, sessions[0])), { x: 0, y: -75, angle: 0 });
   assert.equal(player.scrub(5), true);
   assert.equal(editor.modes.playhead, 2);
 });
 
-test('scrub while playing stops it and a later scrub does not need a simulation', () => {
+test('scrub while playing stops it, and a later scrub continues the same simulation', () => {
   const editor = editorWithBody();
   const clip = editor.history.execute(createClip());
   editor.modes.openClip(clip);
   const { simulator, sessions } = fakeSimulator();
-  const { player } = playerWithClock(editor, simulator);
+  const { player, tick } = playerWithClock(editor, simulator);
   player.play();
   assert.equal(player.scrub(0.5), true);
   assert.equal(player.playing, false);
+  assert.equal(player.scrub(0.75), true);
+  tick(0);
   assert.equal(sessions.length, 1);
-  assert.equal(player.scrub(0.25), true);
-  assert.equal(editor.modes.playhead, 0.25);
+  assert.equal(sessions[0].steps.length, 45);
+  assert.equal(editor.modes.playhead, 0.75);
+});
+
+test('scrub in Animate steps a scrub simulation to the playhead without touching the model', () => {
+  const editor = editorWithBody();
+  const clip = editor.history.execute(createClip());
+  editor.modes.openClip(clip);
+  const before = JSON.stringify(toJson(editor.model, 'dev'));
+  const { simulator, sessions } = fakeSimulator();
+  const { player, tick, poses } = playerWithClock(editor, simulator);
+  assert.equal(player.scrub(0.5), true);
+  assert.equal(sessions.length, 0);
+  tick(0);
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].options.clip, editor.model.prop(clip, 'key'));
+  assert.equal(sessions[0].steps.length, 30);
+  assert.ok(sessions[0].steps.every((dt) => dt === SIMULATE_STEP));
+  assert.deepEqual(poses.at(-1).get(bodyUid(editor, sessions[0])), { x: 0, y: -30, angle: 0 });
+  player.scrub(0.75);
+  tick(16);
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].steps.length, 45);
+  player.scrub(0.25);
+  tick(32);
+  assert.equal(sessions[0].destroyed, true);
+  assert.equal(sessions.length, 2);
+  assert.equal(sessions[1].steps.length, 15);
+  assert.deepEqual(poses.at(-1).get(bodyUid(editor, sessions[1])), { x: 0, y: -15, angle: 0 });
+  assert.equal(editor.modes.mode, 'animate');
+  assert.equal(JSON.stringify(toJson(editor.model, 'dev')), before);
+});
+
+test('the scrub simulation keeps each frame within the step cap and the time budget', () => {
+  const editor = editorWithBody();
+  const clip = editor.history.execute(createClip());
+  editor.history.execute(setProps([clip], { length: 10 }));
+  editor.modes.openClip(clip);
+  const { simulator, sessions } = fakeSimulator();
+  const { player, tick } = playerWithClock(editor, simulator);
+  player.scrub(10);
+  tick(0);
+  assert.equal(sessions[0].steps.length, SCRUB_MAX_STEPS);
+  tick(16);
+  assert.equal(sessions[0].steps.length, 2 * SCRUB_MAX_STEPS);
+  tick(32);
+  assert.equal(sessions[0].steps.length, 600);
+
+  const timed = fakeSimulator();
+  const frames = [];
+  let now = 0;
+  const clock = {
+    request: (callback) => frames.push(callback),
+    cancel: () => {},
+    now: () => now,
+  };
+  const budgeted = new TimelinePlayer(editor.model, editor.modes, clock, (json, options) => {
+    const session = timed.simulator(json, options);
+    const step = session.step;
+    session.step = (dt) => {
+      step(dt);
+      now += 1;
+    };
+    return session;
+  });
+  budgeted.scrub(10);
+  frames.pop()();
+  assert.equal(timed.sessions[0].steps.length, SCRUB_FRAME_BUDGET);
+  assert.equal(frames.length, 1);
+});
+
+test('a model change or another clip drops the scrub simulation and shows the authored pose again', () => {
+  const editor = editorWithBody();
+  const clip = editor.history.execute(createClip());
+  const other = editor.history.execute(createClip());
+  editor.modes.openClip(clip);
+  const { simulator, sessions } = fakeSimulator();
+  const { player, tick, poses } = playerWithClock(editor, simulator);
+  player.scrub(0.5);
+  tick(0);
+  editor.history.execute(setProps([clip], { loop: false }));
+  assert.equal(sessions[0].destroyed, true);
+  assert.equal(player.previewing, false);
+  assert.equal(poses.at(-1), null);
+  player.scrub(0.5);
+  tick(16);
+  assert.equal(sessions.length, 2);
+  editor.history.undo();
+  assert.equal(sessions[1].destroyed, true);
+  player.scrub(0.5);
+  tick(32);
+  editor.modes.openClip(other);
+  assert.equal(sessions[2].destroyed, true);
+  assert.equal(poses.at(-1), null);
+});
+
+test('play continues from the scrub simulation and stop returns to the scrubbed playhead', () => {
+  const editor = editorWithBody();
+  const clip = editor.history.execute(createClip());
+  editor.history.execute(setProps([clip], { length: 2 }));
+  editor.modes.openClip(clip);
+  const { simulator, sessions } = fakeSimulator();
+  const { player, tick } = playerWithClock(editor, simulator);
+  player.scrub(1);
+  tick(0);
+  player.play();
+  assert.equal(sessions.length, 1);
+  assert.equal(editor.modes.mode, 'simulate');
+  near(editor.modes.playhead, 1);
+  player.nextFrame();
+  assert.equal(sessions[0].steps.length, 61);
+  near(editor.modes.playhead, 61 * SIMULATE_STEP);
+  player.stop();
+  assert.equal(sessions[0].destroyed, true);
+  assert.equal(editor.modes.playhead, 1);
+  assert.equal(player.previewing, false);
+});
+
+test('a scrub the simulator refuses moves the playhead and shows no physics until the document changes', () => {
+  const editor = editorWithBody();
+  const clip = editor.history.execute(createClip());
+  editor.modes.openClip(clip);
+  let calls = 0;
+  const { player, tick, poses } = playerWithClock(editor, () => {
+    calls++;
+    throw new Error('invalid document');
+  });
+  assert.equal(player.scrub(0.5), true);
+  tick(0);
+  assert.equal(editor.modes.playhead, 0.5);
+  assert.equal(poses.at(-1), null);
+  player.scrub(0.25);
+  tick(16);
+  assert.equal(calls, 1);
+  editor.history.execute(setProps([clip], { loop: false }));
+  player.scrub(0.5);
+  tick(32);
+  assert.equal(calls, 2);
 });
 
 test('scrub from a simulation started in Edit mode only stops it', () => {
