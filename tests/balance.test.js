@@ -6,7 +6,7 @@ import { validate } from '../lib/validate.js';
 import { fkPose, resolveChannels } from '../lib/evaluate.js';
 import { driveBalance } from '../lib/instance.js';
 import { ragFile } from './helpers/rag-file.js';
-import { BALANCE, fakeBody, fakeInstance } from './helpers/fake-instance.js';
+import { BALANCE, fakeBody, fakeForce, fakeInstance } from './helpers/fake-instance.js';
 
 function near(actual, expected, tolerance = 1e-9) {
   assert.ok(Math.abs(actual - expected) < tolerance, `${actual} != ${expected}`);
@@ -182,31 +182,55 @@ test('fkPose turns a massless rootBody about its origin', () => {
   near(turned.angle, 1);
 });
 
-test('driveBalance applies the §3.2 velocity servo with the S-blended inertia', () => {
+function balanceOf(body, target, drive, balance, dt, links = [{ body, mass: 1, inertia: 0.5 }]) {
+  return driveBalance(body, links, target, drive, balance, dt, fakeForce());
+}
+
+test('driveBalance applies the §3.2 velocity servo with the inertia of the connected bodies', () => {
   const body = fakeBody(0.01, 0);
-  near(driveBalance(body, 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60), -3);
+  near(balanceOf(body, 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60), -3);
   assert.equal(body.torques.length, 1);
   near(body.torques[0][0], -3);
   assert.equal(body.torques[0][1], true);
+  near(body.forces[0][0], 0);
+  near(body.forces[0][1], 0);
   const half = fakeBody(0.01, 0);
-  near(driveBalance(half, 0, { S: 0.5, G: 10, D: 0.5 }, BALANCE, 1 / 60), 0.3 * -0.1 * 60);
+  near(balanceOf(half, 0, { S: 0.5, G: 10, D: 0.5 }, BALANCE, 1 / 60), -3);
   const damped = fakeBody(0, 0.4);
-  near(driveBalance(damped, 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 0.1), 0.5 * (-0.2 - 0.4) / 0.1);
+  near(balanceOf(damped, 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 0.1), 0.5 * (-0.2 - 0.4) / 0.1);
+});
+
+test('driveBalance turns the connected bodies as one piece about their center of mass, with no net force', () => {
+  const root = fakeBody(0.01, 2, { center: [-1, 0], velocity: [0, -2] });
+  const other = fakeBody(0, 2, { center: [1, 0], velocity: [0, 2] });
+  const links = [{ body: root, mass: 1, inertia: 0.1 }, { body: other, mass: 1, inertia: 0.1 }];
+  const inertia = 0.2 + 2;
+  const torque = balanceOf(root, 0, { S: 1, G: 10, D: 0.5 }, { ...BALANCE, maxTorque: 1e6 }, 1 / 60, links);
+  near(torque, inertia * (10 * -0.01 - 0.5 * 2 - 2) * 60);
+  const alpha = torque / inertia;
+  near(root.torques[0][0], 0.1 * alpha);
+  near(other.torques[0][0], 0.1 * alpha);
+  near(root.forces[0][1], -alpha);
+  near(other.forces[0][1], alpha);
+  near(root.forces[0][0] + other.forces[0][0], 0);
+  near(root.torques[0][0] + other.torques[0][0] + (-1) * root.forces[0][1] + 1 * other.forces[0][1], torque);
 });
 
 test('driveBalance clamps speed and torque and wraps the error the short way', () => {
   const fast = fakeBody(3, 0);
-  near(driveBalance(fast, 0, { S: 1, G: 10, D: 0 }, { ...BALANCE, maxTorque: 1e6 }, 1 / 60), 0.5 * -20 * 60);
-  near(driveBalance(fakeBody(3, 0), 0, { S: 0.5, G: 10, D: 0 }, BALANCE, 1 / 60), -25);
-  near(driveBalance(fakeBody(2 * Math.PI - 0.01, 0), 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60), 3);
-  near(driveBalance(fakeBody(-0.01, 0), 4 * Math.PI, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60), 3);
+  near(balanceOf(fast, 0, { S: 1, G: 10, D: 0 }, { ...BALANCE, maxTorque: 1e6 }, 1 / 60), 0.5 * -20 * 60);
+  near(balanceOf(fakeBody(3, 0), 0, { S: 0.5, G: 10, D: 0 }, BALANCE, 1 / 60), -25);
+  near(balanceOf(fakeBody(2 * Math.PI - 0.01, 0), 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60), 3);
+  near(balanceOf(fakeBody(-0.01, 0), 4 * Math.PI, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60), 3);
 });
 
-test('driveBalance does nothing when S or dt is 0', () => {
+test('driveBalance does nothing when S or dt is 0 or nothing has mass', () => {
   const limp = fakeBody(1, 0);
-  assert.equal(driveBalance(limp, 0, { S: 0, G: 10, D: 0.5 }, BALANCE, 1 / 60), 0);
-  assert.equal(driveBalance(limp, 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 0), 0);
+  assert.equal(balanceOf(limp, 0, { S: 0, G: 10, D: 0.5 }, BALANCE, 1 / 60), 0);
+  assert.equal(balanceOf(limp, 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 0), 0);
+  assert.equal(balanceOf(limp, 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60, []), 0);
   assert.deepEqual(limp.torques, []);
+  assert.deepEqual(limp.forces, []);
 });
 
 test('update applies the balance torque to rootBody with root and runtime multipliers', () => {
