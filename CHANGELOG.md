@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-17
+
+### Added
+- Ctrl+D duplicates the selected bodies, shapes or joints together with every limb hanging from them, as one undoable step; the copies are placed over their sources and selected.
+
 ## [0.12.0] - 2026-10-17
 
 ### Added
