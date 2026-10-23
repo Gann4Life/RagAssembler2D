@@ -95,7 +95,7 @@ export function createTimeline(element_, editor, player) {
 
   const canOpen = () => modes.can('clip.open') && !history.inGesture;
   const canEditClip = () => modes.clip !== null && modes.can('edit.animation') && !history.inGesture;
-  const canScrub = () => modes.clip !== null && modes.can('timeline.scrub');
+  const canScrub = () => player.simulating || (modes.clip !== null && modes.can('timeline.scrub'));
 
   function clipLength() {
     return modes.clip === null ? 0 : model.prop(modes.clip, 'length');
@@ -241,7 +241,7 @@ export function createTimeline(element_, editor, player) {
 
   function scrubTo(event) {
     const rect = ruler.getBoundingClientRect();
-    modes.setPlayhead(timeAtOffset(event.clientX - rect.left, rect.width, clipLength()));
+    player.scrub(timeAtOffset(event.clientX - rect.left, rect.width, clipLength()));
   }
 
   const onSelect = () => {
@@ -273,7 +273,7 @@ export function createTimeline(element_, editor, player) {
     const length = clipLength();
     const targets = { ArrowLeft: modes.playhead - SNAP_STEP, ArrowRight: modes.playhead + SNAP_STEP, Home: 0, End: length };
     if (!(event.key in targets)) return;
-    modes.setPlayhead(snapTime(targets[event.key], length));
+    player.scrub(snapTime(targets[event.key], length));
     event.preventDefault();
   };
   function selectedDiamonds() {

@@ -152,6 +152,19 @@ export class TimelinePlayer {
   }
 
   /**
+   * Moves the playhead from the ruler. While a simulation exists it ends first, as Stop does, then the playhead
+   * moves in the restored Animate mode; with no clip to scrub the simulation just ends.
+   * @param {number} t Time in seconds, clamped to the open clip.
+   * @returns {boolean} `false` when nothing could be scrubbed.
+   */
+  scrub(t) {
+    if (this.#session !== null) this.stop();
+    if (this.#modes.clip === null || !this.#modes.can('timeline.scrub')) return false;
+    this.#modes.setPlayhead(t);
+    return true;
+  }
+
+  /**
    * @param {'playing'|'pose'} type Event name.
    * @param {(payload: *) => void} fn Listener.
    * @returns {() => void} Unsubscribe function.

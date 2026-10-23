@@ -32,7 +32,7 @@ export const MODE_POLICY = Object.freeze({
   'assets.import': allowed(true, true, false),
   'assets.delete': allowed(true, false, false),
   'clip.open': allowed(true, true, false),
-  'timeline.scrub': allowed(false, true, false),
+  'timeline.scrub': allowed(false, true, true),
   'preview.stack': allowed(false, true, true),
   'preview.procedural': allowed(false, false, true),
   file: allowed(true, true, false),
