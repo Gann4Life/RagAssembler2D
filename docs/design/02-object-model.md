@@ -33,7 +33,7 @@ The root is a **parent object in the world**, not a physics body.
   - The new `rootBody` is turned about its own center of mass, not the old one's, so the FK preview keeps the pose and orientation of every body but may place it at another position: the old FK let the new `rootBody` move, the new one pins it. There is no root position channel to carry that offset ([§13](13-out-of-scope.md#13-out-of-scope-for-v1-backlog)); under physics the position comes from contacts anyway.
   - When the new `rootBody` is not connected to the old one (or the old one names no body), there is no path: keys are left unchanged.
   - When the joint graph has cycles, the new spanning tree may make another joint the loop joint, so the FK preview of a cycle can change; physics is unaffected.
-- `ragdoll.balance` is not changed: its suggested `maxTorque` depends on `rootBody`, and Fit motor torque ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) refits it.
+- `ragdoll.balance.maxTorque` follows the new `rootBody` through the automatic motor torque, in the same undo step ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)); the other balance fields are not changed.
 
 Example: torso `T` (old `rootBody`), joint `hip` with bodyA `T` and bodyB thigh `L`; a clip keys `bodyAngle` 0.1 and `hip` `angle` 0.5 at `t = 0`. After Set as root body on `L`, `P = [hip]`, `s = +1`, so `bodyAngle` becomes 0.6: `L` is at rest + 0.6 as before, and `T`, reached through the reversed `hip` with sign −1 ([§5.1](05-1-modes.md#51-editor-modes)), is at rest + 0.6 − 0.5 = rest + 0.1 as before.
 

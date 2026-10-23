@@ -40,7 +40,7 @@ Sprites follow the evaluated clip at the playhead in every case.
 | Select, Select Box, Hierarchy selection | ✓ | ✓ (select only) | ✓ (select only) |
 | Pose | ✓ | ✓ (into keys, below) | — |
 | Creation tools: Circle, Box, Polygon, Hinge | ✓ | — | — |
-| Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add, rename and delete; Group, Ungroup, Split, Duplicate, Fit motor torque, Set as root body; Select move, rotate and resize (objects and transform gizmo), joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
+| Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add, rename and delete; Group, Ungroup, Split, Duplicate, Set as root body; Select move, rotate and resize (objects and transform gizmo), joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
 | Animation edits: clip properties, tracks, keys, events, key buttons ◆, autokey, Key selected (K), Pose → keys | — | ✓ | — |
 | Asset import | ✓ | ✓ | — |
 | Asset delete | ✓ | — | — |

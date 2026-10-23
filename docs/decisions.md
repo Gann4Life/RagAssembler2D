@@ -16,4 +16,4 @@ Dated log of design and technical decisions, split by area. Within each file the
 | Tooling and tests | [tooling.md](decisions/tooling.md) | Conformance checks and test infrastructure. |
 | Dock and layout | [dock-layout.md](decisions/dock-layout.md) | Panel layout, dock behavior, header and keyboard navigation. |
 | Model and schema | [model-schema.md](decisions/model-schema.md) | Document model, ids, uids, schema and defaults. |
-| Runtime and format | [runtime.md](decisions/runtime.md) | RagImporter, liquidfun.js, PIXI.js and the physics and animation model. |
+| Runtime and format | [runtime.md](decisions/runtime.md) | RagImporter, liquidfun.js, PIXI.js and the physics and animation model, automatic motor torque. |

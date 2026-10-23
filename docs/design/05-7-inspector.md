@@ -16,7 +16,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | preview gravity | Editor preview only. |
 | strength, gain, damping ◆ | Base global multipliers (0–100 %). Animatable as root channels. |
 | body angle ◆ | Animate mode only: the evaluated root `bodyAngle` at the playhead, in degrees ([§4.2](04-animation-model.md#42-channels)). No base field. |
-| balance | `enabled`, `maxTorque`, `gain`, `damping`, `maxSpeed` of the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)), shown like a joint's motor fields. |
+| balance | `enabled`, `maxTorque`, `gain`, `damping`, `maxSpeed` of the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)), shown like a joint's motor fields (`maxTorque` automatic and read-only, like a joint's). |
 
 **Body**
 
@@ -55,7 +55,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | anchor | Root-local. |
 | collideConnected | Default false. |
 | limits: enabled, lower, upper | Degrees in the UI, `lower ≤ 0 ≤ upper`. |
-| motor: maxTorque, gain, damping, maxSpeed | Base values ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)). maxTorque shows the suggested torque next to it ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)) and offers Fit motor torque for the selected joints. |
+| motor: maxTorque, gain, damping, maxSpeed | Base values ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)). maxTorque is automatic ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels), Automatic motor torque): shown read-only with "auto" until user-set values are specified ([§12](12-open-items.md#12-open-items--to-verify)). |
 | aimAxis | Degrees in the UI ([§4.8](04-animation-model.md#48-procedural-joint-control)). |
 | angle ◆, strength ◆, gain ◆, damping ◆ | Animated channels at the playhead. |
 
