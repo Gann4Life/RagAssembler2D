@@ -6,7 +6,7 @@ import { loadJson, saveJson, toJson } from '../js/model/io.js';
 import { createClip, createShapeBody } from '../js/commands/create.js';
 import { deleteClip } from '../js/commands/delete.js';
 import { setProps } from '../js/commands/props.js';
-import { TimelinePlayer } from '../js/timeline-player.js';
+import { SIMULATE_MAX_STEPS, SIMULATE_STEP, TimelinePlayer } from '../js/timeline-player.js';
 import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '../js/timeline-time.js';
 
 const clipsOf = (editor) => editor.model.children(ROOT_UID, 'clips');
@@ -112,7 +112,31 @@ test('rulerTicks stays under a dozen intervals and ends at the length', () => {
   }
 });
 
-function playerWithClock(editor) {
+function fakeSimulator() {
+  const sessions = [];
+  const simulator = (json, options) => {
+    const session = {
+      json,
+      options,
+      steps: [],
+      destroyed: false,
+      step(dt) {
+        session.steps.push(dt);
+      },
+      pose() {
+        return new Map(json.bodies.map((body) => [body.id, { x: 0, y: -session.steps.length, angle: 0 }]));
+      },
+      destroy() {
+        session.destroyed = true;
+      },
+    };
+    sessions.push(session);
+    return session;
+  };
+  return { simulator, sessions };
+}
+
+function playerWithClock(editor, simulator = fakeSimulator().simulator) {
   const frames = [];
   const clock = {
     request: (callback) => frames.push(callback),
@@ -120,84 +144,145 @@ function playerWithClock(editor) {
       frames[handle - 1] = null;
     },
   };
-  const player = new TimelinePlayer(editor.model, editor.modes, clock);
+  const player = new TimelinePlayer(editor.model, editor.modes, clock, simulator);
+  const poses = [];
+  player.on('pose', (pose) => poses.push(pose));
   const tick = (timestamp) => {
     const callback = frames.pop();
     frames.length = 0;
     callback?.(timestamp);
   };
-  return { player, tick };
+  return { player, tick, poses };
 }
 
-test('player advances the playhead in seconds and loops', () => {
-  const editor = createEditor();
-  const clip = editor.history.execute(createClip());
-  editor.modes.openClip(clip);
-  const { player, tick } = playerWithClock(editor);
+function near(actual, expected) {
+  assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
+}
+
+test('play in Edit mode simulates without a clip and stop restores Edit without touching the model', () => {
+  const editor = editorWithBody();
+  const before = JSON.stringify(toJson(editor.model, 'dev'));
+  const undoLabel = editor.history.state.undoLabel;
+  const { simulator, sessions } = fakeSimulator();
+  const { player, tick, poses } = playerWithClock(editor, simulator);
+  assert.equal(player.canPlay(), true);
   assert.equal(player.play(), true);
-  tick(1000);
-  tick(1400);
-  assert.ok(Math.abs(editor.modes.playhead - 0.4) < 1e-9);
-  tick(2200);
-  assert.ok(Math.abs(editor.modes.playhead - 0.2) < 1e-9);
-  assert.equal(player.playing, true);
-  assert.equal(editor.history.canUndo, true);
-  assert.equal(editor.history.state.undoLabel, 'Create clip');
+  assert.equal(editor.modes.mode, 'simulate');
+  assert.equal(player.simulating, true);
+  assert.equal(sessions[0].options.clip, null);
+  assert.equal(editor.modes.can('history'), false);
+  tick(0);
+  tick(50);
+  assert.equal(sessions[0].steps.length, 3);
+  assert.ok(sessions[0].steps.every((dt) => dt === SIMULATE_STEP));
+  assert.equal(editor.modes.playhead, 0);
+  const body = editor.model.uidOf(sessions[0].json.bodies[0].id);
+  assert.deepEqual(poses.at(-1).get(body), { x: 0, y: -3, angle: 0 });
+  assert.equal(player.stop(), true);
+  assert.equal(editor.modes.mode, 'edit');
+  assert.equal(player.playing, false);
+  assert.equal(sessions[0].destroyed, true);
+  assert.equal(poses.at(-1), null);
+  assert.equal(JSON.stringify(toJson(editor.model, 'dev')), before);
+  assert.equal(editor.history.state.undoLabel, undoLabel);
 });
 
-test('player stops at the end of a non-loop clip and restarts from 0 on play', () => {
-  const editor = createEditor();
+test('play in Animate mode plays the open clip from 0 and stop restores clip and playhead', () => {
+  const editor = editorWithBody();
   const clip = editor.history.execute(createClip());
-  editor.history.execute(setProps([clip], { loop: false }));
+  editor.history.execute(setProps([clip], { length: 2 }));
   editor.modes.openClip(clip);
-  const { player, tick } = playerWithClock(editor);
-  const states = [];
-  player.on('playing', (value) => states.push(value));
+  editor.modes.setPlayhead(1.5);
+  const { simulator, sessions } = fakeSimulator();
+  const { player, tick } = playerWithClock(editor, simulator);
+  player.play();
+  assert.equal(sessions[0].options.clip, editor.model.prop(clip, 'key'));
+  assert.equal(editor.modes.playhead, 0);
+  assert.equal(editor.modes.clip, clip);
+  tick(0);
+  tick(50);
+  near(editor.modes.playhead, 3 * SIMULATE_STEP);
+  player.stop();
+  assert.equal(editor.modes.mode, 'animate');
+  assert.equal(editor.modes.clip, clip);
+  assert.equal(editor.modes.playhead, 1.5);
+});
+
+test('a long frame runs at most the step cap and the playhead loops with the clip', () => {
+  const editor = editorWithBody();
+  const clip = editor.history.execute(createClip());
+  editor.modes.openClip(clip);
+  const { simulator, sessions } = fakeSimulator();
+  const { player, tick } = playerWithClock(editor, simulator);
   player.play();
   tick(0);
   tick(5000);
-  assert.equal(editor.modes.playhead, 1);
-  assert.equal(player.playing, false);
-  assert.deepEqual(states, [true, false]);
-  player.play();
-  assert.equal(editor.modes.playhead, 0);
-  assert.equal(player.playing, true);
-});
-
-test('player keeps playing when another clip is opened and stops on rest pose', () => {
-  const editor = createEditor();
-  const first = editor.history.execute(createClip());
-  const second = editor.history.execute(createClip());
-  editor.modes.openClip(first);
-  const { player, tick } = playerWithClock(editor);
-  player.play();
-  tick(0);
-  tick(300);
-  editor.modes.openClip(second);
-  assert.equal(player.playing, true);
-  assert.equal(editor.modes.playhead, 0);
-  tick(500);
-  assert.ok(Math.abs(editor.modes.playhead - 0.2) < 1e-9);
-  editor.modes.openClip(null);
-  assert.equal(player.playing, false);
-});
-
-test('player refuses to play in Edit mode and pause is safe when idle', () => {
-  const editor = createEditor();
-  const { player } = playerWithClock(editor);
-  assert.equal(player.canPlay(), false);
-  assert.equal(player.play(), false);
-  assert.equal(player.toggle(), false);
+  assert.equal(sessions[0].steps.length, SIMULATE_MAX_STEPS);
   player.pause();
-  assert.equal(player.playing, false);
+  for (let i = SIMULATE_MAX_STEPS; i < 70; i++) player.nextFrame();
+  near(editor.modes.playhead, (70 * SIMULATE_STEP) % 1);
 });
 
-test('player stops when the open clip is deleted', () => {
-  const editor = createEditor();
+test('a non-loop clip holds the playhead at its end while the simulation runs on', () => {
+  const editor = editorWithBody();
+  const clip = editor.history.execute(createClip());
+  editor.history.execute(setProps([clip], { loop: false }));
+  editor.modes.openClip(clip);
+  const { simulator, sessions } = fakeSimulator();
+  const { player } = playerWithClock(editor, simulator);
+  player.play();
+  for (let i = 0; i < 90; i++) player.nextFrame();
+  assert.equal(editor.modes.playhead, 1);
+  assert.equal(sessions[0].steps.length, 90);
+  assert.equal(editor.modes.mode, 'simulate');
+});
+
+test('pause keeps Simulate mode, next frame steps once and toggle resumes', () => {
+  const editor = editorWithBody();
+  const { simulator, sessions } = fakeSimulator();
+  const { player } = playerWithClock(editor, simulator);
+  const states = [];
+  player.on('playing', (value) => states.push(value));
+  assert.equal(player.nextFrame(), false);
+  player.play();
+  player.pause();
+  assert.equal(editor.modes.mode, 'simulate');
+  assert.equal(player.canPlay(), true);
+  assert.equal(player.nextFrame(), true);
+  assert.equal(sessions[0].steps.length, 1);
+  assert.equal(player.toggle(), true);
+  assert.equal(player.playing, true);
+  assert.equal(sessions.length, 1);
+  assert.deepEqual(states, [true, false, true]);
+});
+
+test('without a simulator nothing plays, and a failing simulator leaves the mode unchanged', () => {
+  const editor = editorWithBody();
+  const idle = playerWithClock(editor, null).player;
+  assert.equal(idle.canPlay(), false);
+  assert.equal(idle.play(), false);
+  assert.equal(idle.stop(), false);
+  const failing = playerWithClock(editor, () => {
+    throw new Error('invalid document');
+  }).player;
+  assert.throws(() => failing.play(), /invalid document/);
+  assert.equal(editor.modes.mode, 'edit');
+  assert.equal(failing.simulating, false);
+});
+
+test('a model reset during Simulate ends the simulation in Edit mode', () => {
+  const editor = editorWithBody();
   const clip = editor.history.execute(createClip());
   editor.modes.openClip(clip);
-  const { player } = playerWithClock(editor);
+  const text = saveJson(editor.model, 'dev').text;
+  const { simulator, sessions } = fakeSimulator();
+  const { player, poses } = playerWithClock(editor, simulator);
   player.play();
-  editor.history.execute(deleteClip(clip));
+  assert.equal(loadJson(editor.model, text).ok, true);
+  assert.equal(editor.modes.mode, 'edit');
+  assert.equal(player.simulating, false);
   assert.equal(player.playing, false);
+  assert.equal(sessions[0].destroyed, true);
+  assert.equal(poses.at(-1), null);
 });
+
