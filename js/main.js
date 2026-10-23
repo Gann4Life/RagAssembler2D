@@ -8,6 +8,8 @@ import { TOOL_SPECS } from './tools/tool.js';
 import { createDock } from './panels/dock.js';
 import { PANELS } from './panels/layout.js';
 import { createHierarchy } from './panels/hierarchy.js';
+import { createTimeline } from './panels/timeline.js';
+import { TimelinePlayer } from './timeline-player.js';
 import { openMenu } from './menu.js';
 import { Settings } from './settings.js';
 import { openSettings } from './settings-dialog.js';
@@ -56,6 +58,12 @@ const dock = createDock(document.getElementById('workspace'), {
   viewportElement: document.getElementById('panel-viewport'),
 });
 const hierarchy = createHierarchy(dock.panelElement('hierarchy'), editor);
+const player = new TimelinePlayer(model, modes, {
+  request: (callback) => requestAnimationFrame(callback),
+  cancel: (handle) => cancelAnimationFrame(handle),
+});
+actions.register('toggle-play', { run: () => player.toggle(), isEnabled: () => player.playing || player.canPlay() });
+const timeline = createTimeline(dock.panelElement('timeline'), editor, player);
 attachFileDrop(document.getElementById('panel-viewport'), (read) => editor.loadFrom(read), () => actions.isEnabled('load'));
 blockFileNavigation(document);
 

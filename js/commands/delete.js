@@ -125,3 +125,20 @@ export function deleteObjects(uids, label = 'Delete') {
     },
   });
 }
+
+/**
+ * Builds a command that removes one clip with its tracks, keys and events.
+ * @param {number} uid Clip uid.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command.
+ * @throws {Error} When `run` finds that `uid` is not a clip; nothing is mutated then.
+ */
+export function deleteClip(uid, label = 'Delete clip') {
+  return Object.freeze({
+    label,
+    run(tx) {
+      if (tx.model.get(uid)?.type !== 'clip') throw new Error(`Node ${uid} is not a clip`);
+      tx.remove(uid);
+    },
+  });
+}

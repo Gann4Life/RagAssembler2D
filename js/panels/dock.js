@@ -96,6 +96,10 @@ export function createDock(workspace, { viewportElement }) {
     return { width: workspace.clientWidth, height: workspace.clientHeight };
   }
 
+  function startingLayout(size) {
+    return setTimelineFolded(defaultLayout(size), false);
+  }
+
   function initialLayout(size) {
     const stored = loadLayout();
     if ('value' in stored) {
@@ -105,11 +109,11 @@ export function createDock(workspace, { viewportElement }) {
         return restored.layout;
       } catch (error) {
         console.warn(`Stored layout ignored: ${error.message}`);
-        return defaultLayout(size);
+        return startingLayout(size);
       }
     }
     if (stored.error === 'parse') console.warn('Stored layout ignored: not valid JSON');
-    return defaultLayout(size);
+    return startingLayout(size);
   }
 
   function render(focusPanel) {
@@ -619,7 +623,7 @@ export function createDock(workspace, { viewportElement }) {
     reset() {
       clearTimeout(saveTimer);
       clearLayout();
-      commit(defaultLayout(workspaceSize()), { save: false });
+      commit(startingLayout(workspaceSize()), { save: false });
     },
     windowItems() {
       return WINDOW_ORDER.map((id) => ({
