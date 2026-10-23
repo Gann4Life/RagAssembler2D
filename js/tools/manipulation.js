@@ -2,7 +2,7 @@ import { transformPoint } from '../../lib/geometry.js';
 import { defaultsOf } from '../../lib/schema.js';
 import { manipulationParts, placeParts, rotationAbout, transformParts } from '../commands/transform.js';
 import { ROOT_UID } from '../model/model.js';
-import { parentJoints } from '../model/queries.js';
+import { jointChildBody, parentJoints } from '../model/queries.js';
 import { placement } from '../viewport/placement.js';
 import { formatMove, formatRotation } from './transform-gizmo.js';
 
@@ -190,12 +190,14 @@ export function gizmoPivot(model, objects, { mode, ctrl }) {
 }
 
 /**
- * Whether rotating a target can change anything: at least one body, or at least two joints.
+ * Whether rotating a target can change anything: at least one body, at least two joints, or a joint with a child body.
+ * @param {import('../model/model.js').Model} model Document model.
  * @param {Target} target Target.
  * @returns {boolean}
  */
-export function canRotate(target) {
-  return target.bodies.length > 0 || target.joints.length >= 2;
+export function canRotate(model, target) {
+  if (target.bodies.length > 0 || target.joints.length >= 2) return true;
+  return target.joints.length === 1 && jointChildBody(model, target.joints[0]) !== null;
 }
 
 /**

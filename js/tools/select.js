@@ -133,7 +133,7 @@ export function selectTool() {
     if (press?.dragging && press.kind !== 'handle' && !press.manipulation) return null;
     const pivot = press?.manipulation ? press.manipulation.pivot() : currentPivot(ctrl);
     if (pivot === null) return null;
-    const ring = canRotate(currentTarget()) || rangeRotates(limitEditor());
+    const ring = canRotate(ctx.model, currentTarget()) || rangeRotates(limitEditor());
     return gizmoLayout(ctx.camera.worldToScreen(pivot), { ring });
   }
 
@@ -193,7 +193,7 @@ export function selectTool() {
     }
     const joint = limitJoint(ctx.model, ctx.selection.objects);
     if (pick.limit) return startLimitDrag(ctx, { joint, handle: pick.id, press: e });
-    if (pick.id === 'ring' && joint !== null) return startLimitDrag(ctx, { joint, handle: 'limit-range', press: e });
+    if (pick.id === 'ring' && joint !== null && rangeRotates(limitEditor())) return startLimitDrag(ctx, { joint, handle: 'limit-range', press: e });
     const target = currentTarget();
     if (pick.id === 'ring') return startRotation(ctx, { target, press: e, mode: pivotMode() });
     return startMove(ctx, { target, ref: currentPivot(e.ctrl), axis: MOVE_AXES[pick.id], press: e });

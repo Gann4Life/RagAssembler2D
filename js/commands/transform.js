@@ -1,6 +1,6 @@
 import { transformPoint } from '../../lib/geometry.js';
 import { ROOT_UID } from '../model/model.js';
-import { bodySubtree, parentJoints } from '../model/queries.js';
+import { bodySubtree, jointChildBody, parentJoints } from '../model/queries.js';
 
 /**
  * What a manipulation moves, in root-local meters and radians.
@@ -50,7 +50,8 @@ function bodyEntry(model, uid) {
 }
 
 /**
- * Start values of what a manipulation target moves: the given bodies (with their subtrees when `subtree`), and
+ * Start values of what a manipulation target moves: the given bodies and the child bodies of the given joints (with
+ * their subtrees when `subtree`), and
  * the placed anchors of the given joints, of the moved bodies' parent joints and of joints between two moved bodies.
  * @param {import('../model/model.js').Model} model Document model.
  * @param {{ bodies: number[], joints: number[] }} target Body and joint uids.
@@ -65,6 +66,13 @@ export function manipulationParts(model, { bodies, joints }, { subtree }) {
   const moved = new Set();
   for (const body of bodies) {
     for (const uid of subtree ? bodySubtree(model, body, parents) : [body]) moved.add(uid);
+  }
+  if (subtree) {
+    for (const joint of joints) {
+      const child = jointChildBody(model, joint, parents);
+      if (child === null) continue;
+      for (const uid of bodySubtree(model, child, parents)) moved.add(uid);
+    }
   }
   const carried = new Set(joints);
   for (const body of moved) if (parents.has(body)) carried.add(parents.get(body));
