@@ -2,6 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { RagImporter } from '../lib/ragimporter.js';
+import { motorTorqueSuggestions } from '../lib/motor.js';
 
 const require = createRequire(import.meta.url);
 const Box2D = require('../vendor/liquidfun.js');
@@ -92,7 +93,13 @@ function lightCreature(motor) {
   };
 }
 
-function peakKineticEnergy(motor, seconds) {
+function fitMotorTorque(json) {
+  const suggestions = motorTorqueSuggestions(json);
+  for (const joint of json.joints) joint.motor.maxTorque = suggestions.get(joint.id);
+  return suggestions;
+}
+
+function peakKineticEnergy(motor, seconds, fit = false) {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const gravity = new Box2D.b2Vec2(0, -10);
   const world = new Box2D.b2World(gravity);
@@ -106,7 +113,9 @@ function peakKineticEnergy(motor, seconds) {
   ground.CreateFixture(box, 0);
   Box2D.destroy(center);
   Box2D.destroy(box);
-  const rag = RagImporter.parse(lightCreature(motor)).spawn(world, { x: 0, y: 0.1 });
+  const json = lightCreature(motor);
+  if (fit) fitMotorTorque(json);
+  const rag = RagImporter.parse(json).spawn(world, { x: 0, y: 0.1 });
   let peak = 0;
   try {
     for (let i = 0; i < seconds / STEP; i++) {
@@ -135,5 +144,17 @@ test('a light creature resting on the ground settles when motor torque matches i
 
 test('a light creature held at rest by zero-gain motors stays still at the default torque', () => {
   const peak = peakKineticEnergy({ maxTorque: 80, gain: 0, damping: 0.5, maxSpeed: 20 }, 8);
+  assert.ok(peak < 0.05, `peak kinetic energy ${peak} J`);
+});
+
+test('the suggested torque of the light creature matches the DESIGN §3.1 examples', () => {
+  const suggestions = fitMotorTorque(lightCreature({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }));
+  assert.equal(suggestions.get('j_finger'), 0.0036);
+  assert.equal(suggestions.get('j_hip'), 13);
+  assert.ok([...suggestions.values()].every((value) => typeof value === 'number' && value >= 0.001));
+});
+
+test('a light creature resting on the ground settles with every joint at its suggested torque', { todo: 'DESIGN §12: peak is about 0.10 J, driven by j_thigh (8.1 N·m) and j_neck (12 N·m)' }, () => {
+  const peak = peakKineticEnergy({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }, 8, true);
   assert.ok(peak < 0.05, `peak kinetic energy ${peak} J`);
 });

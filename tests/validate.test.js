@@ -200,6 +200,7 @@ const cases = [
   },
   { code: 'W_ANCHOR_OUTSIDE', mutate: (j) => void (j.joints[1].anchor = [5, 5]), path: '/joints/1/anchor' },
   { code: 'W_BODY_ZERO_MASS', mutate: (j) => void (j.bodies[1].fixtures[0].density = 0), path: '/bodies/1' },
+  { code: 'W_MOTOR_OVERPOWERED', mutate: (j) => void (j.joints[2].motor.maxTorque = 1e6), path: '/joints/2/motor/maxTorque' },
   {
     code: 'W_CLIP_EMPTY',
     mutate: (j) => {
@@ -226,7 +227,7 @@ test('a complete valid file has no problems', () => {
 
 test('PROBLEM_CODES lists exactly the contract codes, frozen, with severity from the prefix', () => {
   assert.ok(Object.isFrozen(PROBLEM_CODES));
-  assert.equal(Object.keys(PROBLEM_CODES).length, 42);
+  assert.equal(Object.keys(PROBLEM_CODES).length, 43);
   for (const [code, severity] of Object.entries(PROBLEM_CODES)) {
     assert.equal(severity, code.startsWith('E_') ? 'error' : 'warning', code);
   }
@@ -566,6 +567,33 @@ test('W_BODY_ZERO_MASS is skipped when the body has errors in its shapes', () =>
   json.bodies[1].fixtures[0].density = 0;
   json.bodies[1].fixtures[0].friction = -1;
   assert.deepEqual(summary(problemsOf(json)), [{ code: 'E_FIELD_RANGE', path: '/bodies/1/fixtures/0/friction' }]);
+});
+
+test('W_MOTOR_OVERPOWERED fires only above 1000 times the suggestion, without values in the message', () => {
+  const json = validFile();
+  json.joints[2].motor.maxTorque = 1000 * 0.47;
+  assert.deepEqual(validate(json).warnings, []);
+  json.joints[2].motor.maxTorque = 1000 * 0.47 + 1;
+  const [warning] = validate(json).warnings;
+  assert.equal(warning.code, 'W_MOTOR_OVERPOWERED');
+  assert.deepEqual(warning.target, { type: 'joint', id: 'j_neck' });
+  assert.match(warning.message, /Fit motor torque/);
+  assert.doesNotMatch(warning.message, /\d/);
+});
+
+test('W_MOTOR_OVERPOWERED is skipped on errors in bodies or in the joint, and without a suggestion', () => {
+  const bodyError = validFile();
+  bodyError.joints[2].motor.maxTorque = 1e6;
+  bodyError.bodies[1].fixtures[0].friction = -1;
+  assert.ok(!problemsOf(bodyError).some((problem) => problem.code === 'W_MOTOR_OVERPOWERED'));
+  const jointError = validFile();
+  jointError.joints[2].motor.maxTorque = 1e6;
+  jointError.joints[2].motor.gain = -1;
+  assert.ok(!problemsOf(jointError).some((problem) => problem.code === 'W_MOTOR_OVERPOWERED'));
+  const massless = validFile();
+  massless.joints[2].motor.maxTorque = 1e6;
+  massless.bodies[3].fixtures[0].density = 0;
+  assert.ok(!problemsOf(massless).some((problem) => problem.code === 'W_MOTOR_OVERPOWERED'));
 });
 
 test('hasImage is optional, receives the asset id and only flags false', () => {

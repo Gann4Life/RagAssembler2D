@@ -13,6 +13,9 @@ import { ToolRegistry } from '../js/tools/registry.js';
 import { TOOL_SPECS } from '../js/tools/tool.js';
 import { defaultsOf } from '../lib/schema.js';
 import { dispatchKey } from '../js/hotkeys.js';
+import { createJoint, createShapeBody } from '../js/commands/create.js';
+import { toJson } from '../js/model/io.js';
+import { motorTorqueSuggestions } from '../lib/motor.js';
 
 function addClip(editor) {
   const { tracks, events, ...props } = defaultsOf('clip');
@@ -751,4 +754,57 @@ test('Ctrl+G, Ctrl+Shift+G and Alt+G reach group, ungroup and split', () => {
   assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
   assert.equal(press('G', { ctrlKey: true, shiftKey: true }), true);
   assert.equal(model.children(ROOT_UID, 'bodies').length, 3);
+});
+
+function fitScene(editor) {
+  const { history, model } = editor;
+  const shapeA = history.execute(createShapeBody({ position: { x: 0, y: 0 }, angle: 0, shape: { type: 'box', width: 1, height: 1 } }));
+  const shapeB = history.execute(createShapeBody({ position: { x: 1, y: 0 }, angle: 0, shape: { type: 'box', width: 1, height: 0.2 } }));
+  const shapeC = history.execute(createShapeBody({ position: { x: 2, y: 0 }, angle: 0, shape: { type: 'circle', radius: 0.1 } }));
+  const [a, b, c] = [shapeA, shapeB, shapeC].map((uid) => model.get(uid).parent);
+  const first = history.execute(createJoint({ bodyA: a, bodyB: b, anchor: { x: 0.5, y: 0 } }));
+  const second = history.execute(createJoint({ bodyA: b, bodyB: c, anchor: { x: 1.5, y: 0 } }));
+  const free = history.execute(createJoint({ bodyA: null, bodyB: null, anchor: { x: 0, y: 0 } }));
+  history.execute(setProps([first, second], { 'motor.maxTorque': 80 }));
+  return { shapeA, first, second, free };
+}
+
+test('fit-motor-torque sets the selected joints, or all, to their suggestion in one undo step', () => {
+  const editor = createEditor();
+  const { model, history, selection, actions } = editor;
+  const { shapeA, first, second, free } = fitScene(editor);
+  const suggestions = motorTorqueSuggestions(toJson(model, 'dev'));
+  const suggested = (uid) => suggestions.get(model.prop(uid, 'id'));
+  selection.set([second, shapeA]);
+  actions.run('fit-motor-torque');
+  assert.equal(model.prop(second, 'motor.maxTorque'), suggested(second));
+  assert.equal(model.prop(first, 'motor.maxTorque'), 80);
+  assert.equal(history.state.undoLabel, 'Fit motor torque');
+  assert.deepEqual(selection.objects, [second, shapeA]);
+  selection.set([shapeA]);
+  actions.run('fit-motor-torque');
+  assert.equal(model.prop(first, 'motor.maxTorque'), suggested(first));
+  assert.equal(model.prop(free, 'motor.maxTorque'), defaultsOf('joint').motor.maxTorque);
+  history.undo();
+  assert.equal(model.prop(first, 'motor.maxTorque'), 80);
+  assert.equal(model.prop(second, 'motor.maxTorque'), suggested(second));
+  history.redo();
+  actions.run('fit-motor-torque');
+  assert.equal(history.state.canRedo, false);
+  history.undo();
+  assert.equal(model.prop(first, 'motor.maxTorque'), 80);
+  assert.equal(model.prop(second, 'motor.maxTorque'), suggested(second));
+});
+
+test('fit-motor-torque runs from Shift+M in Edit mode only', () => {
+  const editor = createEditor();
+  const { model, modes, actions } = editor;
+  const { first } = fitScene(editor);
+  modes.startSimulate();
+  assert.equal(actions.isEnabled('fit-motor-torque'), false);
+  assert.equal(actions.reason('fit-motor-torque'), 'not available in Simulate mode');
+  modes.stopSimulate();
+  const event = { key: 'M', shiftKey: true, target: { tagName: 'BODY' }, preventDefault() {} };
+  assert.equal(dispatchKey(event, { actions }), true);
+  assert.notEqual(model.prop(first, 'motor.maxTorque'), 80);
 });
