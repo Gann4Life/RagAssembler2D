@@ -1,29 +1,62 @@
+import { jointAngleForBody } from '../../lib/evaluate.js';
+import { setJointAngleKey } from '../commands/keys.js';
+import { animatePose } from '../model/animate-preview.js';
 import { toJson } from '../model/io.js';
+import { jointTree } from '../model/queries.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../viewport/style.js';
 import { defineTool } from './tool.js';
 
 const PRIMARY = 0;
+const PREVIEW_VERSION = 'preview';
+const KEY_THRESHOLD = (0.1 * Math.PI) / 180;
 
 function rootTransform(json) {
   const position = Array.isArray(json.ragdoll?.position) ? json.ragdoll.position : [0, 0];
   return { x: position[0], y: position[1], angle: json.ragdoll?.angle ?? 0 };
 }
 
+function byId(model, pose) {
+  return new Map([...pose].map(([uid, transform]) => [model.prop(uid, 'id'), transform]));
+}
+
+function changedJointAngles(model, from, to) {
+  const def = toJson(model, PREVIEW_VERSION);
+  const fromIds = byId(model, from);
+  const toIds = byId(model, to);
+  const changes = [];
+  for (const [body, joint] of jointTree(model).parent) {
+    if (!from.has(body) || !to.has(body)) continue;
+    const jointId = model.prop(joint, 'id');
+    const base = jointAngleForBody(def, jointId, from.get(body).angle, fromIds);
+    const angle = jointAngleForBody(def, jointId, to.get(body).angle, toIds);
+    if (base === null || angle === null || !Number.isFinite(angle)) continue;
+    if (Math.abs(angle - base) > KEY_THRESHOLD) changes.push([joint, angle]);
+  }
+  return changes;
+}
+
 /**
- * Builds the Pose tool: in Edit mode a left press on a shape starts a physics test through `ctx.physics`, pulling
- * the shape's body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`
- * and discarded on release or cancel. A press the physics service refuses shows `not-allowed` until the release.
- * Never executes a command and never changes the selection.
+ * Builds the Pose tool: a left press on a shape starts a physics test through `ctx.physics`, pulling the shape's
+ * body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`. In Edit mode the
+ * result is discarded on release. In Animate mode the test starts from the FK pose at the playhead, and on release
+ * every joint whose angle changed by more than 0.1° gets an `angle` key at the playhead, in the press's undo step.
+ * Cancel always discards. A press the physics service refuses shows `not-allowed` until the release. Never changes
+ * the selection.
  * @returns {Readonly<import('./tool.js').Tool>} The tool.
  */
 export function poseTool() {
   let ctx = null;
   let session = null;
+  let animate = null;
   let refused = false;
   let hoverCursor = null;
 
+  function animating() {
+    return ctx.modes.can('edit.animation') && ctx.modes.clip !== null;
+  }
+
   function canStart() {
-    return ctx.physics !== null && ctx.physics !== undefined && ctx.modes.can('edit.rest');
+    return ctx.physics !== null && ctx.physics !== undefined && (ctx.modes.can('edit.rest') || animating());
   }
 
   function shapeAt(screen) {
@@ -39,10 +72,20 @@ export function poseTool() {
     ctx.setCursor(css);
   }
 
+  function uidPose(pose) {
+    const mapped = new Map();
+    for (const [id, transform] of pose) {
+      const uid = ctx.model.uidOf(id);
+      if (uid !== null) mapped.set(uid, transform);
+    }
+    return mapped;
+  }
+
   function end() {
     const active = session !== null || refused;
     const running = session;
     session = null;
+    animate = null;
     refused = false;
     if (!active) return false;
     hoverCursor = null;
@@ -56,11 +99,21 @@ export function poseTool() {
     return true;
   }
 
+  function keyResult() {
+    if (session === null || animate === null) return;
+    const { clip, time, from } = animate;
+    if (ctx.model.get(clip)?.type !== 'clip') return;
+    for (const [joint, angle] of changedJointAngles(ctx.model, from, uidPose(session.pose()))) {
+      ctx.history.execute(setJointAngleKey(clip, joint, time, angle, 'Pose'));
+    }
+  }
+
   return defineTool({
     id: 'pose',
     activate(context) {
       ctx = context;
       session = null;
+      animate = null;
       refused = false;
       hoverCursor = null;
     },
@@ -73,12 +126,17 @@ export function poseTool() {
       const shape = shapeAt(e.screen);
       if (shape === null) return;
       const body = ctx.model.get(ctx.model.get(shape).parent);
+      const keying = ctx.modes.can('edit.rest')
+        ? null
+        : { clip: ctx.modes.clip, time: ctx.modes.playhead, from: null };
       try {
+        if (keying !== null) keying.from = animatePose(ctx.model, keying.clip, keying.time);
         const json = toJson(ctx.model, ctx.editorVersion());
         session = ctx.physics.startPose(json, {
           root: rootTransform(json),
           bodyId: body.props.id,
           point: { x: e.world.x, y: e.world.y },
+          start: keying === null ? null : byId(ctx.model, keying.from),
         });
       } catch {
         session = null;
@@ -87,6 +145,7 @@ export function poseTool() {
         ctx.setCursor('not-allowed');
         return;
       }
+      animate = keying;
       hoverCursor = 'grabbing';
       ctx.setCursor('grabbing');
       ctx.invalidateOverlay();
@@ -102,7 +161,11 @@ export function poseTool() {
     },
     pointerUp(e) {
       if (e.button !== PRIMARY) return;
-      end();
+      try {
+        keyResult();
+      } finally {
+        end();
+      }
     },
     cancel() {
       return end();
@@ -110,12 +173,7 @@ export function poseTool() {
     tick(seconds) {
       if (session === null) return;
       session.advance(seconds);
-      const pose = new Map();
-      for (const [id, transform] of session.pose()) {
-        const uid = ctx.model.uidOf(id);
-        if (uid !== null) pose.set(uid, transform);
-      }
-      ctx.setPose(pose);
+      ctx.setPose(uidPose(session.pose()));
       ctx.invalidateOverlay();
     },
     drawOverlay(g) {

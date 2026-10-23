@@ -58,6 +58,8 @@
  * @property {import('../../lib/geometry.js').Transform} root Ragdoll position and angle, world, meters and radians.
  * @property {string} bodyId File id of the grabbed body.
  * @property {import('../../lib/geometry.js').Vec2} point Grabbed point, world meters.
+ * @property {Map<string, import('../../lib/geometry.js').Transform>|null} [start] Root-local transforms by body id
+ *   the test starts from, e.g. the FK pose in Animate mode; the rest pose when omitted or `null`.
  */
 
 /**
