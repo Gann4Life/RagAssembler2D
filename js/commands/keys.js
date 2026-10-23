@@ -6,6 +6,90 @@ function requireType(model, uid, type) {
   if (model.get(uid)?.type !== type) throw new Error(`Node ${uid} is not a ${type}`);
 }
 
+function keysByTrack(model, keys) {
+  const groups = new Map();
+  for (const key of new Set(keys)) {
+    requireType(model, key, 'key');
+    const track = model.get(key).parent;
+    groups.set(track, [...(groups.get(track) ?? []), key]);
+  }
+  return groups;
+}
+
+function clipLengthOf(model, track) {
+  return model.prop(model.get(track).parent, 'length');
+}
+
+/**
+ * Builds a command that moves keys along time by the same offset: the offset is limited so the whole group stays
+ * inside the clip, each time is snapped to 1/30 s, keys stay sorted, and a key that lands on the time of an unselected
+ * key of the same track replaces it. Does nothing when no key changes.
+ * @param {number[]} keys Key uids.
+ * @param {number} delta Time offset in seconds.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command.
+ * @throws {Error} When `run` finds a uid that is not a key; nothing is mutated then.
+ * @throws {TypeError} When `run` finds `delta` not finite; nothing is mutated then.
+ */
+export function moveKeys(keys, delta, label = 'Move keys') {
+  return Object.freeze({
+    label,
+    run(tx) {
+      const { model } = tx;
+      if (!Number.isFinite(delta)) throw new TypeError('Key offset must be a finite number');
+      const groups = keysByTrack(model, keys);
+      let limited = delta;
+      for (const [track, moving] of groups) {
+        const times = moving.map((uid) => model.prop(uid, 't'));
+        limited = Math.min(Math.max(limited, -Math.min(...times)), clipLengthOf(model, track) - Math.max(...times));
+      }
+      for (const [track, moving] of groups) {
+        const length = clipLengthOf(model, track);
+        const times = moving.map((uid) => model.prop(uid, 't'));
+        const target = new Map(moving.map((uid, index) => [uid, snapTime(times[index] + limited, length)]));
+        const taken = new Set();
+        const dropped = new Set();
+        for (const uid of moving) {
+          const t = target.get(uid);
+          if (taken.has(t)) {
+            dropped.add(uid);
+            target.delete(uid);
+          } else taken.add(t);
+        }
+        const survivors = [];
+        for (const uid of model.children(track, 'keys')) {
+          const t = model.prop(uid, 't');
+          if (target.has(uid)) survivors.push(uid);
+          else if (dropped.has(uid) || [...taken].some((time) => Math.abs(time - t) < SAME_TIME)) tx.remove(uid);
+          else survivors.push(uid);
+        }
+        for (const [uid, t] of target) if (model.prop(uid, 't') !== t) tx.set(uid, 't', t);
+        const order = survivors.toSorted((a, b) => model.prop(a, 't') - model.prop(b, 't'));
+        order.forEach((uid, index) => {
+          if (model.children(track, 'keys')[index] !== uid) tx.move(uid, track, 'keys', index);
+        });
+      }
+    },
+  });
+}
+
+/**
+ * Builds a command that removes keys. A track left without keys stays (it has no effect on its channel).
+ * @param {number[]} keys Key uids.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command.
+ * @throws {Error} When `run` finds a uid that is not a key; nothing is mutated then.
+ */
+export function deleteKeys(keys, label = 'Delete keys') {
+  return Object.freeze({
+    label,
+    run(tx) {
+      const groups = keysByTrack(tx.model, keys);
+      for (const uids of groups.values()) for (const uid of uids) tx.remove(uid);
+    },
+  });
+}
+
 /**
  * Builds a command that sets the `angle` key of a joint in a clip: the time is snapped to 1/30 s and clamped to the
  * clip, the joint's `angle` track is created when missing, and a key already at that time is updated, else a

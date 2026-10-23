@@ -1,6 +1,7 @@
 import { ROOT_UID } from '../model/model.js';
 import { setProps } from '../commands/props.js';
 import { createClip } from '../commands/create.js';
+import { deleteKeys, moveKeys } from '../commands/keys.js';
 import { deleteClip } from '../commands/delete.js';
 import { jointAngleRows } from '../timeline-rows.js';
 import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '../timeline-time.js';
@@ -45,7 +46,7 @@ function formatSeconds(value) {
  * @returns {Timeline}
  */
 export function createTimeline(element_, editor, player) {
-  const { model, history, modes } = editor;
+  const { model, history, modes, selection } = editor;
   const doc = element_.ownerDocument;
 
   const header = element(doc, 'div', 'timeline-header');
@@ -90,6 +91,7 @@ export function createTimeline(element_, editor, player) {
 
   let signature = '';
   let scrubPointer = null;
+  let keyDrag = null;
 
   const canOpen = () => modes.can('clip.open') && !history.inGesture;
   const canEditClip = () => modes.clip !== null && modes.can('edit.animation') && !history.inGesture;
@@ -160,14 +162,23 @@ export function createTimeline(element_, editor, player) {
         lane.append(
           ...row.keys.map((key) => {
             const diamond = element(doc, 'span', 'timeline-key');
+            diamond.dataset.key = String(key.uid);
+            diamond.dataset.time = String(key.t);
             diamond.style.left = `${fractionOfTime(key.t, length) * 100}%`;
             diamond.title = `${formatSeconds(key.t)} s`;
+            diamond.classList.toggle('selected', selection.timeline.includes(key.uid));
             return diamond;
           }),
         );
         return lane;
       }),
     );
+  }
+
+  function renderKeySelection() {
+    for (const diamond of lanes.querySelectorAll('.timeline-key')) {
+      diamond.classList.toggle('selected', selection.timeline.includes(Number(diamond.dataset.key)));
+    }
   }
 
   function render() {
@@ -178,7 +189,7 @@ export function createTimeline(element_, editor, player) {
       clips.map((uid) => [uid, clipLabel(model, uid)]),
       open,
       open === null ? 0 : model.prop(open, 'length'),
-      rows.map((row) => [row.joint, row.label, row.keys.map((key) => key.t)]),
+      rows.map((row) => [row.joint, row.label, row.keys.map((key) => [key.uid, key.t])]),
     ]);
     if (next !== signature) {
       signature = next;
@@ -265,6 +276,64 @@ export function createTimeline(element_, editor, player) {
     modes.setPlayhead(snapTime(targets[event.key], length));
     event.preventDefault();
   };
+  function selectedDiamonds() {
+    return [...lanes.querySelectorAll('.timeline-key.selected')];
+  }
+
+  function previewDrag(delta) {
+    const length = clipLength();
+    for (const diamond of selectedDiamonds()) {
+      const t = snapTime(Number(diamond.dataset.time) + delta, length);
+      diamond.style.left = `${fractionOfTime(t, length) * 100}%`;
+    }
+  }
+
+  function dragDelta(event) {
+    const rect = ruler.getBoundingClientRect();
+    if (!(rect.width > 0)) return 0;
+    const length = clipLength();
+    const raw = ((event.clientX - keyDrag.startX) / rect.width) * length;
+    const times = keyDrag.times;
+    const limited = Math.min(Math.max(raw, -Math.min(...times)), length - Math.max(...times));
+    return snapTime(keyDrag.anchor + limited, length) - keyDrag.anchor;
+  }
+
+  function endKeyDrag(event) {
+    if (keyDrag === null || keyDrag.pointer !== event.pointerId) return;
+    const drag = keyDrag;
+    keyDrag = null;
+    if (lanes.hasPointerCapture?.(event.pointerId)) lanes.releasePointerCapture(event.pointerId);
+    const delta = event.type === 'pointerup' && canEditClip() ? drag.delta : 0;
+    if (delta !== 0) history.execute(moveKeys(drag.keys, delta));
+    else previewDrag(0);
+    signature = '';
+    render();
+  }
+
+  const onKeyPointerDown = (event) => {
+    const diamond = event.target.closest?.('.timeline-key');
+    if (event.button !== 0 || !diamond || keyDrag !== null) return;
+    const uid = Number(diamond.dataset.key);
+    if (!selection.timeline.includes(uid)) selection.set([uid]);
+    lanes.focus();
+    event.preventDefault();
+    if (!canEditClip()) return;
+    const keys = [...selection.timeline];
+    const times = selectedDiamonds().map((node) => Number(node.dataset.time));
+    keyDrag = { pointer: event.pointerId, startX: event.clientX, keys, times, anchor: Number(diamond.dataset.time), delta: 0 };
+    lanes.setPointerCapture?.(event.pointerId);
+  };
+  const onKeyPointerMove = (event) => {
+    if (keyDrag === null || keyDrag.pointer !== event.pointerId) return;
+    keyDrag.delta = dragDelta(event);
+    previewDrag(keyDrag.delta);
+  };
+  const onLanesKeyDown = (event) => {
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+    if (keyDrag !== null || !canEditClip() || selection.timeline.length === 0) return;
+    history.execute(deleteKeys([...selection.timeline]));
+    event.preventDefault();
+  };
   const onLengthKey = (event) => {
     if (event.key === 'Enter') commitLength();
     else if (event.key === 'Escape') {
@@ -286,8 +355,15 @@ export function createTimeline(element_, editor, player) {
   ruler.addEventListener('pointerup', onPointerEnd);
   ruler.addEventListener('pointercancel', onPointerEnd);
   ruler.addEventListener('keydown', onKeyDown);
+  lanes.tabIndex = 0;
+  lanes.addEventListener('pointerdown', onKeyPointerDown);
+  lanes.addEventListener('pointermove', onKeyPointerMove);
+  lanes.addEventListener('pointerup', endKeyDrag);
+  lanes.addEventListener('pointercancel', endKeyDrag);
+  lanes.addEventListener('keydown', onLanesKeyDown);
 
   const unsubscribe = [
+    selection.on('selection', renderKeySelection),
     model.on('change', render),
     model.on('reset', render),
     modes.on('mode', render),

@@ -1123,4 +1123,15 @@ body.dock-resizing-column * {
   margin-left: -5px;
   background: var(--focus);
   transform: rotate(45deg) scale(0.8);
+  cursor: grab;
+}
+
+.timeline-key.selected {
+  background: var(--text);
+  outline: 2px solid var(--focus);
+  transform: rotate(45deg) scale(1);
+}
+
+.timeline-lanes:focus {
+  outline: none;
 }
