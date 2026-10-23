@@ -1,6 +1,6 @@
 {
   "format": "ragassembler",
-  "version": 1,
+  "version": 2,
   "meta": {
     "name": "sample",
     "editorVersion": "0.1.0"
@@ -27,6 +27,13 @@
       "strength": 1,
       "gain": 1,
       "damping": 1
+    },
+    "balance": {
+      "enabled": true,
+      "maxTorque": 96,
+      "gain": 10,
+      "damping": 0.5,
+      "maxSpeed": 20
     }
   },
   "sprites": [],

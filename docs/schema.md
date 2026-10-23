@@ -57,7 +57,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | `balance.damping` | number | `0.5` | ≥0 | — | |
 | `balance.maxSpeed` | number | `20` | ≥0 | rad/s | |
 
-New documents get `balance.enabled = true`; the 1 → 2 migration writes `false` ([`DESIGN.md` §6.3](design/06-file-format.md#63-versioning)). The root `bodyAngle` channel ◆ has no field here: the inspector shows its evaluated value at the playhead in Animate mode.
+New documents and the 1 → 2 migration both write `balance.enabled = true` ([`DESIGN.md` §6.3](design/06-file-format.md#63-versioning)). The root `bodyAngle` channel ◆ has no field here: the inspector shows its evaluated value at the playhead in Animate mode.
 
 The root inspector also shows `units.pixelsPerMeter` and `preview.gravity` from the document. `position` and `angle` are locked: no editor command writes them, and loaded values are kept ([`DESIGN.md` §2.1](design/02-object-model.md#21-root-the-ragdoll-itself)).
 
