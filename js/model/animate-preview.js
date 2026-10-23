@@ -5,7 +5,8 @@ import { toJson } from './io.js';
 const PREVIEW_VERSION = 'preview';
 
 /**
- * Pose of every body at a clip time, by body uid in the root-local frame, from the joint angles the clip resolves.
+ * Pose of every body at a clip time, by body uid in the root-local frame, from the joint angles and the root
+ * `bodyAngle` the clip resolves.
  * Never changes the model.
  * @param {import('./model.js').Model} model Document model.
  * @param {number} clip Uid of a clip.
@@ -19,9 +20,9 @@ export function animatePose(model, clip, time) {
 function poseFromDef(model, def, clip, time) {
   const clipDef = def.clips[model.children(ROOT_UID, 'clips').indexOf(clip)];
   const layers = clipDef ? [{ clip: clipDef, time }] : [];
-  const { joints } = resolveChannels(def, layers);
+  const { joints, root } = resolveChannels(def, layers);
   const pose = new Map();
-  for (const [id, transform] of fkPose(def, joints)) pose.set(model.uidOf(id), transform);
+  for (const [id, transform] of fkPose(def, joints, root.bodyAngle)) pose.set(model.uidOf(id), transform);
   return pose;
 }
 

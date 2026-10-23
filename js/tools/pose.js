@@ -1,7 +1,8 @@
 import { jointAngleForBody } from '../../lib/evaluate.js';
-import { setJointAngleKey } from '../commands/keys.js';
+import { setJointAngleKey, setRootBodyAngleKey } from '../commands/keys.js';
 import { animatePose } from '../model/animate-preview.js';
 import { toJson } from '../model/io.js';
+import { ROOT_UID } from '../model/model.js';
 import { jointTree } from '../model/queries.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../viewport/style.js';
 import { defineTool } from './tool.js';
@@ -17,6 +18,15 @@ function rootTransform(json) {
 
 function byId(model, pose) {
   return new Map([...pose].map(([uid, transform]) => [model.prop(uid, 'id'), transform]));
+}
+
+function changedRootAngle(model, from, to) {
+  const id = model.prop(ROOT_UID, 'rootBody');
+  const uid = typeof id === 'string' ? model.uidOf(id) : null;
+  if (uid === null || uid === undefined || !from.has(uid) || !to.has(uid)) return null;
+  const angle = to.get(uid).angle - model.prop(uid, 'angle');
+  const turned = to.get(uid).angle - from.get(uid).angle;
+  return Number.isFinite(angle) && Math.abs(turned) > KEY_THRESHOLD ? angle : null;
 }
 
 function changedJointAngles(model, from, to) {
@@ -38,8 +48,9 @@ function changedJointAngles(model, from, to) {
 /**
  * Builds the Pose tool: a left press on a shape starts a physics test through `ctx.physics`, pulling the shape's
  * body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`. In Edit mode the
- * result is discarded on release. In Animate mode the test starts from the FK pose at the playhead, and on release
- * every joint whose angle changed by more than 0.1° gets an `angle` key at the playhead, in the press's undo step.
+ * result is discarded on release. In Animate mode the test starts from the FK pose at the playhead with `rootBody`
+ * held to what FK can show, and on release every joint whose angle changed by more than 0.1° gets an `angle` key at
+ * the playhead, and the root `bodyAngle` too when `rootBody` turned by more than 0.1°, in the press's undo step.
  * Cancel always discards. A press the physics service refuses shows `not-allowed` until the release. Never changes
  * the selection.
  * @returns {Readonly<import('./tool.js').Tool>} The tool.
@@ -103,9 +114,12 @@ export function poseTool() {
     if (session === null || animate === null) return;
     const { clip, time, from } = animate;
     if (ctx.model.get(clip)?.type !== 'clip') return;
-    for (const [joint, angle] of changedJointAngles(ctx.model, from, uidPose(session.pose()))) {
+    const result = uidPose(session.pose());
+    for (const [joint, angle] of changedJointAngles(ctx.model, from, result)) {
       ctx.history.execute(setJointAngleKey(clip, joint, time, angle, 'Pose'));
     }
+    const bodyAngle = changedRootAngle(ctx.model, from, result);
+    if (bodyAngle !== null) ctx.history.execute(setRootBodyAngleKey(clip, time, bodyAngle, 'Pose'));
   }
 
   return defineTool({
@@ -137,6 +151,7 @@ export function poseTool() {
           bodyId: body.props.id,
           point: { x: e.world.x, y: e.world.y },
           start: keying === null ? null : byId(ctx.model, keying.from),
+          holdRoot: keying !== null,
         });
       } catch {
         session = null;

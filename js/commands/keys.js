@@ -1,3 +1,4 @@
+import { ROOT_UID } from '../model/model.js';
 import { snapTime } from '../timeline-time.js';
 
 const SAME_TIME = 1e-6;
@@ -104,24 +105,43 @@ export function deleteKeys(keys, label = 'Delete keys') {
  * @throws {TypeError} When `run` finds `time` or `angle` not finite; nothing is mutated then.
  */
 export function setJointAngleKey(clip, joint, time, angle, label = 'Key joint angle') {
+  return angleKeyCommand(clip, joint, 'joint', 'angle', time, angle, label);
+}
+
+/**
+ * Builds a command that sets the root `bodyAngle` key in a clip, with the same rules as `setJointAngleKey`: the
+ * root's `bodyAngle` track is created when missing. `run` returns the key uid.
+ * @param {number} clip Uid of the clip.
+ * @param {number} time Time in seconds.
+ * @param {number} angle Root `bodyAngle`, radians relative to the rest orientation.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command.
+ * @throws {Error} When `run` finds `clip` of the wrong type; nothing is mutated then.
+ * @throws {TypeError} When `run` finds `time` or `angle` not finite; nothing is mutated then.
+ */
+export function setRootBodyAngleKey(clip, time, angle, label = 'Key body angle') {
+  return angleKeyCommand(clip, ROOT_UID, 'root', 'bodyAngle', time, angle, label);
+}
+
+function angleKeyCommand(clip, node, type, channel, time, angle, label) {
   return Object.freeze({
     label,
     run(tx) {
       const { model } = tx;
       requireType(model, clip, 'clip');
-      requireType(model, joint, 'joint');
+      requireType(model, node, type);
       if (!Number.isFinite(time) || !Number.isFinite(angle)) throw new TypeError('Key time and angle must be finite numbers');
       const t = snapTime(time, model.prop(clip, 'length'));
-      const target = model.prop(joint, 'id');
+      const target = model.prop(node, 'id');
       const v = angle + 0;
       const track = model
         .children(clip, 'tracks')
-        .find((uid) => model.prop(uid, 'target') === target && model.prop(uid, 'channel') === 'angle');
+        .find((uid) => model.prop(uid, 'target') === target && model.prop(uid, 'channel') === channel);
       const key = { type: 'key', props: { t, v, interp: 'linear' } };
       if (track === undefined) {
         const created = tx.add(clip, 'tracks', undefined, {
           type: 'track',
-          props: { target, channel: 'angle' },
+          props: { target, channel },
           children: { keys: [key] },
         });
         return model.children(created, 'keys')[0];

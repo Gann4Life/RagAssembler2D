@@ -1,6 +1,6 @@
 import { animatePose } from '../model/animate-preview.js';
 import { placement } from '../viewport/placement.js';
-import { animateRotationPivot, animateRotationTarget, startAnimateRotation } from './animate-rotation.js';
+import { animateRotationTarget, animateTargetPivot, startAnimateRotation } from './animate-rotation.js';
 import { COLORS, HIT_RADIUS, LINE_WIDTH } from '../viewport/style.js';
 import { drawLimitHandles, drawLimitRange, limitJoint, limitLayout, limitRange, startLimitDrag } from './joint-limits.js';
 import { canRotate, gizmoPivot, manipulationTarget, startMove, startRotation } from './manipulation.js';
@@ -140,7 +140,7 @@ export function selectTool() {
     } else {
       const target = animateTarget();
       const pose = target && animatePose(ctx.model, ctx.modes.clip, ctx.modes.playhead);
-      pivot = target && animateRotationPivot(ctx.model, pose, target.joint);
+      pivot = target && animateTargetPivot(ctx.model, pose, target);
     }
     return pivot === null ? null : gizmoLayout(ctx.camera.worldToScreen(pivot), { ring: true, ringOnly: true });
   }

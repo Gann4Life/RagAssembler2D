@@ -1,5 +1,5 @@
 import { defaultsOf } from '../lib/schema.js';
-import { motorTorqueSuggestions } from '../lib/motor.js';
+import { balanceTorqueSuggestion, motorTorqueSuggestions } from '../lib/motor.js';
 import { Model, ROOT_UID } from './model/model.js';
 import { createJoint, createShapeBody } from './commands/create.js';
 import { deleteObjects, deletionPlan } from './commands/delete.js';
@@ -217,17 +217,22 @@ function saveWriteErrorNotice() {
 function fitMotorTorque(model, selected, editorVersion) {
   const all = model.children(ROOT_UID, 'joints');
   const chosen = selected.filter((uid) => model.get(uid)?.type === 'joint');
-  const suggestions = motorTorqueSuggestions(toJson(model, editorVersion));
+  const json = toJson(model, editorVersion);
+  const suggestions = motorTorqueSuggestions(json);
   const changes = [];
   for (const uid of chosen.length > 0 ? chosen : all) {
     const suggestion = suggestions.get(model.prop(uid, 'id'));
     if (typeof suggestion === 'number' && model.prop(uid, 'motor.maxTorque') !== suggestion) changes.push([uid, suggestion]);
   }
+  if (chosen.length === 0 || selected.includes(ROOT_UID)) {
+    const balance = balanceTorqueSuggestion(json);
+    if (typeof balance === 'number' && model.prop(ROOT_UID, 'balance.maxTorque') !== balance) changes.push([ROOT_UID, balance, 'balance.maxTorque']);
+  }
   if (changes.length === 0) return null;
   return Object.freeze({
     label: 'Fit motor torque',
     run(tx) {
-      for (const [uid, suggestion] of changes) tx.set(uid, 'motor.maxTorque', suggestion);
+      for (const [uid, suggestion, path = 'motor.maxTorque'] of changes) tx.set(uid, path, suggestion);
     },
   });
 }
