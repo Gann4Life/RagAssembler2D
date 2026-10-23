@@ -36,8 +36,8 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
   - Events are drawn as markers with their name, can be dragged, and are edited in the inspector.
 - **Playhead / scrub:**
   - Click or drag on the ruler.
-  - Scrubbing updates the FK preview and the sprites live.
-  - In Simulate mode (playing or paused) the ruler stays enabled, because the runtime cannot seek: pressing or dragging it, or using Left / Right / Home / End on it, first stops the simulation as Stop does, then scrubs the restored clip in Animate mode at that time. With no clip open it only stops.
+  - Scrubbing (pointer or Left / Right / Home / End on the ruler) shows the physics simulation of the clip at the playhead, re-simulated from 0 when going back ([§5.1](05-1-modes.md#51-editor-modes), physics scrub preview); the sprites follow the playhead live.
+  - In Simulate mode (playing or paused) the ruler stays enabled: scrubbing first returns to the restored clip in Animate mode, as Stop does, and the running simulation becomes the scrub simulation, so scrubbing forward continues it. With no clip open it only stops.
   - The snap step defaults to 1/30 s.
 - **Loop toggle and length field** mirror the clip properties.
 - **Autokey (●):** while it is on, Pose and Select rotation changes in Animate mode create keys automatically.
