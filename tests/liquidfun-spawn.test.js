@@ -131,7 +131,7 @@ test('bodies spawn at S × L in rest pose, ignoring ragdoll.position and angle',
     const filter = torso.GetFilterData();
     assert.equal(filter.get_categoryBits(), 2);
     assert.equal(filter.get_maskBits() & 0xffff, 65527);
-    assert.equal(filter.get_groupIndex(), 0);
+    assert.equal(filter.get_groupIndex(), -1);
     near(torso.GetFriction(), 0.6, 'friction');
     assert.equal(rag.view.parent, parent);
     assert.equal(rag.view.sortableChildren, true);
