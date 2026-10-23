@@ -6,6 +6,8 @@ import { toJson } from './model/io.js';
  * @property {(callback: (timestamp: number) => void) => number} request Schedules one frame; the callback gets a
  *   timestamp in milliseconds.
  * @property {(handle: number) => void} cancel Cancels a scheduled frame.
+ * @property {() => number} [now] Current time in milliseconds, `performance.now` in the browser; without it the scrub
+ *   preview is limited by {@link SCRUB_MAX_STEPS} alone.
  */
 
 /**
@@ -34,15 +36,30 @@ export const SIMULATE_STEP = 1 / 60;
  */
 export const SIMULATE_MAX_STEPS = 4;
 
+/**
+ * Time the scrub preview may spend stepping in one frame, milliseconds.
+ * @type {number}
+ */
+export const SCRUB_FRAME_BUDGET = 8;
+
+/**
+ * Most physics steps the scrub preview runs in one frame.
+ * @type {number}
+ */
+export const SCRUB_MAX_STEPS = 240;
+
 const PREVIEW_VERSION = 'preview';
 const STEP_EPSILON = 1e-9;
 
 /**
- * Play, Pause, Next frame and Stop (`DESIGN.md` §5.1, §5.3). Play enters Simulate mode and runs the document
- * through a {@link Simulator} at a fixed step, playing the open clip from 0; the playhead follows the simulated
- * clip time. Stop destroys the simulation and restores the mode, clip and playhead active before Play. Never
- * changes the model. Events: `playing` with the new `boolean`; `pose` with the simulated pose by body uid
- * (root-local), or `null` when the simulation ends.
+ * Play, Pause, Next frame, Stop and scrub (`DESIGN.md` §5.1, §5.3, §5.8). Play enters Simulate mode and runs the
+ * document through a {@link Simulator} at a fixed step, playing the open clip; the playhead follows the simulated
+ * clip time. Stop destroys the simulation and restores the mode, clip and playhead active before Play. Scrubbing in
+ * Animate mode keeps a scrub simulation of the open clip and steps it at the same fixed step up to the playhead,
+ * within a per-frame budget, rebuilding it from 0 to go back; a model change, a mode change or another open clip
+ * drops it. Play continues from the scrub simulation when there is one. Never changes the model. Events: `playing`
+ * with the new `boolean`; `pose` with the simulated pose by body uid (root-local), or `null` when no simulation is
+ * shown any more.
  */
 export class TimelinePlayer {
   #model;
@@ -57,12 +74,17 @@ export class TimelinePlayer {
   #last = null;
   #accumulated = 0;
   #steps = 0;
+  #preview = null;
+  #previewing = false;
+  #previewFailed = false;
+  #previewHandle = null;
 
   /**
    * @param {import('./model/model.js').Model} model Document model, read only.
    * @param {import('./modes.js').Modes} modes Editor modes holding the open clip and the playhead.
    * @param {PlayerClock} clock Frame scheduler, `requestAnimationFrame` in the browser.
-   * @param {Simulator|null} [simulator] Starts a simulation; without one nothing can play.
+   * @param {Simulator|null} [simulator] Starts a simulation; without one nothing can play and scrubbing shows no
+   *   physics.
    */
   constructor(model, modes, clock, simulator = null) {
     this.#model = model;
@@ -71,7 +93,15 @@ export class TimelinePlayer {
     this.#simulator = simulator;
     modes.on('mode', ({ mode }) => {
       if (this.#session !== null && mode !== 'simulate') this.#teardown();
+      this.#dropPreview();
     });
+    model.on('change', () => this.#dropPreview());
+    model.on('reset', () => this.#dropPreview());
+  }
+
+  /** @returns {boolean} Whether the viewport is shown the scrub simulation (Animate mode, after a scrub). */
+  get previewing() {
+    return this.#previewing;
   }
 
   /** @returns {boolean} Whether the simulation is advancing. */
@@ -90,8 +120,9 @@ export class TimelinePlayer {
   }
 
   /**
-   * Resumes a paused simulation, or starts one: builds it from the document, enters Simulate mode and plays the
-   * open clip from 0.
+   * Resumes a paused simulation, or starts one and enters Simulate mode: it continues the scrub simulation of the
+   * open clip when there is one, with the playhead at the time it reached, otherwise it builds one from the
+   * document and plays the open clip from 0.
    * @returns {boolean} `false` when nothing can play.
    * @throws {Error} When the simulator fails (for example on a document with validation errors); the mode is
    *   unchanged.
@@ -152,15 +183,31 @@ export class TimelinePlayer {
   }
 
   /**
-   * Moves the playhead from the ruler. While a simulation exists it ends first, as Stop does, then the playhead
-   * moves in the restored Animate mode; with no clip to scrub the simulation just ends.
+   * Moves the playhead from the ruler and shows the physics at that time: the scrub simulation steps toward it on
+   * the following frames, emitting `pose` with the latest state reached. While a Simulate run exists it leaves
+   * Simulate mode first, as Stop does, and its simulation becomes the scrub simulation; with no clip to scrub it
+   * just ends.
    * @param {number} t Time in seconds, clamped to the open clip.
    * @returns {boolean} `false` when nothing could be scrubbed.
    */
   scrub(t) {
-    if (this.#session !== null) this.stop();
-    if (this.#modes.clip === null || !this.#modes.can('timeline.scrub')) return false;
+    const taken = this.#session === null ? null : this.#takeSimulation();
+    const scrubbable = this.#modes.clip !== null && this.#modes.can('timeline.scrub');
+    if (taken !== null) {
+      if (scrubbable && taken.clip === this.#modes.clip) {
+        this.#preview = taken;
+        this.#previewing = true;
+      } else {
+        taken.session.destroy();
+        this.#emitter.emit('pose', null);
+      }
+    }
+    if (!scrubbable) return false;
     this.#modes.setPlayhead(t);
+    if (this.#simulator !== null) {
+      this.#previewing = true;
+      this.#requestPreview();
+    }
     return true;
   }
 
@@ -175,20 +222,112 @@ export class TimelinePlayer {
 
   #start() {
     const clip = this.#modes.clip;
-    const key = clip === null ? null : this.#model.prop(clip, 'key');
-    const session = this.#simulator(toJson(this.#model, PREVIEW_VERSION), { clip: key });
+    const adopted = this.#adoptPreview(clip);
+    const session = adopted?.session ?? this.#create(clip);
     this.#clip = clip;
-    this.#steps = 0;
+    this.#steps = adopted?.steps ?? 0;
     this.#accumulated = 0;
     try {
       this.#modes.startSimulate();
       this.#session = session;
-      if (clip !== null) this.#modes.setPlayhead(0);
+      if (clip !== null) this.#modes.setPlayhead(this.#clipTime());
     } catch (error) {
+      this.#session = null;
       session.destroy();
       throw error;
     }
-    this.#emitPose();
+    this.#emitPose(session);
+  }
+
+  #create(clip) {
+    const key = clip === null ? null : this.#model.prop(clip, 'key');
+    return this.#simulator(toJson(this.#model, PREVIEW_VERSION), { clip: key });
+  }
+
+  #adoptPreview(clip) {
+    const preview = this.#preview;
+    if (preview === null || clip === null || preview.clip !== clip) {
+      this.#dropPreview();
+      return null;
+    }
+    this.#preview = null;
+    this.#previewing = false;
+    this.#cancelPreview();
+    return preview;
+  }
+
+  #takeSimulation() {
+    const taken = { session: this.#session, clip: this.#clip, steps: this.#steps };
+    this.#session = null;
+    this.#clip = null;
+    this.pause();
+    try {
+      this.#modes.stopSimulate();
+    } catch (error) {
+      taken.session.destroy();
+      this.#emitter.emit('pose', null);
+      throw error;
+    }
+    return taken;
+  }
+
+  #dropPreview() {
+    const shown = this.#previewing;
+    const preview = this.#preview;
+    this.#preview = null;
+    this.#previewing = false;
+    this.#previewFailed = false;
+    this.#cancelPreview();
+    preview?.session.destroy();
+    if (shown) this.#emitter.emit('pose', null);
+  }
+
+  #requestPreview() {
+    if (this.#previewHandle === null) this.#previewHandle = this.#clock.request(() => this.#previewFrame());
+  }
+
+  #cancelPreview() {
+    if (this.#previewHandle !== null) this.#clock.cancel(this.#previewHandle);
+    this.#previewHandle = null;
+  }
+
+  #previewFrame() {
+    this.#previewHandle = null;
+    const clip = this.#modes.clip;
+    if (!this.#previewing || this.#previewFailed || clip === null) return;
+    const started = this.#now();
+    const target = this.#stepsAt(clip, this.#modes.playhead);
+    if (this.#preview !== null && this.#preview.steps > target) {
+      this.#preview.session.destroy();
+      this.#preview = null;
+    }
+    if (this.#preview === null) {
+      try {
+        this.#preview = { session: this.#create(clip), clip, steps: 0 };
+      } catch {
+        this.#previewFailed = true;
+        this.#emitter.emit('pose', null);
+        return;
+      }
+    }
+    const preview = this.#preview;
+    for (let run = 0; preview.steps < target && run < SCRUB_MAX_STEPS; run++) {
+      if (run > 0 && this.#now() - started >= SCRUB_FRAME_BUDGET) break;
+      preview.session.step(SIMULATE_STEP);
+      preview.steps++;
+    }
+    this.#emitPose(preview.session);
+    if (preview.steps < target) this.#requestPreview();
+  }
+
+  #now() {
+    return typeof this.#clock.now === 'function' ? this.#clock.now() : 0;
+  }
+
+  #stepsAt(clip, time) {
+    const speed = this.#model.prop(clip, 'speed') ?? 1;
+    if (!(speed > 0)) return 0;
+    return Math.round(time / (SIMULATE_STEP * speed));
   }
 
   #teardown() {
@@ -225,7 +364,7 @@ export class TimelinePlayer {
     for (let i = 0; i < steps; i++) this.#session.step(SIMULATE_STEP);
     this.#steps += steps;
     if (this.#clip !== null && this.#modes.clip === this.#clip) this.#modes.setPlayhead(this.#clipTime());
-    this.#emitPose();
+    this.#emitPose(this.#session);
   }
 
   #clipTime() {
@@ -236,9 +375,9 @@ export class TimelinePlayer {
     return this.#model.prop(this.#clip, 'loop') === true ? time % length : Math.min(time, length);
   }
 
-  #emitPose() {
+  #emitPose(session) {
     const pose = new Map();
-    for (const [id, transform] of this.#session.pose()) {
+    for (const [id, transform] of session.pose()) {
       const uid = this.#model.uidOf(id);
       if (uid !== null) pose.set(uid, transform);
     }

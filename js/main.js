@@ -66,6 +66,7 @@ const player = new TimelinePlayer(
   {
     request: (callback) => requestAnimationFrame(callback),
     cancel: (handle) => cancelAnimationFrame(handle),
+    now: () => performance.now(),
   },
   (json, options) => createSimulateSession(Box2D, json, options),
 );
@@ -230,8 +231,17 @@ const viewport = await createViewport(PIXI, viewportHost, {
   onSpaceTap: () => actions.run('toggle-play'),
 });
 
-bindAnimatePreview(model, modes, (pose) => viewport.setBasePose(pose));
-player.on('pose', (pose) => viewport.setBasePose(pose));
+let authoredPose = null;
+let simulatedPose = null;
+const showBasePose = () => viewport.setBasePose(simulatedPose ?? authoredPose);
+bindAnimatePreview(model, modes, (pose) => {
+  authoredPose = pose;
+  showBasePose();
+});
+player.on('pose', (pose) => {
+  simulatedPose = pose;
+  showBasePose();
+});
 player.on('playing', refreshHeader);
 
 actions.register('settings', { run: toggleSettings, isEnabled: () => modes.can('settings.editor') });
