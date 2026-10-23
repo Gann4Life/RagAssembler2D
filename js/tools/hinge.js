@@ -1,4 +1,6 @@
+import { motorTorqueSuggestions } from '../../lib/motor.js';
 import { createJoint } from '../commands/create.js';
+import { toJson } from '../model/io.js';
 import { jointBetween, orderJointBodies } from '../model/queries.js';
 import { placement } from '../viewport/placement.js';
 import { snapAngle } from '../viewport/snap.js';
@@ -39,6 +41,18 @@ export function hingePair(model, hits) {
   return orderJointBodies(model, first, second);
 }
 
+function withSuggestedTorque(create, editorVersion) {
+  return Object.freeze({
+    label: create.label,
+    run(tx) {
+      const uid = create.run(tx);
+      const suggestion = motorTorqueSuggestions(toJson(tx.model, editorVersion())).get(tx.model.prop(uid, 'id'));
+      if (typeof suggestion === 'number') tx.set(uid, 'motor.maxTorque', suggestion);
+      return uid;
+    },
+  });
+}
+
 function wrap(angle) {
   const turned = angle - 2 * Math.PI * Math.floor((angle + Math.PI) / (2 * Math.PI));
   return turned === -Math.PI ? Math.PI : turned;
@@ -60,7 +74,8 @@ export function hingeLimits(phi, { shift, alt }) {
 /**
  * Builds the Hinge Joint tool: a press where shapes of two bodies overlap anchors a revolute joint at the
  * grid-snapped press point; a click creates a pin, a drag creates one-sided limits toward the pointer (ALT:
- * symmetric) and shows them in a readout. One joint per press through `history.execute`, then the joint is
+ * symmetric) and shows them in a readout. `motor.maxTorque` is the joint's suggested torque (`DESIGN.md` §3.1), the
+ * schema default when there is none. One joint per press through `history.execute`, then the joint is
  * selected. Refused spots show the `not-allowed` cursor while hovering.
  * @returns {Readonly<import('./tool.js').Tool>} The tool.
  */
@@ -118,7 +133,7 @@ export function hingeTool() {
       ctx.invalidateOverlay();
       const spec = { ...pair, anchor: ctx.toLocal(anchor) };
       if (lower !== 0 || upper !== 0) spec.limits = { enabled: true, lower, upper };
-      const uid = ctx.history.execute(createJoint(spec));
+      const uid = ctx.history.execute(withSuggestedTorque(createJoint(spec), ctx.editorVersion));
       ctx.selection.set([uid]);
     },
     cancel() {

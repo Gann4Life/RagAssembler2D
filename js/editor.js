@@ -1,4 +1,5 @@
 import { defaultsOf } from '../lib/schema.js';
+import { motorTorqueSuggestions } from '../lib/motor.js';
 import { Model, ROOT_UID } from './model/model.js';
 import { createJoint, createShapeBody } from './commands/create.js';
 import { deleteObjects, deletionPlan } from './commands/delete.js';
@@ -11,7 +12,7 @@ import { Modes } from './modes.js';
 import { ActionRegistry } from './actions.js';
 import { Settings } from './settings.js';
 import { DEV_VERSION } from './version.js';
-import { loadJson, newDocument, saveJson } from './model/io.js';
+import { loadJson, newDocument, saveJson, toJson } from './model/io.js';
 import { Camera } from './viewport/camera.js';
 import { ToolRegistry } from './tools/registry.js';
 import { selectTool } from './tools/select.js';
@@ -213,6 +214,24 @@ function saveWriteErrorNotice() {
   return notice('save-error', 'Cannot save', 'The file could not be written. The ragdoll still has unsaved changes.', []);
 }
 
+function fitMotorTorque(model, selected, editorVersion) {
+  const all = model.children(ROOT_UID, 'joints');
+  const chosen = selected.filter((uid) => model.get(uid)?.type === 'joint');
+  const suggestions = motorTorqueSuggestions(toJson(model, editorVersion));
+  const changes = [];
+  for (const uid of chosen.length > 0 ? chosen : all) {
+    const suggestion = suggestions.get(model.prop(uid, 'id'));
+    if (typeof suggestion === 'number' && model.prop(uid, 'motor.maxTorque') !== suggestion) changes.push([uid, suggestion]);
+  }
+  if (changes.length === 0) return null;
+  return Object.freeze({
+    label: 'Fit motor torque',
+    run(tx) {
+      for (const [uid, suggestion] of changes) tx.set(uid, 'motor.maxTorque', suggestion);
+    },
+  });
+}
+
 const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, boxTool, hingeTool]);
 
 /**
@@ -220,7 +239,7 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * actions. The tool registry is the first `mode` listener, so a mode change cancels the operation in progress
  * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
  * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
- * and the `delete`, `group`, `ungroup`, `split`, `rename`, `add-shape`, `add-joint`, `new` actions, plus `load` and
+ * and the `delete`, `group`, `ungroup`, `split`, `rename`, `add-shape`, `fit-motor-torque`, `add-joint`, `new` actions, plus `load` and
  * `save` when `files` is given.
  * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null,
  *   confirm?: (request: ConfirmRequest) => Promise<boolean>, notify?: (notice: Notice) => Promise<void>,
@@ -508,6 +527,14 @@ export function createEditor({
         createShapeBody({ position: { x: 0, y: 0 }, angle: 0, shape: { type: 'box', width, height } }, 'Add shape'),
       );
       selection.set([uid]);
+    },
+    isEnabled: canEditRest,
+    reason: () => modeReason('edit.rest'),
+  });
+  actions.register('fit-motor-torque', {
+    run: () => {
+      const command = fitMotorTorque(model, selection.objects, editorVersion());
+      if (command !== null) history.execute(command);
     },
     isEnabled: canEditRest,
     reason: () => modeReason('edit.rest'),
