@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sampleTrack, channelDefault, evaluateClip, resolveChannels } from '../lib/evaluate.js';
+import { sampleTrack, channelDefault, evaluateClip, resolveChannels, fkPose, jointAngleForBody } from '../lib/evaluate.js';
 
 const k = (t, v, interp) => ({ t, v, interp });
 
@@ -163,4 +163,130 @@ test('resolveChannels clamps multipliers and ignores unknown targets', () => {
 test('resolveChannels rejects more than one layer', () => {
   const layer = { clip: clipOf([]), time: 0 };
   assert.throws(() => resolveChannels(def, [layer, layer]), /single layer/);
+});
+
+const body = (id, x, y, angle = 0) => ({ id, position: [x, y], angle });
+const hinge = (id, bodyA, bodyB, x, y) => ({ id, bodyA, bodyB, anchor: [x, y] });
+const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} !== ${expected}`);
+const chain = () => ({
+  ragdoll: { rootBody: 'b_0' },
+  bodies: [body('b_0', 0, 0), body('b_1', 1, 0), body('b_2', 2, 0)],
+  joints: [hinge('j_1', 'b_0', 'b_1', 0.5, 0), hinge('j_2', 'b_1', 'b_2', 1.5, 0)],
+});
+const angles = (entries) => new Map(Object.entries(entries).map(([id, angle]) => [id, { angle }]));
+
+test('fkPose: zero angles give the rest pose', () => {
+  const pose = fkPose(chain(), angles({}));
+  assert.deepEqual([...pose.keys()], ['b_0', 'b_1', 'b_2']);
+  for (const [id, x] of [['b_0', 0], ['b_1', 1], ['b_2', 2]]) {
+    close(pose.get(id).x, x);
+    close(pose.get(id).y, 0);
+    close(pose.get(id).angle, 0);
+  }
+});
+
+test('fkPose: a chain rotates around each anchor and accumulates', () => {
+  const pose = fkPose(chain(), angles({ j_1: Math.PI / 2, j_2: -Math.PI / 2 }));
+  close(pose.get('b_0').x, 0);
+  close(pose.get('b_1').x, 0.5);
+  close(pose.get('b_1').y, 0.5);
+  close(pose.get('b_1').angle, Math.PI / 2);
+  close(pose.get('b_2').x, 1);
+  close(pose.get('b_2').y, 1);
+  close(pose.get('b_2').angle, 0);
+});
+
+test('fkPose: untracked joints keep their rest angle', () => {
+  const pose = fkPose(chain(), angles({ j_1: Math.PI / 2 }));
+  close(pose.get('b_1').angle, Math.PI / 2);
+  close(pose.get('b_2').angle, Math.PI / 2);
+  close(pose.get('b_2').x, 0.5);
+  close(pose.get('b_2').y, 1.5);
+});
+
+test('fkPose: a rotated rest pose and rotated root are relative to rest', () => {
+  const def = {
+    ragdoll: { rootBody: 'b_0' },
+    bodies: [body('b_0', 1, 1, Math.PI / 2), body('b_1', 1, 2, Math.PI)],
+    joints: [hinge('j_1', 'b_0', 'b_1', 1, 1.5)],
+  };
+  const rest = fkPose(def, angles({}));
+  close(rest.get('b_1').x, 1);
+  close(rest.get('b_1').y, 2);
+  close(rest.get('b_1').angle, Math.PI);
+  const posed = fkPose(def, angles({ j_1: Math.PI / 2 }));
+  close(posed.get('b_0').angle, Math.PI / 2);
+  close(posed.get('b_1').angle, 1.5 * Math.PI);
+  close(posed.get('b_1').x, 0.5);
+  close(posed.get('b_1').y, 1.5);
+});
+
+test('fkPose: a joint whose bodyB is nearer the root turns bodyA the other way', () => {
+  const def = {
+    ragdoll: { rootBody: 'b_1' },
+    bodies: [body('b_0', 0, 0), body('b_1', 1, 0)],
+    joints: [hinge('j_1', 'b_0', 'b_1', 0.5, 0)],
+  };
+  const pose = fkPose(def, angles({ j_1: Math.PI / 2 }));
+  close(pose.get('b_1').x, 1);
+  close(pose.get('b_0').angle, -Math.PI / 2);
+  close(pose.get('b_0').x, 0.5);
+  close(pose.get('b_0').y, 0.5);
+});
+
+test('fkPose: loop joints and unlinked bodies stay out of the FK', () => {
+  const def = chain();
+  def.bodies.push(body('b_3', 5, 5));
+  def.joints.push(hinge('j_3', 'b_1', 'b_0', 0.5, 0), hinge('j_4', 'b_3', 'b_3', 5, 5));
+  const pose = fkPose(def, angles({ j_1: 1, j_3: 2, j_4: 3 }));
+  close(pose.get('b_2').angle, 1);
+  assert.deepEqual(pose.get('b_3'), { x: 5, y: 5, angle: 0 });
+});
+
+test('fkPose: no root body gives the rest pose and never mutates the document', () => {
+  const def = chain();
+  def.ragdoll.rootBody = null;
+  const before = structuredClone(def);
+  const pose = fkPose(def, angles({ j_1: 1 }));
+  assert.equal(pose.get('b_1').angle, 0);
+  assert.deepEqual(def, before);
+});
+
+test('fkPose: follows the clip at the playhead with loop and hold timing', () => {
+  const clip = (loop) => ({
+    length: 2,
+    loop,
+    tracks: [{ target: 'j_1', channel: 'angle', keys: [{ t: 0, v: 0 }, { t: 2, v: 2 }] }],
+  });
+  const def = chain();
+  const angleAt = (c, time) => {
+    const pose = resolveChannels(def, [{ clip: c, time }]);
+    return fkPose(def, pose.joints).get('b_1').angle;
+  };
+  close(angleAt(clip(true), 1), 1);
+  close(angleAt(clip(true), 3), 1);
+  close(angleAt(clip(false), 3), 2);
+  close(angleAt(clip(false), 2), 2);
+  close(angleAt(clip(false), 0), 0);
+});
+
+test('jointAngleForBody inverts fkPose', () => {
+  const def = chain();
+  const pose = fkPose(def, angles({ j_1: 0.3 }));
+  close(jointAngleForBody(def, 'j_2', 1.1, pose), 0.8);
+  const again = fkPose(def, angles({ j_1: 0.3, j_2: jointAngleForBody(def, 'j_2', 1.1, pose) }));
+  close(again.get('b_2').angle, 1.1);
+  close(jointAngleForBody(def, 'j_1', -0.4, pose), -0.4);
+  assert.equal(jointAngleForBody(def, 'j_9', 0, pose), null);
+});
+
+test('jointAngleForBody respects direction and rest angles', () => {
+  const def = {
+    ragdoll: { rootBody: 'b_1' },
+    bodies: [body('b_0', 0, 0, 0.5), body('b_1', 1, 0, 0.25)],
+    joints: [hinge('j_1', 'b_0', 'b_1', 0.5, 0)],
+  };
+  const pose = fkPose(def, angles({ j_1: 0.6 }));
+  const angle = jointAngleForBody(def, 'j_1', pose.get('b_0').angle, pose);
+  close(angle, 0.6);
 });
