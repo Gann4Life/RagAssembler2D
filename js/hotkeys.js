@@ -36,6 +36,7 @@ export const HOTKEYS = Object.freeze(
     { keys: 'Z', action: 'pivot-mode' },
     { keys: 'F2', action: 'rename' },
     { keys: 'Shift+M', action: 'fit-motor-torque' },
+    { keys: 'Shift+R', action: 'set-root-body' },
   ].map((row) => Object.freeze(row)),
 );
 

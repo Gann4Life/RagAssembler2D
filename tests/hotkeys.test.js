@@ -99,6 +99,7 @@ test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, tool rows first', (
       'pivot-mode',
       'rename',
       'fit-motor-torque',
+      'set-root-body',
     ],
   );
   assert.ok(Object.isFrozen(HOTKEYS));

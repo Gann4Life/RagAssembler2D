@@ -5,6 +5,8 @@ import { createJoint, createShapeBody } from './commands/create.js';
 import { deleteObjects, deletionPlan } from './commands/delete.js';
 import { duplicatePlan, duplicateSelection } from './commands/duplicate.js';
 import { groupBodies, groupPlan, splitParts, splitShapes, ungroupBodies, ungroupParts } from './commands/group.js';
+import { setRootBody } from './commands/root-body.js';
+import { selectedBodies } from './model/queries.js';
 import { Selection } from './model/selection.js';
 import { Rename } from './rename.js';
 import { History } from './commands/history.js';
@@ -244,7 +246,7 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * actions. The tool registry is the first `mode` listener, so a mode change cancels the operation in progress
  * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
  * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
- * and the `delete`, `group`, `ungroup`, `split`, `rename`, `add-shape`, `fit-motor-torque`, `add-joint`, `new` actions, plus `load` and
+ * and the `delete`, `group`, `ungroup`, `split`, `rename`, `add-shape`, `fit-motor-torque`, `set-root-body`, `add-joint`, `new` actions, plus `load` and
  * `save` when `files` is given.
  * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null,
  *   confirm?: (request: ConfirmRequest) => Promise<boolean>, notify?: (notice: Notice) => Promise<void>,
@@ -542,6 +544,21 @@ export function createEditor({
       if (command !== null) history.execute(command);
     },
     isEnabled: canEditRest,
+    reason: () => modeReason('edit.rest'),
+  });
+  const newRootBody = () => {
+    if (confirming || !canEditRest()) return null;
+    const bodies = readPlan(selectedBodies, selection.objects) ?? [];
+    if (bodies.length !== 1) return null;
+    const rootBody = model.prop(ROOT_UID, 'rootBody');
+    return typeof rootBody === 'string' && model.uidOf(rootBody) === bodies[0] ? null : bodies[0];
+  };
+  actions.register('set-root-body', {
+    run: () => {
+      const body = newRootBody();
+      if (body !== null) history.execute(setRootBody(body));
+    },
+    isEnabled: () => newRootBody() !== null,
     reason: () => modeReason('edit.rest'),
   });
   actions.register('add-joint', {
