@@ -82,7 +82,7 @@ v1 supports **revolute (hinge) joints** only.
   - for a body connected to `rootBody`, it is the joint through which the spanning tree from `rootBody` reaches it; `rootBody` has none, and loop joints are never parent joints;
   - for a body not connected to `rootBody`, it is the first joint in `joints` order that has it as bodyB and another body as bodyA, or none.
 
-  A body's **subtree** is the body itself plus every body whose chain of parent joints leads to it. The Select tool moves and rotates subtrees and pivots around parent joint anchors ([§5.5](05-5-tools.md#55-tools)).
+  A body's **subtree** is the body itself plus every body whose chain of parent joints leads to it. The Select tool moves and rotates subtrees, carries the subtree of a selected joint's child body (the body it is the parent joint of), and pivots around parent joint anchors ([§5.5](05-5-tools.md#55-tools)).
 
 ## 2.5 Collision rules
 - **Self-collision:** two shapes of the *same* ragdoll instance collide only if **both** have `selfCollide = true` (default `false`).
