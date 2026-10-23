@@ -5,7 +5,8 @@ const PIXELS_PER_METER = 80;
 const STEP = 1 / 60;
 const MAX_FRAME = 0.25;
 const SAMPLE_URL = './assets/sample.rag.json';
-const SPAWN = { x: 0, y: 0.3 };
+const SPAWN_X = 0;
+const GROUND_CLEARANCE = 0.02;
 
 const stage = document.getElementById('stage');
 const fileInput = document.getElementById('file-input');
@@ -75,10 +76,27 @@ function describeError(error) {
   return error.message ?? String(error);
 }
 
+function lowestPoint(rag) {
+  let lowest = Infinity;
+  for (const body of rag.bodies.values()) {
+    for (let fixture = body.GetFixtureList(); Box2D.getPointer(fixture) !== 0; fixture = fixture.GetNext()) {
+      lowest = Math.min(lowest, fixture.GetAABB(0).get_lowerBound().get_y());
+    }
+  }
+  return Number.isFinite(lowest) ? lowest : 0;
+}
+
+function spawnOnGround() {
+  const probe = def.spawn(world, { x: SPAWN_X, y: 0 });
+  const lift = GROUND_CLEARANCE - lowestPoint(probe);
+  probe.destroy();
+  return def.spawn(world, { parent: sceneRoot, x: SPAWN_X, y: lift });
+}
+
 function respawn() {
   if (def === null) return;
   instance?.destroy();
-  instance = def.spawn(world, { parent: sceneRoot, ...SPAWN });
+  instance = spawnOnGround();
   instance.setStrength(Number(strengthSlider.value));
   accumulator = 0;
 }
