@@ -100,7 +100,45 @@ test('manipulationParts: selected joints are added once, unplaced anchors are sk
     ],
   });
   assert.deepEqual(names(partsOf(model, uids, ['b_2'], ['j_1', 'j_2'], true), uids), { bodies: ['b_2', 'b_3'], anchors: ['j_1'] });
-  assert.deepEqual(names(partsOf(model, uids, [], ['j_1', 'j_3'], true), uids), { bodies: [], anchors: ['j_1'] });
+  assert.deepEqual(names(partsOf(model, uids, [], ['j_1', 'j_3'], true), uids), { bodies: ['b_2', 'b_3'], anchors: ['j_1'] });
+  assert.deepEqual(names(partsOf(model, uids, [], ['j_1', 'j_3'], false), uids), { bodies: [], anchors: ['j_1'] });
+});
+
+test('manipulationParts: a joint carries the subtree of its child body', () => {
+  const { model, uids } = arm();
+  assert.deepEqual(names(partsOf(model, uids, [], ['j_2'], true), uids), { bodies: ['b_3', 'b_4'], anchors: ['j_2', 'j_3'] });
+  assert.deepEqual(names(partsOf(model, uids, [], ['j_2'], false), uids), { bodies: [], anchors: ['j_2'] });
+});
+
+test('manipulationParts: a loop joint moves its anchor only', () => {
+  const { model, uids } = build({
+    bodies: { b_1: {}, b_2: {}, b_3: {} },
+    joints: [
+      ['b_1', 'b_2', [0, 0]],
+      ['b_2', 'b_3', [1, 0]],
+      ['b_2', 'b_3', [2, 0]],
+    ],
+  });
+  assert.deepEqual(names(partsOf(model, uids, [], ['j_3'], true), uids), { bodies: [], anchors: ['j_3'] });
+});
+
+test('manipulationParts: a joint and a body with overlapping subtrees move each part once', () => {
+  const { model, uids } = arm();
+  const parts = partsOf(model, uids, ['b_3'], ['j_1', 'j_2'], true);
+  assert.deepEqual(names(parts, uids), { bodies: ['b_2', 'b_3', 'b_4'], anchors: ['j_1', 'j_2', 'j_3'] });
+});
+
+test('rotating a joint turns its child subtree around the pivot', () => {
+  const { model, uids } = arm();
+  const parts = partsOf(model, uids, [], ['j_2'], true);
+  const turned = transformParts(parts, rotationAbout({ x: 1.5, y: 0 }, Math.PI / 2));
+  const b4 = turned.bodies.find((entry) => entry.uid === uids.b_4);
+  near(b4.position.x, 1.5, 'x');
+  near(b4.position.y, 1.5, 'y');
+  near(b4.angle, Math.PI / 2, 'angle');
+  const j3 = turned.anchors.find((entry) => entry.uid === uids.j_3);
+  near(j3.anchor.x, 1.5, 'anchor x');
+  near(j3.anchor.y, 1, 'anchor y');
 });
 
 test('manipulationParts reads a missing or malformed position as the origin and a missing angle as 0', () => {
