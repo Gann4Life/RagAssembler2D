@@ -66,11 +66,11 @@ DuplicatePlan {
   - the bodies are the union of `bodySubtree` (body plus descendants through parent joints) of each `selectedBodies` result (selected bodies and bodies of selected shapes) and of the `jointChildBody` of each selected joint; a loop joint has no child body, so alone it copies nothing;
   - a joint is copied when both its bodies are copied (internal), or when it is selected and only its child body is copied (it is re-attached to the uncopied parent body);
   - other node types are ignored.
-- **`duplicateSelection(uids, offset, label = 'Duplicate') → Command`.** `run(tx)` throws `Error` when the plan is `empty`, before mutating. Per body, appended to `bodies`: a new `b` id, the props of the source with `name` and `position` shifted by `offset` (a missing or non-finite `position` reads (0, 0)), and a copy of each fixture with a new `f` id and the same props and sprite. Then per joint, appended to `joints`: a new `j` id, `bodyA` and `bodyB` mapped to the copies (an uncopied body keeps its id), `anchor` shifted by `offset`. Tracks are not copied and `rootBody` is unchanged.
+- **`duplicateSelection(uids, label = 'Duplicate') → Command`.** `run(tx)` throws `Error` when the plan is `empty`, before mutating. Per body, appended to `bodies`: a new `b` id, the props of the source with a new `name` (copies are in place: `position` unchanged), and a copy of each fixture with a new `f` id and the same props and sprite. Then per joint, appended to `joints`: a new `j` id, `bodyA` and `bodyB` mapped to the copies (an uncopied body keeps its id), `anchor` unchanged. Tracks are not copied and `rootBody` is unchanged.
 - **Names.** `<base>_copy`, or `<base>_copy<k>` with the smallest `k ≥ 2` not taken among the names of the same kind (bodies, shapes, joints); a trailing `_copy` or `_copy<k>` (`k ≥ 2`) of the source is stripped first.
 - `run` returns the copies of the given bodies, shapes and joints that were copied, in the given order, deduplicated; the action selects them. A copied shape is selected as itself, not as its body; bodies copied only as part of a branch are not selected.
-- Tests: `tests/duplicate.test.js` covers the plan (branches, joint child side, loops, root), the command (ids, fields, order, re-attached joints, names, one undo step, exact undo and redo, nothing copied) and the action (offset, root angle, availability).
-- One undo step; the offset is computed by the `duplicate` action (`js/editor.js`), not here.
+- Tests: `tests/duplicate.test.js` covers the plan (branches, joint child side, loops, root), the command (ids, fields, order, re-attached joints, names, one undo step, exact undo and redo, nothing copied) and the action (in place, selection, availability).
+- One undo step.
 
 ## `lib/geometry.js`: `polygonCentroid(vertices) → Vec2`
 
