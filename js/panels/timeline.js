@@ -203,7 +203,7 @@ export function createTimeline(element_, editor, player) {
 
   function togglePlay() {
     if (playButton.getAttribute('aria-disabled') === 'true') return;
-    player.toggle();
+    editor.actions.run('toggle-play');
   }
 
   function addClip() {

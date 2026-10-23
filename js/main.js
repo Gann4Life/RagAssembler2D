@@ -22,6 +22,7 @@ import { renameAnchor, renamePoint } from './rename.js';
 import { attachRenameField, openRenamePopup } from './rename-field.js';
 import { setProps } from './commands/props.js';
 import { createPoseSession } from './physics/pose-session.js';
+import { createSimulateSession } from './physics/simulate-session.js';
 import { DEV_VERSION, loadVersion } from './version.js';
 import { RagImporter } from '../lib/ragimporter.js';
 
@@ -59,11 +60,40 @@ const dock = createDock(document.getElementById('workspace'), {
   viewportElement: document.getElementById('panel-viewport'),
 });
 const hierarchy = createHierarchy(dock.panelElement('hierarchy'), editor);
-const player = new TimelinePlayer(model, modes, {
-  request: (callback) => requestAnimationFrame(callback),
-  cancel: (handle) => cancelAnimationFrame(handle),
+const player = new TimelinePlayer(
+  model,
+  modes,
+  {
+    request: (callback) => requestAnimationFrame(callback),
+    cancel: (handle) => cancelAnimationFrame(handle),
+  },
+  (json, options) => createSimulateSession(Box2D, json, options),
+);
+
+function startPlayback(run) {
+  try {
+    run();
+  } catch (error) {
+    const items = Array.isArray(error?.errors) ? error.errors.slice(0, 50).map((item) => `${item.code} ${item.path}: ${item.message}`) : [];
+    noticeDialog(document, { title: 'Cannot play', message: error?.message ?? String(error), items, closeLabel: 'OK' });
+  }
+}
+
+const simulateReason = () => (player.simulating ? null : 'only in Simulate mode');
+actions.register('toggle-play', { run: () => startPlayback(() => player.toggle()), isEnabled: () => player.canPlay() });
+actions.register('play', {
+  run: () => startPlayback(() => player.play()),
+  isEnabled: () => player.canPlay() && !player.playing,
+  reason: () => (player.playing ? 'already playing' : null),
 });
-actions.register('toggle-play', { run: () => player.toggle(), isEnabled: () => player.playing || player.canPlay() });
+actions.register('pause', { run: () => player.pause(), isEnabled: () => player.playing, reason: simulateReason });
+actions.register('next-frame', {
+  run: () => player.nextFrame(),
+  isEnabled: () => player.simulating,
+  reason: simulateReason,
+  repeatable: true,
+});
+actions.register('stop', { run: () => player.stop(), isEnabled: () => player.simulating, reason: simulateReason });
 const timeline = createTimeline(dock.panelElement('timeline'), editor, player);
 attachFileDrop(document.getElementById('panel-viewport'), (read) => editor.loadFrom(read), () => actions.isEnabled('load'));
 blockFileNavigation(document);
@@ -173,7 +203,19 @@ windowButton.addEventListener('keydown', (event) => {
   if (!windowMenuOpen()) toggleWindowMenu(event.key === 'ArrowUp' ? 'last' : 'first');
 });
 
+function stopsSimulation(event) {
+  if (event.key !== 'Escape' || event.defaultPrevented || !player.simulating) return false;
+  if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable]')) return false;
+  return document.querySelector('.menu, dialog[open]') === null;
+}
+
 document.addEventListener('keydown', (event) => {
+  if (stopsSimulation(event)) {
+    event.preventDefault();
+    tools.cancel();
+    player.stop();
+    return;
+  }
   dispatchKey(event, { actions, tools, viewportFocused: viewportHost.contains(document.activeElement) });
 });
 
@@ -189,6 +231,8 @@ const viewport = await createViewport(PIXI, viewportHost, {
 });
 
 bindAnimatePreview(model, modes, (pose) => viewport.setBasePose(pose));
+player.on('pose', (pose) => viewport.setBasePose(pose));
+player.on('playing', refreshHeader);
 
 actions.register('settings', { run: toggleSettings, isEnabled: () => modes.can('settings.editor') });
 actions.register('frame-selection', { run: () => viewport.frame(selection.objects), isEnabled: () => modes.can('camera') });
