@@ -8,6 +8,7 @@ Hotkeys are accelerators only ([§5](05-editor.md#visible-controls-and-feedback)
 | C, R, N, H | Circle, Box, Polygon, Hinge Joint tools | Tools overlay |
 | S | Toggle sprite edit (Select) | Header Rig › Sprite edit ([§5.3](05-3-header.md#53-header)) |
 | Del | Delete ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Hierarchy Delete button; Rig › Delete |
+| Ctrl+C, Ctrl+V, Del (while keys hold the selection focus) | Copy keys, Paste keys at the playhead, Delete keys ([§5.8](05-8-animation-timeline.md#58-animation-timeline)) | Timeline Copy, Paste, Delete keys |
 | Ctrl+Z | Undo | Header Undo |
 | Ctrl+Shift+Z, Ctrl+Y | Redo | Header Redo |
 | Ctrl+S, Ctrl+O | Save, Load | Header Save, Load |
@@ -16,7 +17,7 @@ Hotkeys are accelerators only ([§5](05-editor.md#visible-controls-and-feedback)
 | F2 | Rename the single selected object ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Rename |
 | Shift+R | Set as root body ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Set as root body |
 | Shift+M | Fit motor torque: selected joints, or all ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Rig › Fit motor torque |
-| Space | Play / Pause | Header Play, Pause; Timeline Play |
+| Space | Play / Pause | Header Play, Pause; Timeline Play button ([§5.8](05-8-animation-timeline.md#58-animation-timeline)) |
 | . | Next frame | Header Next frame |
 | K | Key selected ([§5.8](05-8-animation-timeline.md#58-animation-timeline)) | Timeline ◆ Key selected |
 | F, Home | Frame selection, frame all ([§5.4](05-4-viewport.md#54-viewport)) | Header View › Frame selection, Frame all |
@@ -30,6 +31,7 @@ Hotkeys are accelerators only ([§5](05-editor.md#visible-controls-and-feedback)
 - Hotkeys are ignored while focus is in a text field. Space also goes to a focused button or control instead of Play/Pause.
 - On macOS, Cmd acts as Ctrl. Keys match the character the keyboard layout produces (letters case-insensitive), and modifiers must match exactly. Exception: a hotkey with Alt and a letter also matches the physical key of that letter, because Alt (Option on macOS) changes the character it produces (Option+G gives "©").
 - A matched hotkey always suppresses the browser's own shortcut (e.g. Ctrl+S never opens the browser's save dialog), even when its action is currently disabled.
+- While keys hold the selection focus (the last selection made was of Timeline keys), Del deletes the selected keys and never the Hierarchy selection, and Ctrl+C / Ctrl+V copy and paste keys; otherwise Del is the Hierarchy Delete, and Ctrl+C / Ctrl+V do nothing outside text fields.
 - Holding a key repeats only Undo, Redo and Next frame; other hotkeys act once per press.
 - While a drag or scrub is in progress, hotkeys that edit the document (Delete, Group, Duplicate, Key selected, …) do nothing; Undo and Esc cancel the drag.
 - While focus is in a toolbar, a tab list, a tree (the Hierarchy, [§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)), a resize handle or an open menu, their navigation keys (arrows, Home, End, Space, Enter, Esc) do not trigger global hotkeys. The Hierarchy tree handles arrows, Home, End and Space; Del, Esc, F and F2 stay hotkeys there.

@@ -38,4 +38,4 @@ These rules hold everywhere in the editor ([§5.1](05-1-modes.md#51-editor-modes
 | Split | no body has some, not all, of its shapes selected | "select some, not all, shapes of a body" |
 | Set as root body | not exactly one body in the selection; that body is already `rootBody` | "select one body"; "already the root body" |
 | Sprite edit | Select is not the active tool; no single shape with a sprite is selected | "choose the Select tool"; "select one shape with a sprite" |
-| Delete clip, scrub | no clip is open | "open a clip" |
+| Delete clip | no clip is open | "open a clip" |
