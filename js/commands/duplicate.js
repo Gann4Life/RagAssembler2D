@@ -11,11 +11,6 @@ import { bodySubtree, jointChildBody, parentJoints, selectedBodies } from '../mo
 
 const COPY_SUFFIX = /_copy(\d*)$/;
 
-function isFinitePair(value) {
-  return (
-    Array.isArray(value) && value.length === 2 && value.every((item) => typeof item === 'number' && Number.isFinite(item))
-  );
-}
 
 function resolve(model, id) {
   return typeof id === 'string' ? model.uidOf(id) : null;
@@ -46,10 +41,6 @@ function namer(used) {
   };
 }
 
-function shifted(point, offset) {
-  const [x, y] = isFinitePair(point) ? point : [0, 0];
-  return [x + offset[0] + 0, y + offset[1] + 0];
-}
 
 /**
  * Computes what duplicating a selection copies: the union of the whole branches of the selected bodies, the
@@ -86,18 +77,16 @@ export function duplicatePlan(model, uids) {
 
 /**
  * Builds a command that duplicates a selection as {@link duplicatePlan} computes when it runs: copies are appended
- * with new ids and `<base>_copy<k>` names, bodies and joint anchors moved by `offset`, shapes unchanged, no track
+ * with new ids and `<base>_copy<k>` names, in place over their sources (positions, anchors and shapes unchanged), no track
  * copied, `rootBody` unchanged. `run` returns the uids that replace the selection: the copy of every given body,
  * shape and joint that was copied, in the given order; bodies copied only as part of a branch are not included.
  * @param {ReadonlyArray<number>} uids Selected uids.
- * @param {readonly [number, number]} offset Offset added to body positions and joint anchors, root-local meters.
  * @param {string} [label] Undo step label.
  * @returns {import('./history.js').Command} The command.
  * @throws {Error} When `run` finds an unknown uid or nothing to copy; nothing is mutated then.
  */
-export function duplicateSelection(uids, offset, label = 'Duplicate') {
+export function duplicateSelection(uids, label = 'Duplicate') {
   const requested = Object.freeze([...uids]);
-  const shift = Object.freeze([...offset]);
   return Object.freeze({
     label,
     run(tx) {
@@ -116,7 +105,7 @@ export function duplicateSelection(uids, offset, label = 'Duplicate') {
           type: 'shape',
           props: { ...model.get(shape).props, id: model.nextId('f'), name: shapeName(model.prop(shape, 'name')) },
         }));
-        const props = { ...source, id, name: bodyName(source.name), position: shifted(source.position, shift) };
+        const props = { ...source, id, name: bodyName(source.name) };
         const copy = tx.add(ROOT_UID, 'bodies', undefined, { type: 'body', props, children: { fixtures } });
         const copiedShapes = model.children(copy, 'fixtures');
         const sourceShapes = model.children(body, 'fixtures');
@@ -132,7 +121,6 @@ export function duplicateSelection(uids, offset, label = 'Duplicate') {
           name: jointName(source.name),
           bodyA: ids.get(source.bodyA) ?? source.bodyA,
           bodyB: ids.get(source.bodyB) ?? source.bodyB,
-          anchor: shifted(source.anchor, shift),
         };
         copies.set(joint, tx.add(ROOT_UID, 'joints', undefined, { type: 'joint', props }));
       }

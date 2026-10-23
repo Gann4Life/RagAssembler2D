@@ -5,7 +5,6 @@ import { ROOT_UID } from '../js/model/model.js';
 import { duplicatePlan, duplicateSelection } from '../js/commands/duplicate.js';
 import { defaultsOf } from '../lib/schema.js';
 
-const EPSILON = 1e-9;
 const COLLECTIONS = { root: ['sprites', 'bodies', 'joints', 'clips'], body: ['fixtures'], clip: ['tracks', 'events'], track: ['keys'] };
 
 function build({ bodies, joints = [], rootAngle = 0, clips = [] }) {
@@ -126,7 +125,7 @@ test('duplicatePlan: a loop joint alone, the root or nothing copies nothing; loo
 
 test('duplicateSelection copies whole branches with new ids and fields, appended in order', () => {
   const { model, history, uids } = build(RIG);
-  const result = history.execute(duplicateSelection([uids.b_2, uids.b_1], [0.1, -0.1]));
+  const result = history.execute(duplicateSelection([uids.b_2, uids.b_1]));
   const bodies = model.children(ROOT_UID, 'bodies');
   assert.equal(bodies.length, 6);
   const [torsoCopy, armCopy, legCopy] = bodies.slice(3);
@@ -137,7 +136,7 @@ test('duplicateSelection copies whole branches with new ids and fields, appended
   assert.equal(torso.angle, 0.4);
   assert.equal(torso.linearDamping, 0.7);
   assert.equal(torso.bullet, true);
-  assert.deepEqual(torso.position, [1.1, 0.9]);
+  assert.deepEqual(torso.position, model.prop(uids.b_1, 'position'));
   assert.equal(model.prop(legCopy, 'name'), 'leg_copy');
   const shapes = model.children(torsoCopy, 'fixtures');
   assert.deepEqual(shapes.map((shape) => model.prop(shape, 'id')), ['f_5', 'f_6']);
@@ -152,14 +151,14 @@ test('duplicateSelection copies whole branches with new ids and fields, appended
   assert.equal(jointCopy.bodyA, 'b_4');
   assert.equal(jointCopy.bodyB, 'b_5');
   assert.equal(jointCopy.collideConnected, true);
-  assert.deepEqual(jointCopy.anchor, [1.1, 1.9]);
+  assert.deepEqual(jointCopy.anchor, model.prop(uids.j_1, 'anchor'));
   assert.equal(model.get(joints[3]).props.bodyB, 'b_6');
   assert.equal(model.prop(ROOT_UID, 'rootBody'), 'b_1');
 });
 
 test('duplicateSelection re-attaches a selected joint to the uncopied parent and selects only selected objects', () => {
   const { model, history, uids } = build(RIG);
-  const result = history.execute(duplicateSelection([uids.j_1, ROOT_UID, uids.f_3, uids.j_2, uids.b_2], [0, 0]));
+  const result = history.execute(duplicateSelection([uids.j_1, ROOT_UID, uids.f_3, uids.j_2, uids.b_2]));
   const [armCopy, legCopy] = model.children(ROOT_UID, 'bodies').slice(3);
   const [shoulderCopy, kneeCopy] = model.children(ROOT_UID, 'joints').slice(2);
   assert.deepEqual(result, [shoulderCopy, model.children(armCopy, 'fixtures')[0], kneeCopy, armCopy]);
@@ -172,12 +171,12 @@ test('duplicateSelection re-attaches a selected joint to the uncopied parent and
 
 test('duplicateSelection copies an ancestor and its selected joint once, and does not copy edge joints', () => {
   const { model, history, uids } = build(RIG);
-  const result = history.execute(duplicateSelection([uids.b_1, uids.j_1], [0, 0]));
+  const result = history.execute(duplicateSelection([uids.b_1, uids.j_1]));
   assert.equal(model.children(ROOT_UID, 'bodies').length, 6);
   assert.equal(model.children(ROOT_UID, 'joints').length, 4);
   assert.equal(result.length, 2);
   const only = build(RIG);
-  only.history.execute(duplicateSelection([only.uids.b_3], [0, 0]));
+  only.history.execute(duplicateSelection([only.uids.b_3]));
   assert.equal(only.model.children(ROOT_UID, 'bodies').length, 4);
   assert.equal(only.model.children(ROOT_UID, 'joints').length, 2);
 });
@@ -189,10 +188,10 @@ test('duplicateSelection names: _copy suffix stripped, first free _copy<k> taken
       { id: 'b_3', name: 'hand_copy1', shapes: [{ id: 'f_3' }] },
     ],
   });
-  history.execute(duplicateSelection([uids.b_1], [0, 0]));
-  history.execute(duplicateSelection([uids.b_1], [0, 0]));
-  history.execute(duplicateSelection([uids.b_2], [0, 0]));
-  history.execute(duplicateSelection([uids.b_3], [0, 0]));
+  history.execute(duplicateSelection([uids.b_1]));
+  history.execute(duplicateSelection([uids.b_1]));
+  history.execute(duplicateSelection([uids.b_2]));
+  history.execute(duplicateSelection([uids.b_3]));
   const bodies = model.children(ROOT_UID, 'bodies').map((body) => model.prop(body, 'name'));
   assert.deepEqual(bodies.slice(3), ['arm_copy2', 'arm_copy3', 'arm_copy4', 'hand_copy1_copy']);
   const shapes = model.children(ROOT_UID, 'bodies').flatMap((body) => model.children(body, 'fixtures').map((shape) => model.prop(shape, 'name')));
@@ -206,7 +205,7 @@ test('duplicateSelection numbers copies made in one operation', () => {
       { id: 'b_2', name: 'arm', shapes: [{ id: 'f_2', name: 'pad' }] },
     ],
   });
-  history.execute(duplicateSelection([uids.b_1, uids.b_2], [0, 0]));
+  history.execute(duplicateSelection([uids.b_1, uids.b_2]));
   const names = model.children(ROOT_UID, 'bodies').map((body) => model.prop(body, 'name'));
   assert.deepEqual(names.slice(2), ['arm_copy', 'arm_copy2']);
 });
@@ -214,7 +213,7 @@ test('duplicateSelection numbers copies made in one operation', () => {
 test('duplicateSelection is one undo step with exact undo and redo, leaves tracks and rootBody alone', () => {
   const { model, history, uids } = build({ ...RIG, clips: [{ key: 'c', target: 'b_2' }] });
   const before = dump(model);
-  history.execute(duplicateSelection([uids.b_1, uids.b_2], [0.2, -0.2]));
+  history.execute(duplicateSelection([uids.b_1, uids.b_2]));
   assert.equal(history.state.undoLabel, 'Duplicate');
   const after = dump(model);
   assert.equal(model.children(uids.c, 'tracks').length, 1);
@@ -228,36 +227,18 @@ test('duplicateSelection is one undo step with exact undo and redo, leaves track
 test('duplicateSelection throws and mutates nothing for a loop joint alone', () => {
   const { model, history, uids } = build(FORK);
   const before = dump(model);
-  assert.throws(() => history.execute(duplicateSelection([ROOT_UID, uids.j_3], [0, 0])), /Nothing to duplicate/);
+  assert.throws(() => history.execute(duplicateSelection([ROOT_UID, uids.j_3])), /Nothing to duplicate/);
   assert.deepEqual(dump(model), before);
 });
 
-test('duplicate action: offset is 0.1 m down-right, or the minor grid spacing with Snap to grid', () => {
-  const { editor, model, uids } = build(RIG);
+test('duplicate action copies in place, selects the copies and never copies the root', () => {
+  const { editor, model, uids } = build({ ...RIG, rootAngle: Math.PI / 2 });
+  editor.settings.set('snap.grid', true);
   editor.selection.set([uids.b_1]);
   assert.equal(editor.actions.run('duplicate'), true);
   const copy = model.children(ROOT_UID, 'bodies')[3];
-  const [x, y] = model.prop(copy, 'position');
-  assert.ok(Math.abs(x - 1.1) < EPSILON && Math.abs(y - 0.9) < EPSILON);
+  assert.deepEqual(model.prop(copy, 'position'), model.prop(uids.b_1, 'position'));
   assert.deepEqual(editor.selection.objects, [copy]);
-  editor.settings.set('snap.grid', true);
-  editor.settings.set('grid.size', 1);
-  editor.settings.set('grid.subdivisions', 4);
-  editor.selection.set([uids.b_2]);
-  editor.actions.run('duplicate');
-  const second = model.children(ROOT_UID, 'bodies')[6];
-  const [sx, sy] = model.prop(second, 'position');
-  assert.ok(Math.abs(sx - 2.25) < EPSILON && Math.abs(sy - 0.75) < EPSILON);
-});
-
-test('duplicate action: the offset is rotated into the root frame, and the root is never copied', () => {
-  const { editor, model, uids } = build({ ...RIG, rootAngle: Math.PI / 2 });
-  editor.selection.set([uids.b_1]);
-  editor.actions.run('duplicate');
-  const copy = model.children(ROOT_UID, 'bodies')[3];
-  const [x, y] = model.prop(copy, 'position');
-  assert.ok(Math.abs(x - 0.9) < EPSILON, `x ${x}`);
-  assert.ok(Math.abs(y - 0.9) < EPSILON, `y ${y}`);
   editor.selection.set([ROOT_UID]);
   assert.equal(editor.actions.isEnabled('duplicate'), false);
   assert.equal(editor.actions.reason('duplicate'), null);

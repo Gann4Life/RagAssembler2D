@@ -401,16 +401,8 @@ export function createEditor({
     isEnabled: () => !confirming && canShapeEdit() && splittable(readPlan(splitParts, selection.objects)),
     reason: shapeEditReason(partsReason(splitParts, 'select some, not all, shapes of a body')),
   });
-  const duplicateOffset = () => {
-    const spacing = settings.get('snap.grid') ? settings.get('grid.size') / settings.get('grid.subdivisions') : 0.1;
-    const rootAngle = model.prop(ROOT_UID, 'angle');
-    const angle = typeof rootAngle === 'number' && Number.isFinite(rootAngle) ? rootAngle : 0;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    return [spacing * cos - spacing * sin + 0, -spacing * cos - spacing * sin + 0];
-  };
   actions.register('duplicate', {
-    run: () => selection.set(history.execute(duplicateSelection([...selection.objects], duplicateOffset()))),
+    run: () => selection.set(history.execute(duplicateSelection([...selection.objects]))),
     isEnabled: () => {
       if (confirming || !canShapeEdit()) return false;
       const plan = readPlan(duplicatePlan, selection.objects);
