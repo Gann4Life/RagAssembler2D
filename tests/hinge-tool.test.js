@@ -219,7 +219,7 @@ test('a click on an overlap creates a pin at the snapped point and selects it', 
   assert.equal(props.collideConnected, false);
   assert.equal(props.aimAxis, 0);
   const suggested = motorTorqueSuggestions(toJson(model, 'dev')).get(props.id);
-  assert.ok(suggested > 0 && suggested < defaultsOf('joint').motor.maxTorque);
+  assert.ok(suggested > 0 && suggested !== defaultsOf('joint').motor.maxTorque);
   assert.deepEqual(props.motor, { ...defaultsOf('joint').motor, maxTorque: suggested });
   assert.equal(props.name, 'joint_1');
   assert.deepEqual(selection.objects, [uid]);

@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 const Box2D = require('../vendor/liquidfun.js');
 
 const STEP = 1 / 60;
+const SUBSTEPS = 8;
 const PARTS = [
   { id: 'trunk', box: [0.33, 0.33], at: [0, 0.95], angle: 0.6 },
   { id: 'hip', parent: 'trunk', box: [0.43, 0.45], at: [0, 0.82], angle: 0.7, anchor: [0.02, 0.94], limit: 1.57 },
@@ -115,7 +116,14 @@ function groundWorld() {
   return world;
 }
 
-function peakKineticEnergy(motor, seconds, fit = false) {
+function frame(rag, world, substeps) {
+  for (let i = 0; i < substeps; i++) {
+    rag.update(STEP / substeps);
+    world.Step(STEP / substeps, 8, 3);
+  }
+}
+
+function peakKineticEnergy(motor, seconds, fit = false, substeps = SUBSTEPS) {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const world = groundWorld();
   const json = lightCreature(motor);
@@ -124,8 +132,7 @@ function peakKineticEnergy(motor, seconds, fit = false) {
   let peak = 0;
   try {
     for (let i = 0; i < seconds / STEP; i++) {
-      rag.update(STEP);
-      world.Step(STEP, 8, 3);
+      frame(rag, world, substeps);
       if (i * STEP < seconds / 2) continue;
       let energy = 0;
       for (const body of rag.bodies.values()) {
@@ -154,14 +161,19 @@ test('a light creature held at rest by zero-gain motors stays still at the defau
 
 test('the suggested torque of the light creature matches the DESIGN §3.1 examples', () => {
   const suggestions = fitMotorTorque(lightCreature({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }));
-  assert.equal(suggestions.get('j_finger'), 0.0036);
-  assert.equal(suggestions.get('j_hip'), 13);
+  assert.equal(suggestions.get('j_finger'), 2.4);
+  assert.equal(suggestions.get('j_hip'), 53);
   assert.ok([...suggestions.values()].every((value) => typeof value === 'number' && value >= 0.001));
 });
 
-test('a light creature resting on the ground settles with every joint at its suggested torque', { todo: 'DESIGN §12: peak is about 0.7 J, driven by its 11–23 g foot pieces that now carry the body (about 14 N·m)' }, () => {
+test('a light creature resting on the ground settles with every joint at its suggested torque', () => {
   const peak = peakKineticEnergy({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }, 8, true);
   assert.ok(peak < 0.05, `peak kinetic energy ${peak} J`);
+});
+
+test('without substeps the suggested torques make the light creature gain energy (why the editor steps 8 substeps)', () => {
+  const peak = peakKineticEnergy({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }, 8, true, 1);
+  assert.ok(peak > 0.5, `peak kinetic energy ${peak} J`);
 });
 
 function balancedTilt(seconds) {
@@ -178,10 +190,9 @@ function balancedTilt(seconds) {
   let previous = 0;
   try {
     for (let i = 0; i < seconds / STEP; i++) {
-      rag.update(STEP);
-      world.Step(STEP, 8, 3);
+      frame(rag, world, SUBSTEPS);
       if (i * STEP < seconds / 2) continue;
-      late = Math.max(late, Math.abs(root.GetAngle() - goal) * 180 / Math.PI);
+      late =Math.max(late, Math.abs(root.GetAngle() - goal) * 180 / Math.PI);
       const omega = root.GetAngularVelocity();
       if (Math.abs(omega) > 0.05 && Math.sign(omega) !== Math.sign(previous)) flips++;
       previous = omega;
@@ -193,7 +204,7 @@ function balancedTilt(seconds) {
   }
 }
 
-test('a light creature with the suggested balance torque holds rootBody within 5° without chatter', { todo: 'DESIGN §12: the error stays under 2° but the trembling feet make the angular velocity change sign about 40 times in 5 s' }, () => {
+test('a light creature with the suggested balance torque holds rootBody within 5° without chatter', () => {
   const { late, flips } = balancedTilt(10);
   assert.ok(late < 5 && flips < 10, `last 5 s ${late}°, ${flips} sign flips`);
 });

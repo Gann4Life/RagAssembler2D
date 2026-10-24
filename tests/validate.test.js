@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PROBLEM_CODES, SUPPORTED_VERSIONS, validate } from '../lib/validate.js';
-import { balanceTorqueSuggestion } from '../lib/motor.js';
+import { balanceTorqueSuggestion, motorTorqueSuggestions } from '../lib/motor.js';
 import { RagImporter } from '../lib/ragimporter.js';
 import { shapeGeometryValid } from '../lib/geometry.js';
 import { defaultsOf } from '../lib/schema.js';
@@ -574,9 +574,10 @@ test('W_BODY_ZERO_MASS is skipped when the body has errors in its shapes', () =>
 
 test('W_MOTOR_OVERPOWERED fires only above 1000 times the suggestion, without values in the message', () => {
   const json = validFile();
-  json.joints[2].motor.maxTorque = 1000 * 0.47;
+  const suggestion = motorTorqueSuggestions(json).get('j_neck');
+  json.joints[2].motor.maxTorque = 1000 * suggestion;
   assert.deepEqual(validate(json).warnings, []);
-  json.joints[2].motor.maxTorque = 1000 * 0.47 + 1;
+  json.joints[2].motor.maxTorque = 1000 * suggestion + 1;
   const [warning] = validate(json).warnings;
   assert.equal(warning.code, 'W_MOTOR_OVERPOWERED');
   assert.deepEqual(warning.target, { type: 'joint', id: 'j_neck' });
@@ -686,9 +687,10 @@ test('RagImporter.validate delegates to validate and supportedVersions is the fr
 
 test('W_MOTOR_UNDERPOWERED fires only below 0.1 times the suggestion, without values in the message', () => {
   const json = validFile();
-  json.joints[2].motor.maxTorque = 0.1 * 0.47;
+  const suggestion = motorTorqueSuggestions(json).get('j_neck');
+  json.joints[2].motor.maxTorque = 0.1 * suggestion;
   assert.deepEqual(validate(json).warnings, []);
-  json.joints[2].motor.maxTorque = 0.04;
+  json.joints[2].motor.maxTorque = 0.099 * suggestion;
   const [warning] = validate(json).warnings;
   assert.equal(warning.code, 'W_MOTOR_UNDERPOWERED');
   assert.equal(warning.path, '/joints/2/motor/maxTorque');

@@ -37,10 +37,12 @@ function onRevive() { rag.stop('dead', { fadeOut: 1 }); }
 app.stage.eventMode = 'static';
 app.stage.on('pointermove', ev => rag.lookAt('neck', rag.toWorld(ev.global), { weight: 0.7 }));
 
-// game loop, fixed step recommended
+// game loop, fixed step recommended; 8 substeps as the editor (§3.1)
 app.ticker.add(() => {
-  rag.update(dt);           // animation + procedural → motors
-  world.Step(dt, 16, 3);
+  for (let i = 0; i < 8; i++) {
+    rag.update(dt / 8);     // animation + procedural → motors
+    world.Step(dt / 8, 8, 3);
+  }
   rag.sync();               // physics → PIXI sprites
 });
 ```

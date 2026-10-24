@@ -182,6 +182,34 @@ export function humanoidRig() {
 }
 
 /**
+ * A 1.3 m, 0.9 kg biped like a small robot: a light `rootBody` pelvis (94 g) joining two overlapping legs of 20 g
+ * thighs, 48 g shins and 120 g feet, a torso, a head and two overlapping arms.
+ * @returns {{ json: object, pose: Map<string, number> }} Document and a keyed pose with both knees bent.
+ */
+export function bipedRig() {
+  const leg = (side) => [
+    { id: `thigh${side}`, at: [0, 0.55], shapes: [box(0.04, 0.2)], density: 2.5, parent: 'pelvis', anchor: [0, 0.64], lower: -1.05, upper: 1.05 },
+    { id: `shin${side}`, at: [0, 0.35], shapes: [box(0.06, 0.2)], density: 4, parent: `thigh${side}`, anchor: [0, 0.45], lower: -1.57, upper: 1.57 },
+    { id: `foot${side}`, at: [0.02, 0.12], shapes: [box(0.1, 0.24)], density: 5, parent: `shin${side}`, anchor: [0, 0.25], lower: -1.57, upper: 0.26 },
+  ];
+  const arm = (side) => [
+    { id: `upper${side}`, at: [0, 0.92], shapes: [box(0.06, 0.25)], density: 3, parent: 'torso', anchor: [0, 1.04] },
+    { id: `fore${side}`, at: [0, 0.67], shapes: [box(0.06, 0.25)], density: 3, parent: `upper${side}`, anchor: [0, 0.795], lower: -1.05, upper: 1.57 },
+  ];
+  const json = rigDocument('biped', 'pelvis', [
+    { id: 'pelvis', at: [0, 0.7], shapes: [circle(0.1)], density: 3 },
+    { id: 'torso', at: [0, 0.95], shapes: [box(0.2, 0.3)], density: 3, parent: 'pelvis', anchor: [0, 0.8], lower: -0.78, upper: 0.78 },
+    { id: 'head', at: [0, 1.18], shapes: [circle(0.08)], density: 4, parent: 'torso', anchor: [0, 1.1], lower: -0.78, upper: 0.78 },
+    ...leg('L'),
+    ...leg('R'),
+    ...arm('L'),
+    ...arm('R'),
+  ]);
+  const pose = new Map([['j_thighL', 0.45], ['j_shinL', -0.69], ['j_footL', -0.29], ['j_thighR', -0.24], ['j_shinR', -0.8], ['j_footR', 0.24], ['j_torso', -0.47], ['j_head', 0.16]]);
+  return { json, pose };
+}
+
+/**
  * Writes the suggested torques into a document, as Fit motor torque does: every joint's `motor.maxTorque` and
  * `ragdoll.balance.maxTorque`.
  * @param {object} json Document; changed in place.
@@ -248,16 +276,18 @@ function lowestPoint(json) {
  */
 
 /**
- * Runs a ragdoll on a flat ground (top at the rest pose's lowest point, friction 0.8, gravity 10 m/s², 8 velocity and
- * 3 position iterations, as Simulate mode does) and measures how firmly it holds its target pose.
+ * Runs a ragdoll on a flat ground (top at the rest pose's lowest point, friction 0.8, gravity 10 m/s², each step split
+ * into 8 substeps of 8 velocity and 3 position iterations, as Simulate mode does) and measures how firmly it holds its
+ * target pose.
  * @param {*} Box2D The liquidfun.js namespace.
  * @param {*} RagImporter RagImporter, configured with `Box2D` and a PIXI stub.
  * @param {object} json Document; not changed.
- * @param {{ pose?: Map<string, number>, seconds?: number, step?: number, ramp?: number }} [options] Keyed pose (none:
- *   the rest pose), duration (default 10 s), step (default 1/60 s) and pose ramp (default 1 s).
+ * @param {{ pose?: Map<string, number>, seconds?: number, step?: number, ramp?: number, velocityIterations?: number,
+ *   substeps?: number }} [options] Keyed pose (none: the rest pose), duration (default 10 s), step (default 1/60 s),
+ *   pose ramp (default 1 s), velocity iterations (default 8) and substeps per step (default 8).
  * @returns {HoldResult} Measurements.
  */
-export function holdRun(Box2D, RagImporter, json, { pose = new Map(), seconds = 10, step = 1 / 60, ramp = 1, velocityIterations = 8 } = {}) {
+export function holdRun(Box2D, RagImporter, json, { pose = new Map(), seconds = 10, step = 1 / 60, ramp = 1, velocityIterations = 8, substeps = 8 } = {}) {
   const doc = structuredClone(json);
   const clip = pose.size > 0 ? addHoldClip(doc, pose, ramp) : null;
   const gravity = new Box2D.b2Vec2(0, -10);
@@ -286,8 +316,10 @@ export function holdRun(Box2D, RagImporter, json, { pose = new Map(), seconds = 
   try {
     const steps = Math.round(seconds / step);
     for (let i = 0; i < steps; i++) {
-      rag.update(step);
-      world.Step(step, velocityIterations, 3);
+      for (let k = 0; k < substeps; k++) {
+        rag.update(step / substeps);
+        world.Step(step / substeps, velocityIterations, 3);
+      }
       const late = i >= steps / 2;
       const tilt = Math.abs(root.GetAngle() - restAngle) * 180 / Math.PI;
       const omega = root.GetAngularVelocity();

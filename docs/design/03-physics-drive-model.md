@@ -24,7 +24,7 @@ enableMotor    = S > 0
 - This model is the same in the editor and at runtime. The editor's Simulate mode uses RagImporter itself, so **preview equals production**.
 
 ## 3.1 Suggested motor torque
-A `motor.maxTorque` far above what a joint's bodies need makes light ragdolls gain energy on contact: the motor reaches any `motorSpeed` in one step and its reaction impulses fight contacts and limits. The editor therefore suggests a torque per joint that scales with the mass it drives. RagImporter never computes it: the file's `motor.maxTorque` is always used as written.
+Every motorized joint must hold its target firmly whatever happens: gravity in any orientation, carrying the other limbs, a limb pressed into the ground lifting the whole ragdoll, pushes and impacts. The editor therefore suggests, per joint, the torque of the worst static case it can face plus an inertial term. RagImporter never computes it: the file's `motor.maxTorque` is always used as written.
 
 Computed in the rest pose, root-local, meters, by `motorTorqueSuggestions(doc)` (pure, `lib/motor.js`; shared by the editor and validation):
 
@@ -32,24 +32,22 @@ Computed in the rest pose, root-local, meters, by `motorTorqueSuggestions(doc)` 
 sides       remove joint j from the joint graph (§6.4 edge rule); side A = bodies connected to bodyA,
             side B = bodies connected to bodyB; if bodyB is still connected to bodyA (j lies on a loop),
             side A = {bodyA} and side B = {bodyB}
-per side s  M_s = Σ m_b
-            I_s = Σ (I_b + m_b · |c_b − anchor|²)        inertia about the anchor
-            r_s = |C_s − anchor|                           C_s = mass-weighted center of the side
+M           mass of every body connected to j (both sides; the whole loop for a loop joint)
+I_s         Σ_{b∈s} (I_b + m_b · |c_b − anchor|²)          inertia of side s about the anchor
 I_eff       = I_A · I_B / (I_A + I_B)
-feet        bodies whose lowest non-sensor point is within β · H of the rest pose's lowest point
-            (H = rest pose height); a foot is a set of such bodies joined by joints between them
-L           j between two bodies of one foot, or no foot on either side: the side with the smaller I_s
-            (B on a tie); otherwise the side away from a foot, the larger M_s · r_s when both sides hold one
-suggestion  = roundUp2(I_eff · α + M_L · g · r_L),  at least τ_min
+R_s         reach of side s with its joints straightened: from the anchor, along the anchors of the joints
+            inside s (sum of anchor-to-anchor distances), to the farthest non-sensor fixture point
+suggestion  = roundUp2(I_eff · α + k · M · g · min(R_A, R_B)),  at least τ_min
 ```
 
-- `m_b`, `c_b` and `I_b` are each body's mass, root-local center of mass and rotational inertia about that center, as Box2D computes them from its fixtures (area × density, sensors included; `bodyMassData` in `lib/geometry.js`).
-- Constants: **α = 100 rad/s²** (target angular acceleration of the effective inertia), **g = 10 m/s²** (reference gravity; `preview.gravity` is editor-only and the host's gravity is unknown), **τ_min = 0.001 N·m**, **β = 0.05** (foot band). `roundUp2` rounds up to two significant digits (0.00357 → 0.0036, 12.43 → 13), so the value stays readable and never falls below the computed need.
-- `I_eff · α` bounds the angular impulse per step by what the lighter side can absorb, whichever body is `rootBody`; `M_L · g · r_L` lets the joint hold its load side against gravity at full extension. The load is the side the joint carries when the ragdoll stands on its feet: an ankle, knee or hip carries everything above it (each foot of a biped counts, so a leg can hold the body alone), while a free limb, a joint inside a foot and a ragdoll lying flat (one foot spans the whole body) keep the lighter side.
+- `m_b`, `c_b` and `I_b` are each body's mass, root-local center of mass and rotational inertia about that center, as Box2D computes them from its fixtures (area × density, sensors included; `bodyMassData` in `lib/geometry.js`). Fixture points are circle centers plus radius, box corners and polygon vertices.
+- **Worst case.** The torque at j equals the moment, about the anchor, of every external force on one side. Contacts can only push on fixtures, and at most with the weight of the whole ragdoll, so `M · g · R_s` bounds it from either side in any pose and orientation: a hand pressed into the ground lifting the body, a leg holding the body alone, a body hanging from a limb. The bound from the shorter side is the tighter one. **k = 2** is the margin for dynamic loads (impacts, pushes, clip accelerations).
+- Constants: **α = 100 rad/s²** (target angular acceleration of the effective inertia), **g = 10 m/s²** (reference gravity; `preview.gravity` is editor-only and the host's gravity is unknown), **k = 2**, **τ_min = 0.001 N·m**. `roundUp2` rounds up to two significant digits (0.00357 → 0.0036, 12.43 → 13), so the value stays readable and never falls below the computed need.
 - No suggestion (`null`) for a joint whose `bodyA` or `bodyB` is not a body id, whose bodies are the same, or whose side A or side B has zero mass. `doc` is `{ bodies, joints }` in file shape; the function never throws and skips bodies and fixtures it cannot read.
-- Examples (density 1): a 6 g fingertip circle (radius 0.044 m, center 0.036 m from the anchor) on a 1.6 kg creature gives 0.0036 N·m; that creature's hip (leg side 0.48 kg, I ≈ 0.14 kg·m²; rest I ≈ 0.41 kg·m²) about 13 N·m; a 4.4 m humanoid of 0.09–0.82 kg bodies (5.6 kg) gets 0.33 N·m at the hands, 110 N·m at the ankles and knees and 180 N·m at the hips.
-- Limit: Box2D's solver converges poorly when a very light body carries a heavy one. A rig standing on pieces about 1/100 of the mass above them (11–23 g foot pieces under 1.6 kg) still trembles at 8 velocity iterations and only settles at about 40 ([§12](12-open-items.md)). A humanoid standing on one foot (a 0.19 kg foot under 5.6 kg) hops in a steady 0.08 m cycle at 8 and stands still from 14 on, so the editor (Simulate and the clip simulation) steps with **16 velocity and 3 position iterations**, and hosts should too.
-- Cheap enough to run on every edit (about 0.25 ms for 14 joints, 1.5 ms for 100).
+- Examples (density 1): a 6 g fingertip circle on a 1.4 kg creature gives 2.4 N·m and that creature's hip 53 N·m; a 4.4 m humanoid of 0.09–0.82 kg bodies (5.6 kg) gets 35 N·m at the hands, 58 N·m at the ankles, 220 N·m at the knees and 450 N·m at the hips; a 1 m, 1.1 kg biped 4.7–23 N·m.
+- **Stepping (required).** A velocity motor converges only as far as Box2D's iterative solver gets in a step. When a light body sits between heavier ones (a 20 g thigh between a 94 g pelvis and a 126 g foot), the joints of the chain fight through it, the motors fall short of their speed far below their torque, and the PD of §3 then oscillates with a growing amplitude: the "jelly" pose. More velocity iterations help slowly (a robot holding a bent-knee pose: 55° error at 16, 4° at 64); shorter steps help much more, because the PD runs on each one. The editor (Simulate and the clip simulation) therefore splits every 1/60 s step into **8 substeps of `update(dt / 8)` and `world.Step(dt / 8, 8, 3)`**, and hosts should do the same ([§7](07-ragimporter.md)). Without substeps these torques make light rigs gain energy on contact (the creature above: 11.6 J peak), which is what the earlier, lighter suggestion avoided at the cost of firmness.
+- Measured with the editor's stepping (`tests/liquidfun-firmness.test.js`, `tests/liquidfun-hold.test.js`): held poses within 1° (the robot's bent-knee pose 0.6°, was 37°), no energy gain or trembling at rest (peak kinetic energy < 0.05 J), a 3 m/s push on a limb end or on `rootBody` deflects under 2° and settles in under 0.15 s without ringing (was up to 37° on a humanoid hand), and a light limb keyed into the ground lifts the ragdoll lying beside it by 79–104% of the depth (was 0–3% for arms and knees).
+- Cheap enough to run on every edit (about 0.2 ms for 14 joints, 4 ms for a 100-body chain).
 - Used by the Hinge tool for new joints ([§5.5](05-5-tools.md#55-tools)), by the automatic motor torque ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) and by `W_MOTOR_OVERPOWERED` ([§6.4](06-file-format.md#64-validation)).
 
 ## 3.2 Balance controller (rootBody orientation)

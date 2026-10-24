@@ -6,7 +6,7 @@ import { composeTransforms, shapeBounds } from '../lib/geometry.js';
 import { SIMULATE_WORLD, createSimulateSession } from '../js/physics/simulate-session.js';
 import { SIMULATE_STEP } from '../js/timeline-player.js';
 import { ragFile } from './helpers/rag-file.js';
-import { addHoldClip, fitTorque, humanoidRig } from './helpers/rigs.js';
+import { addHoldClip, bipedRig, fitTorque, humanoidRig } from './helpers/rigs.js';
 
 const require = createRequire(import.meta.url);
 const Box2D = require('../vendor/liquidfun.js');
@@ -83,8 +83,9 @@ test('the session starts in rest pose, root-local, by body id', () => {
   }
 });
 
-test('gravity pulls the ragdoll down and the ground under its rest pose stops it', () => {
+test('gravity pulls a limp ragdoll down and the ground under its rest pose stops it', () => {
   const json = ragFile();
+  json.ragdoll.channels.strength = 0;
   const session = start(json);
   try {
     const restY = worldY(json, session.pose().get('b_torso'));
@@ -151,6 +152,30 @@ test('a humanoid holding a pose on one foot stands still instead of hopping', ()
   } finally {
     session.destroy();
   }
+});
+
+test('a light-hub biped on 20 g thighs holds a bent-knee pose within 1° (substeps make its motor chains converge)', () => {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const { json, pose } = bipedRig();
+  fitTorque(json);
+  addHoldClip(json, pose, 1);
+  const session = createSimulateSession(Box2D, json, { clip: 'hold' });
+  const rest = new Map(json.bodies.map((body) => [body.id, body.angle]));
+  let worst = 0;
+  try {
+    run(session, 3);
+    for (let i = 0; i < 120; i++) {
+      session.step(SIMULATE_STEP);
+      const bodies = session.pose();
+      for (const joint of json.joints) {
+        const angle = bodies.get(joint.bodyB).angle - bodies.get(joint.bodyA).angle - (rest.get(joint.bodyB) - rest.get(joint.bodyA));
+        worst = Math.max(worst, Math.abs(angle - (pose.get(joint.id) ?? 0)) * 180 / Math.PI);
+      }
+    }
+  } finally {
+    session.destroy();
+  }
+  assert.ok(worst < 1, `largest joint error ${worst.toFixed(2)}°`);
 });
 
 test('the open clip plays on the instance and an unknown clip key releases everything', () => {
