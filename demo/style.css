@@ -66,6 +66,10 @@ button.active { background: #2f5d46; border-color: #4a9a73; }
   font: 12px ui-monospace, monospace;
 }
 
+#drop-hint[hidden] {
+  display: none;
+}
+
 #drop-hint {
   position: fixed;
   inset: 0;
