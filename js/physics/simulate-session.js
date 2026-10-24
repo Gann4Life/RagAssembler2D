@@ -1,4 +1,4 @@
-import { RagImporter } from '../../lib/ragimporter.js';
+import { RagImporter, stepWorld } from '../../lib/ragimporter.js';
 import { composeTransforms, invertTransform } from '../../lib/geometry.js';
 
 /**
@@ -12,10 +12,6 @@ export const SIMULATE_WORLD = Object.freeze({
   halfHeight: 0.5,
   friction: 0.8,
 });
-
-const SUBSTEPS = 8;
-const VELOCITY_ITERATIONS = 8;
-const POSITION_ITERATIONS = 3;
 
 function rootTransform(json) {
   const position = Array.isArray(json.ragdoll?.position) ? json.ragdoll.position : [0, 0];
@@ -109,8 +105,8 @@ function createGround(Box2D, world, { top, centerX }) {
  * @param {object} json A `.rag.json` document.
  * @param {{ clip: string|null, pose?: string|null }} options Key of the clip to play, and key of the clip whose pose
  *   at time 0 the bodies spawn in (`null` or omitted: the rest pose).
- * @returns {import('../timeline-player.js').SimulationSession} The session; `step(dt)` runs 8 substeps of
- *   `rag.update(dt / 8)` then `world.Step(dt / 8, 8, 3)`, `pose()` returns root-local body transforms by body id.
+ * @returns {import('../timeline-player.js').SimulationSession} The session; `step(dt)` advances the world with
+ *   RagImporter's `stepWorld`, `pose()` returns root-local body transforms by body id.
  * @throws {import('../../lib/ragimporter.js').RagFormatError} When the document has validation errors; nothing
  *   native is created.
  * @throws {Error} When the clip key is unknown or a native call fails; everything built is released first.
@@ -140,6 +136,7 @@ export function createSimulateSession(Box2D, json, { clip, pose = null }) {
     throw error;
   }
 
+  const instances = [rag];
   const toRoot = invertTransform(root);
   let destroyed = false;
   const alive = () => {
@@ -149,11 +146,7 @@ export function createSimulateSession(Box2D, json, { clip, pose = null }) {
   return Object.freeze({
     step(dt) {
       alive();
-      const substep = dt / SUBSTEPS;
-      for (let i = 0; i < SUBSTEPS; i++) {
-        rag.update(substep);
-        world.Step(substep, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
-      }
+      stepWorld(world, instances, dt);
     },
     pose() {
       alive();

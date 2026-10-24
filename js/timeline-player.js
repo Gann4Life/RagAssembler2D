@@ -1,4 +1,5 @@
 import { Emitter } from '../lib/emitter.js';
+import { STEP_SETTINGS } from '../lib/ragimporter.js';
 import { toJson } from './model/io.js';
 import { ghostTimes, keyTimes } from './model/key-times.js';
 
@@ -81,10 +82,10 @@ import { ghostTimes, keyTimes } from './model/key-times.js';
  */
 
 /**
- * Fixed physics step, seconds.
+ * Fixed physics step, seconds: RagImporter's `STEP_SETTINGS.dt`.
  * @type {number}
  */
-export const SIMULATE_STEP = 1 / 60;
+export const SIMULATE_STEP = STEP_SETTINGS.dt;
 
 /**
  * Most physics steps Simulate mode runs in one frame; the rest of a long frame is dropped.

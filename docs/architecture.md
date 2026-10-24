@@ -78,12 +78,12 @@ Each topic lives in its own file; read only the one you need.
 1. **Authoring:** UI action → command → `history.execute` → model ops → one `change` event → views update their own entries (scene, hierarchy, inspector, timeline, Problems after a debounced `validate(toJson(model))`).
 2. **Save:** `saveJson(model, editor.editorVersion())`: `toJson` → `validate` (blocked on errors, listed through `notify`) → `serialize` → `files.saveText` downloads `<name>.rag.json` (+ sprite files, #158) → `history.markSaved()`. **Load:** `editor.loadFrom(read)` (picker or drop) → confirm when dirty → `loadJson(model, text)`: parse JSON → `migrate` → `validate` (rejected on errors, model untouched) → drop unknown fields → `reset` ([Model I/O](architecture/model-io.md#model-io), [Editor composition](architecture/editor-composition.md#editor-composition)).
 3. **Animate mode:** model clips → `lib/evaluate.js` at the playhead → FK pose (`scene.setPose`) and sprite channels.
-4. **Simulate mode / runtime:** `toJson(model)` → `RagImporter.parse` → spawn in a LiquidFun world → each step:
+4. **Simulate mode / runtime:** `toJson(model)` → `RagImporter.parse` → spawn in a LiquidFun world → each fixed frame (`STEP_SETTINGS.dt`), through `stepWorld` (editor and hosts alike):
 
 ```
-rag.update(dt)    advance clips, fire events, resolve channels + overrides, write motors and textures
-world.Step(dt)    LiquidFun integrates
-rag.sync()        body transforms → PIXI sprites
+8 × rag.update(dt / 8)            advance clips, fire events, resolve channels + overrides, write motors and textures
+    world.Step(dt / 8, 8, 3)      LiquidFun integrates
+rag.sync()                        body transforms → PIXI sprites (hosts)
 ```
 
 ## Conformance

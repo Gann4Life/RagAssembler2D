@@ -10,8 +10,10 @@ RagImporter is the `lib/` folder of ES modules, with `lib/ragimporter.js` as its
 - `parse` and `validate` need neither library. `spawn` resolves both on every call, before it creates anything, and throws an `Error` naming the missing one (`liquidfun.js (Box2D)` or `PIXI.js (PIXI)`). A configured value wins over the global; a value is accepted when it is a non-null object or function.
 - The editor uses these same modules for validation, evaluation, Simulate mode and rendering. It may also import the internal `lib/` modules (schema, serializer, emitter); host projects and `demo/` use only `lib/ragimporter.js`.
 
+> **Hosts must step the world with `stepWorld`.** The motor torques and the PD of [§3](03-physics-drive-model.md) are tuned for the editor's stepping (`STEP_SETTINGS`: 1/60 s frames, 8 substeps of 8 velocity and 3 position iterations). A host that calls `world.Step` its own way gets ragdolls that differ from the editor preview and can gain energy and blow up. Call `stepWorld(world, instances)` once per fixed frame instead of `update` + `world.Step`, then `sync()`.
+
 ```js
-import { RagImporter } from './lib/ragimporter.js';
+import { RagImporter, stepWorld, STEP_SETTINGS } from './lib/ragimporter.js';
 // liquidfun.js (global Box2D) and PIXI.js v8 (global PIXI) loaded by the host with <script> tags.
 
 const app   = new PIXI.Application(); await app.init({ resizeTo: window });
@@ -37,13 +39,15 @@ function onRevive() { rag.stop('dead', { fadeOut: 1 }); }
 app.stage.eventMode = 'static';
 app.stage.on('pointermove', ev => rag.lookAt('neck', rag.toWorld(ev.global), { weight: 0.7 }));
 
-// game loop, fixed step recommended; 8 substeps as the editor (§3.1)
-app.ticker.add(() => {
-  for (let i = 0; i < 8; i++) {
-    rag.update(dt / 8);     // animation + procedural → motors
-    world.Step(dt / 8, 8, 3);
+// game loop: fixed frames of STEP_SETTINGS.dt, each stepped exactly like the editor (§3.1)
+let accumulator = 0;
+app.ticker.add((ticker) => {
+  accumulator = Math.min(accumulator + ticker.deltaMS / 1000, 0.25);
+  while (accumulator >= STEP_SETTINGS.dt) {
+    stepWorld(world, [rag]);  // 8 × (rag.update(dt / 8), world.Step(dt / 8, 8, 3))
+    accumulator -= STEP_SETTINGS.dt;
   }
-  rag.sync();               // physics → PIXI sprites
+  rag.sync();                 // physics → PIXI sprites
 });
 ```
 
@@ -60,6 +64,8 @@ app.ticker.add(() => {
 | `RagFormatError` | Exported next to `RagImporter`. Extends `Error`; `name` is `"RagFormatError"`; `errors` and `warnings` are frozen copies of the arrays `validate` returned. `message`: for an unsupported `version`, `Unsupported .rag.json version <v>; supported: <list>`; otherwise `Invalid .rag.json: <n> error(s); first: <code> at <path>`. |
 | `RagImporter.validate(json) → { errors, warnings }` | Validation without throwing: two arrays of problems `{ severity, code, message, path, target }` ([§6.4](06-file-format.md#64-validation)). |
 | `RagImporter.supportedVersions` | Frozen array of the format versions `parse` and `validate` accept: `[2]` ([§6.3](06-file-format.md#63-versioning)). |
+| `STEP_SETTINGS` | Exported next to `RagImporter`. Frozen `{ dt: 1/60, substeps: 8, velocityIterations: 8, positionIterations: 3 }`: the editor's frame step (seconds) and how each frame is split ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)). The editor's Simulate mode and clip simulation read it, so editor and host never drift. |
+| `stepWorld(world, instances = [], dt = STEP_SETTINGS.dt)` | Exported next to `RagImporter`. Advances one frame exactly like the editor: `substeps` times, `update(dt / substeps)` on every instance in iteration order, then `world.Step(dt / substeps, velocityIterations, positionIterations)`. Does not call `sync()`. Destroyed instances are no-ops. Throws a `TypeError` when `world` has no `Step`, `instances` is not iterable, or `dt` is not a finite number ≥ 0. The editor itself steps through it; with the same file, spawn and inputs the host gets the same body transforms as the editor ([§12](12-open-items.md)). |
 
 **`RagDef`** (one per file; can spawn many instances)
 
@@ -96,7 +102,7 @@ app.ticker.add(() => {
 | `clearJointOverride(jointName, { fadeOut })` / `clearAllOverrides()` | Removes overrides. |
 | `toWorld(pixiPoint) → { x, y }` / `toPixi(worldPoint)` | Coordinate conversion through `pixelsPerMeter` and the view's parent transform. |
 | `on(type, fn)` / `off(type, fn)` | Types: `event` (custom), `start`, `loop`, `complete`, `stop`. `on` returns a function that removes the listener. |
-| `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors, applies the balance torque to `rootBody` and swaps sprite images. Call it once per physics step, **before** `world.Step`, with that step's `dt` (the balance torque is sized for it, [§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). |
+| `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors, applies the balance torque to `rootBody` and swaps sprite images. Call it once per physics step, **before** `world.Step`, with that step's `dt` (the balance torque is sized for it, [§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). `stepWorld` does this for every substep; hosts use it instead of calling `update` themselves. |
 | `sync()` | Copies body transforms to the sprites. Call it **after** `world.Step`. |
 | `view` | The instance's `PIXI.Container`, with `sortableChildren` on and sprite `zIndex = z`. |
 | `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun (`Box2D.b2Body`, `Box2D.b2RevoluteJoint`, `Box2D.b2Fixture`) / PIXI objects, looked up by name; `undefined` for an unknown name. When names repeat (warning `W_DUPLICATE_NAME`), the first in file order wins. |

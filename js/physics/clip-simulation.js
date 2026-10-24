@@ -1,12 +1,13 @@
 import { Emitter } from '../../lib/emitter.js';
+import { STEP_SETTINGS } from '../../lib/ragimporter.js';
 
 /**
- * Clip simulation constants: `step` in s, `budget` and `debounce` in ms, `maxStepsPerFrame` in steps, `cycleLimit`
+ * Clip simulation constants: `step` in s (RagImporter's `STEP_SETTINGS.dt`), `budget` and `debounce` in ms, `maxStepsPerFrame` in steps, `cycleLimit`
  * in cycles.
  * @type {Readonly<{ step: number, budget: number, maxStepsPerFrame: number, debounce: number, cycleLimit: number }>}
  */
 export const CLIP_SIMULATION = Object.freeze({
-  step: 1 / 60,
+  step: STEP_SETTINGS.dt,
   budget: 8,
   maxStepsPerFrame: 240,
   debounce: 250,
