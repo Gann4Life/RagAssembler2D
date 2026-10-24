@@ -25,20 +25,25 @@ export function keyTimes(model, clip) {
 }
 
 /**
- * Which key times get a ghost and on which side of the playhead (`DESIGN.md` §5.1, Ghosts): a key time is skipped
- * while it maps to the same simulation step as the playhead; the others are `ahead` (after the playhead) or `behind`.
+ * Which key times get a ghost and on which side of the playhead (`DESIGN.md` §5.1, Ghosts): only the nearest key
+ * time `behind` the playhead and the nearest one `ahead` of it. A key time that maps to the same simulation step as
+ * the playhead gets none.
  * @param {ReadonlyArray<number>} times Key times, seconds.
  * @param {number} playhead Playhead clip time, seconds.
  * @param {(t: number) => number} stepOf Simulation step of a clip time.
- * @returns {Array<{ t: number, side: 'ahead'|'behind' }>} Ghost times in the order given.
+ * @returns {Array<{ t: number, side: 'ahead'|'behind' }>} At most two ghost times, `behind` first.
  */
 export function ghostTimes(times, playhead, stepOf) {
   const current = stepOf(playhead);
-  const ghosts = [];
+  let behind = null;
+  let ahead = null;
   for (const t of times) {
     const step = stepOf(t);
-    if (step === current) continue;
-    ghosts.push({ t, side: step > current ? 'ahead' : 'behind' });
+    if (step < current && (behind === null || step > behind.step)) behind = { t, step };
+    if (step > current && (ahead === null || step < ahead.step)) ahead = { t, step };
   }
+  const ghosts = [];
+  if (behind !== null) ghosts.push({ t: behind.t, side: 'behind' });
+  if (ahead !== null) ghosts.push({ t: ahead.t, side: 'ahead' });
   return ghosts;
 }

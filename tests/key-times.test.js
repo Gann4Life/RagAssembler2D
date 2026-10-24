@@ -46,10 +46,13 @@ test('keyTimes is empty without a clip, for a node that is not a clip, and for a
   assert.deepEqual(keyTimes(editor.model, clipWith(editor, [])), []);
 });
 
-test('ghostTimes skips the playhead step and colors the rest by side', () => {
+test('ghostTimes keeps only the nearest key time on each side and skips the playhead step', () => {
   const stepOf = (t) => Math.round(t * 60);
-  assert.deepEqual(ghostTimes([0, 0.25, 0.5, 1], 0.5, stepOf), [
-    { t: 0, side: 'behind' },
+  assert.deepEqual(ghostTimes([0, 0.25, 0.5, 0.75, 1], 0.5, stepOf), [
+    { t: 0.25, side: 'behind' },
+    { t: 0.75, side: 'ahead' },
+  ]);
+  assert.deepEqual(ghostTimes([0, 0.25, 1], 0.3, stepOf), [
     { t: 0.25, side: 'behind' },
     { t: 1, side: 'ahead' },
   ]);
