@@ -1,8 +1,8 @@
-import { RagImporter, RagFormatError } from '../lib/ragimporter.js';
+import { RagImporter, RagFormatError, STEP_SETTINGS, stepWorld } from '../lib/ragimporter.js';
 import { drawPhysics } from './debug-draw.js';
 
 const PIXELS_PER_METER = 80;
-const STEP = 1 / 60;
+const STEP = STEP_SETTINGS.dt;
 const MAX_FRAME = 0.25;
 const SAMPLE_URL = './assets/sample.rag.json';
 const SPAWN_X = 0;
@@ -200,8 +200,7 @@ layoutScene();
 app.ticker.add((ticker) => {
   accumulator = Math.min(accumulator + ticker.deltaMS / 1000, MAX_FRAME);
   while (accumulator >= STEP) {
-    instance?.update(STEP);
-    world.Step(STEP, 8, 3);
+    stepWorld(world, instance === null ? [] : [instance], STEP);
     accumulator -= STEP;
   }
   drawPhysics(Box2D, physicsView, instance, ground);
