@@ -310,52 +310,77 @@ function seedJointKey(env, value) {
   });
 }
 
-test('Animate: keys are the evaluated values plus the change since the press, so untouched channels keep theirs', () => {
+test('Animate: a changed joint is keyed at its released angle, not the evaluated value plus the change', () => {
   const env = animateEnvironment({ turn: 0.3 });
   env.history.execute(setProps([ROOT_UID], { rootBody: env.ids[0] }));
   seedJointKey(env, 0.4);
   const before = env.snapshot();
   env.view.displayed = new Map([
     [env.bodies[0], { x: 0, y: -0.02, angle: 0.05 }],
-    [env.bodies[1], { x: 1, y: -0.1, angle: 0.05 + 0.35 }],
+    [env.bodies[1], { x: 1, y: -0.1, angle: 0.05 + 0.15 }],
   ]);
   drag(env);
   const tracks = angleKeys(env);
   assert.equal(tracks.length, 1);
   assert.equal(tracks[0].channel, 'angle');
   const key = tracks[0].keys.find(([t]) => Math.abs(t - 0.5) < 1e-9);
-  assert.ok(Math.abs(key[1] - 0.7) < 1e-9, `v ${key[1]}`);
+  assert.ok(Math.abs(key[1] - 0.45) < 1e-9, `v ${key[1]}`);
   env.history.undo();
   assert.equal(env.snapshot().json, before.json);
 });
 
-test('Animate: repeated drags that turn back and forth leave the keys where they started', () => {
-  const turns = [0.3, -0.3, 0.3, -0.3];
-  const env = animateEnvironment({ turn: 0 });
-  seedJointKey(env, 0.4);
-  let index = 0;
-  const original = env.physics.startPose.bind(env.physics);
-  env.physics.startPose = (json, options) => {
-    const session = original(json, options);
-    const turn = turns[index++];
-    session.pose = () => {
-      const pose = new Map(options.start);
-      const child = pose.get(env.ids[1]);
-      pose.set(env.ids[1], { ...child, angle: child.angle + turn });
-      return pose;
-    };
-    return session;
-  };
+function limitJoint(env, lower, upper) {
+  env.history.execute(setProps([env.joint], { limits: { enabled: true, lower, upper } }));
+}
+
+test('Animate: repeated drags from a display that lags the keys never key past the joint limits', () => {
+  const env = animateEnvironment({ turn: 0.35 });
+  limitJoint(env, -0.5, 0.5);
+  seedJointKey(env, 0.5);
   const restAngle = env.model.prop(env.bodies[1], 'angle');
-  for (let i = 0; i < turns.length; i++) {
+  for (let i = 0; i < 4; i++) {
     env.view.displayed = new Map([
       [env.bodies[0], { x: 0, y: 0, angle: 0 }],
       [env.bodies[1], { x: 1, y: -0.1, angle: restAngle + 0.1 }],
     ]);
     drag(env);
+    const key = angleKeys(env)[0].keys.find(([t]) => Math.abs(t - 0.5) < 1e-9);
+    assert.ok(Math.abs(key[1] - 0.45) < 1e-9, `drag ${i}: v ${key[1]}`);
   }
-  const key = angleKeys(env)[0].keys.find(([t]) => Math.abs(t - 0.5) < 1e-9);
-  assert.ok(Math.abs(key[1] - 0.4) < 1e-9, `v ${key[1]}`);
+});
+
+test('Animate: a released angle past an enabled limit (solver slop) is keyed at the limit', () => {
+  for (const [turn, expected] of [[0.55, 0.5], [-0.62, -0.6]]) {
+    const env = animateEnvironment({ turn });
+    limitJoint(env, -0.6, 0.5);
+    drag(env);
+    const [, v] = angleKeys(env)[0].keys[0];
+    assert.ok(Math.abs(v - expected) < 1e-9, `turn ${turn}: v ${v}`);
+  }
+  const free = animateEnvironment({ turn: 0.55 });
+  limitJoint(free, -0.6, 0.5);
+  free.history.execute(setProps([free.joint], { limits: { enabled: false, lower: -0.6, upper: 0.5 } }));
+  drag(free);
+  assert.ok(Math.abs(angleKeys(free)[0].keys[0][1] - 0.55) < 1e-9);
+});
+
+test('Animate: a joint whose child is bodyA is keyed with the Box2D sign', () => {
+  const env = animateEnvironment({ turn: 0 });
+  env.history.execute(setProps([ROOT_UID], { rootBody: env.ids[1] }));
+  const original = env.physics.startPose.bind(env.physics);
+  env.physics.startPose = (json, options) => {
+    const session = original(json, options);
+    session.pose = () => {
+      const pose = new Map(options.start);
+      const child = pose.get(env.ids[0]);
+      pose.set(env.ids[0], { ...child, angle: child.angle + 0.3 });
+      return pose;
+    };
+    return session;
+  };
+  drag(env);
+  const track = angleKeys(env).find((entry) => entry.channel === 'angle');
+  assert.ok(Math.abs(track.keys[0][1] + 0.3) < 1e-9, `v ${track.keys[0][1]}`);
 });
 
 test('Animate: a click writes nothing but still holds the released bodies', () => {

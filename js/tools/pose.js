@@ -1,4 +1,4 @@
-import { jointAngleForBody, resolveChannels } from '../../lib/evaluate.js';
+import { jointAngleForBody } from '../../lib/evaluate.js';
 import { setJointAngleKey, setRootBodyAngleKey } from '../commands/keys.js';
 import { animatePose } from '../model/animate-preview.js';
 import { toJson } from '../model/io.js';
@@ -21,22 +21,24 @@ function byId(model, pose) {
   return new Map([...pose].map(([uid, transform]) => [model.prop(uid, 'id'), transform]));
 }
 
-function evaluated(model, def, clip, time) {
-  const clipDef = def.clips[model.children(ROOT_UID, 'clips').indexOf(clip)];
-  return resolveChannels(def, clipDef ? [{ clip: clipDef, time }] : []);
-}
-
 function finiteOr(value, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
-function rootKey(model, resolved, pressed, result) {
+function rootKey(model, pressed, result) {
   const id = model.prop(ROOT_UID, 'rootBody');
   const uid = typeof id === 'string' ? model.uidOf(id) : null;
   if (uid === null || uid === undefined || !result.has(uid) || !pressed.has(uid)) return null;
   const delta = result.get(uid).angle - pressed.get(uid).angle;
   if (!Number.isFinite(delta) || Math.abs(delta) <= KEY_THRESHOLD) return null;
-  return finiteOr(resolved.root.bodyAngle, 0) + delta;
+  const angle = result.get(uid).angle - finiteOr(model.prop(uid, 'angle'), 0);
+  return Number.isFinite(angle) ? angle : null;
+}
+
+function withinLimits(model, joint, angle) {
+  const limits = model.prop(joint, 'limits');
+  if (limits?.enabled !== true || !Number.isFinite(limits.lower) || !Number.isFinite(limits.upper)) return angle;
+  return Math.min(Math.max(angle, limits.lower), limits.upper);
 }
 
 function jointAngles(model, def, pose) {
@@ -50,14 +52,13 @@ function jointAngles(model, def, pose) {
   return angles;
 }
 
-function jointKeys(model, def, resolved, pressed, result) {
+function jointKeys(model, def, pressed, result) {
   const before = jointAngles(model, def, pressed);
   const keys = [];
   for (const [joint, angle] of jointAngles(model, def, result)) {
     if (!before.has(joint)) continue;
-    const delta = angle - before.get(joint);
-    if (Math.abs(delta) <= KEY_THRESHOLD) continue;
-    keys.push([joint, finiteOr(resolved.joints.get(model.prop(joint, 'id'))?.angle, 0) + delta]);
+    if (Math.abs(angle - before.get(joint)) <= KEY_THRESHOLD) continue;
+    keys.push([joint, withinLimits(model, joint, angle)]);
   }
   return keys;
 }
@@ -69,8 +70,8 @@ function jointKeys(model, def, resolved, pressed, result) {
  * displayed bodies (`ctx.displayedPose`, the FK pose when nothing is shown), `rootBody` free like every body; a press while
  * playing pauses first (`ctx.playback.pause`, the playhead at the displayed step) and grabs in the same press. On a
  * release after a drag, with autokey on, every joint whose measured angle changed by more than 0.1° since the press gets
- * a key there worth its evaluated `angle` at the playhead plus that change, and the root `bodyAngle` likewise, in one
- * undo step, so joints the drag did not move keep their keys; with
+ * a key there worth its released angle, clamped to its limits when they are enabled, and the root `bodyAngle` likewise
+ * (unclamped), in one undo step, so joints the drag did not move keep their keys; with
  * autokey off nothing is written and the status line says so. A click writes nothing. Every Animate release hands the
  * released bodies to `ctx.playback.hold`. Cancel always discards. A press the physics service refuses shows
  * `not-allowed` until the release. Never changes the selection.
@@ -138,9 +139,8 @@ export function poseTool() {
     const result = uidPose(session.pose());
     if (dragged) {
       const def = toJson(ctx.model, PREVIEW_VERSION);
-      const resolved = evaluated(ctx.model, def, clip, time);
-      const joints = jointKeys(ctx.model, def, resolved, from, result);
-      const bodyAngle = rootKey(ctx.model, resolved, from, result);
+      const joints = jointKeys(ctx.model, def, from, result);
+      const bodyAngle = rootKey(ctx.model, from, result);
       const keying = joints.length > 0 || bodyAngle !== null;
       if (keying && !ctx.autokey()) {
         ctx.status(AUTOKEY_OFF);
