@@ -62,6 +62,7 @@ function accessibleName(row) {
   if (row.match?.field === 'id') name += `, id ${item.id}`;
   if (item.loop) name += `, loop joint to ${item.loopTo}`;
   if (item.unassigned) name += ', unassigned joint';
+  if (item.rootBody) name += ', root body';
   return name;
 }
 
@@ -103,6 +104,7 @@ function rowSignature(row) {
     item.loop,
     item.loopTo,
     item.unassigned,
+    item.rootBody,
     match,
     row.expandable,
     row.expanded,
@@ -137,6 +139,7 @@ function rowContent(doc, row) {
     nodes.push(span(doc, 'hierarchy-badge', 'loop'), span(doc, 'hierarchy-loop-to', `→ ${item.loopTo}`));
   }
   if (item.unassigned) nodes.push(span(doc, 'hierarchy-badge is-error', 'unassigned'));
+  if (item.rootBody) nodes.push(span(doc, 'hierarchy-badge', 'root body'));
   return nodes;
 }
 
@@ -442,14 +445,17 @@ export function createHierarchy(element, editor) {
     }
   });
 
-  addButton.addEventListener('click', () => toggleAddMenu('first'));
+  addButton.addEventListener('click', () => {
+    if (addButton.getAttribute('aria-disabled') === 'true') actions.run('add-shape', { label: 'Add' });
+    else toggleAddMenu('first');
+  });
   addButton.addEventListener('keydown', (event) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     event.preventDefault();
     if (addButton.getAttribute('aria-expanded') !== 'true') toggleAddMenu(event.key === 'ArrowUp' ? 'last' : 'first');
   });
   deleteButton.addEventListener('click', () => {
-    if (deleteButton.getAttribute('aria-disabled') !== 'true') actions.run('delete');
+    actions.run('delete', { label: 'Delete' });
   });
 
   tree.addEventListener('mousedown', (event) => {

@@ -1174,3 +1174,61 @@ body.dock-resizing-column * {
 .timeline-lanes:focus {
   outline: none;
 }
+
+.tools-button[aria-pressed="true"][aria-disabled="true"] {
+  opacity: 0.6;
+}
+
+.status-line {
+  grid-area: 1 / 1;
+  z-index: 2;
+  place-self: end center;
+  max-width: calc(100% - 16px);
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+}
+
+.status-line[hidden] {
+  display: none;
+}
+
+.header-button.mode-segment {
+  border-radius: 0;
+}
+
+.header-button.mode-segment + .header-button.mode-segment {
+  margin-left: -1px;
+}
+
+.header-button.mode-segment:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.header-button.mode-segment:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.header-button.mode-segment[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--focus) 35%, transparent);
+  color: var(--text);
+}
+
+.mode-switch {
+  display: flex;
+  flex: none;
+}
+
+.menu-shortcut {
+  margin-left: auto;
+  padding-left: 24px;
+  color: var(--text-muted);
+}

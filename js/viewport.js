@@ -144,7 +144,7 @@ export async function createViewport(
     settings.on('settings', invalidateOverlay),
   ];
 
-  const hoverAllowed = () => tools.active === null || tools.active.hover;
+  const hoverAllowed = () => tools.active === null || (tools.usable && tools.active.hover);
   const onHover = (screen) => {
     const shown = screen && hoverAllowed() && tools.handleAt(screen) === null;
     gizmos.setHover(shown ? (hitTestAt(screen)[0] ?? null) : null);
@@ -154,6 +154,7 @@ export async function createViewport(
     if (!hoverAllowed()) gizmos.setHover(null);
   };
   const offTool = tools.on('tool', onTool);
+  const offModeHover = modes.on('mode', onTool);
 
   const unbindTools = tools.bindView({
     hitTest: hitTestAt,
@@ -209,6 +210,7 @@ export async function createViewport(
       PIXI.Ticker.shared.remove(tickTools);
       unbindTools();
       offTool();
+      offModeHover();
       offCamera();
       for (const off of overlayTriggers) off();
       offReset();

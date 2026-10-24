@@ -44,8 +44,10 @@ test('header lists the DESIGN.md §5.3 actions in grouped order', () => {
     [
       ['New', 'Load', 'Save'],
       ['Undo', 'Redo'],
+      ['Rig'],
+      ['Edit', 'Animate', 'Simulate'],
       ['Play', 'Pause', 'Next frame', 'Stop'],
-      ['Window', 'Settings'],
+      ['View', 'Window', 'Settings'],
     ],
   );
 });
@@ -65,10 +67,15 @@ test('header shortcuts match the DESIGN.md §5.9 hotkeys', () => {
     save: 'Control+S',
     undo: 'Control+Z',
     redo: 'Control+Shift+Z Control+Y',
+    rig: null,
+    'mode:edit': null,
+    'mode:animate': null,
+    simulate: null,
     play: 'Space',
     pause: 'Space',
     'next-frame': '.',
     stop: null,
+    view: null,
     window: null,
     settings: null,
   });
@@ -85,7 +92,9 @@ test('actionTitle shows the label plus the hotkey and marks unavailable actions'
 
 test('actionTitle appends the given reason while disabled, and nothing for a null reason', () => {
   const undo = HEADER_GROUPS.flat().find((action) => action.id === 'undo');
-  assert.equal(actionTitle(undo, false, 'not available in Simulate mode'), 'Undo (Ctrl+Z) (not available in Simulate mode)');
+  assert.equal(actionTitle(undo, false, 'only in Edit and Animate modes'), 'Undo (Ctrl+Z) (only in Edit and Animate modes)');
+  const animate = HEADER_GROUPS.flat().find((action) => action.id === 'mode:animate');
+  assert.equal(actionTitle(animate, true, null, 'Animate mode: opens walk'), 'Animate mode: opens walk');
   assert.equal(actionTitle(undo, false, null), 'Undo (Ctrl+Z)');
   assert.equal(actionTitle(undo, true, 'ignored'), 'Undo (Ctrl+Z)');
   assert.equal(actionTitle(undo, false, undefined), 'Undo (Ctrl+Z) (not available yet)');

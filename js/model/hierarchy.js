@@ -20,6 +20,7 @@ export const UNLINKED_KEY = 'unlinked';
  * @property {boolean} loop Joint leaf that closes a cycle.
  * @property {string|null} loopTo For loop leaves, the label of the joint's bodyB; else `null`. Never searched.
  * @property {boolean} unassigned Joint that does not connect two different existing bodies.
+ * @property {boolean} rootBody The body named by `rootBody`.
  * @property {ReadonlyArray<HierarchyItem>} children Child items, in display order.
  */
 
@@ -67,6 +68,7 @@ function objectItem(model, uid, kind, extra = {}) {
     loop: false,
     loopTo: null,
     unassigned: false,
+    rootBody: false,
     children: [],
     ...extra,
   };
@@ -126,7 +128,10 @@ export function hierarchyTree(model) {
   const placed = new Set();
   const root = objectItem(model, ROOT_UID, 'root');
   const start = rootBodyUid(model);
-  if (start !== null) root.children.push(componentItem(model, edges, start, placed));
+  if (start !== null) {
+    const tree = componentItem(model, edges, start, placed);
+    root.children.push({ ...tree, rootBody: true });
+  }
   const group = {
     key: UNLINKED_KEY,
     kind: 'unlinked',
@@ -138,6 +143,7 @@ export function hierarchyTree(model) {
     loop: false,
     loopTo: null,
     unassigned: false,
+    rootBody: false,
     children: [],
   };
   for (const body of model.children(ROOT_UID, 'bodies')) {

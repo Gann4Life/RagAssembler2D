@@ -7,6 +7,7 @@ import { rovingIndex } from './roving-focus.js';
  * @property {string} [shortcut] Human-readable shortcut hint (`DESIGN.md` §5.9).
  * @property {string} [ariaKeyShortcuts] Value for `aria-keyshortcuts`.
  * @property {boolean} [menu] Whether the button opens a menu.
+ * @property {boolean} [segment] Whether the button is a segment of the mode switch (`aria-pressed`).
  */
 
 /**
@@ -28,6 +29,12 @@ export const HEADER_GROUPS = Object.freeze([
       ariaKeyShortcuts: 'Control+Shift+Z Control+Y',
     }),
   ]),
+  Object.freeze([Object.freeze({ id: 'rig', label: 'Rig', menu: true })]),
+  Object.freeze([
+    Object.freeze({ id: 'mode:edit', label: 'Edit', segment: true }),
+    Object.freeze({ id: 'mode:animate', label: 'Animate', segment: true }),
+    Object.freeze({ id: 'simulate', label: 'Simulate', segment: true }),
+  ]),
   Object.freeze([
     Object.freeze({ id: 'play', label: 'Play', shortcut: 'Space', ariaKeyShortcuts: 'Space' }),
     Object.freeze({ id: 'pause', label: 'Pause', shortcut: 'Space', ariaKeyShortcuts: 'Space' }),
@@ -35,6 +42,7 @@ export const HEADER_GROUPS = Object.freeze([
     Object.freeze({ id: 'stop', label: 'Stop' }),
   ]),
   Object.freeze([
+    Object.freeze({ id: 'view', label: 'View', menu: true }),
     Object.freeze({ id: 'window', label: 'Window', menu: true }),
     Object.freeze({ id: 'settings', label: 'Settings' }),
   ]),
@@ -43,15 +51,17 @@ export const HEADER_GROUPS = Object.freeze([
 const NOT_AVAILABLE_YET = 'not available yet';
 
 /**
- * Builds the tooltip text of a header action: the label, the hotkey if any, and while disabled the reason
- * in parentheses.
+ * Builds the tooltip text of a header action: the label (or `text`), the hotkey if any, and while disabled the
+ * reason in parentheses.
  * @param {Readonly<HeaderAction>} action
  * @param {boolean} enabled
  * @param {string|null} [reason] Why the action is disabled; `null` appends nothing.
+ * @param {string|null} [text] Text shown instead of the label, e.g. a mode switch segment's description.
  * @returns {string}
  */
-export function actionTitle(action, enabled, reason = NOT_AVAILABLE_YET) {
-  const base = action.shortcut ? `${action.label} (${action.shortcut})` : action.label;
+export function actionTitle(action, enabled, reason = NOT_AVAILABLE_YET, text = null) {
+  const label = text ?? action.label;
+  const base = action.shortcut ? `${label} (${action.shortcut})` : label;
   return enabled || reason === null ? base : `${base} (${reason})`;
 }
 
@@ -60,17 +70,29 @@ export function actionTitle(action, enabled, reason = NOT_AVAILABLE_YET) {
  * @param {HTMLButtonElement} button A button created by {@link createHeader}.
  * @param {boolean} enabled
  * @param {string|null} [reason] Why the action is disabled; `null` appends nothing.
+ * @param {string|null} [text] Tooltip text instead of the label.
  * @returns {void}
  */
-export function setActionEnabled(button, enabled, reason = NOT_AVAILABLE_YET) {
+export function setActionEnabled(button, enabled, reason = NOT_AVAILABLE_YET, text = null) {
   const action = findAction(button.dataset.action);
   button.setAttribute('aria-disabled', String(!enabled));
-  if (action) button.title = actionTitle(action, enabled, reason);
+  if (action) button.title = actionTitle(action, enabled, reason, text);
 }
 
 /**
- * Creates the editor header toolbar with every action disabled.
- * Enabled buttons dispatch a bubbling `header-action` CustomEvent with `detail.action` on click.
+ * Sets the pressed state of a mode switch segment.
+ * @param {HTMLButtonElement} button A segment created by {@link createHeader}.
+ * @param {boolean} pressed Whether its mode is the current one.
+ * @returns {void}
+ */
+export function setSegmentPressed(button, pressed) {
+  button.setAttribute('aria-pressed', String(pressed));
+}
+
+/**
+ * Creates the editor header toolbar with every action disabled; the mode switch segments sit in a
+ * `role="group"` labelled "Mode". Every click dispatches a bubbling `header-action` CustomEvent with
+ * `detail.action`, `detail.label` and `detail.disabled`, so a disabled button can report its reason.
  * @param {Document} doc Document used to create the elements.
  * @returns {HTMLElement} The `<header id="header">` element.
  */
@@ -82,6 +104,15 @@ export function createHeader(doc) {
 
   HEADER_GROUPS.forEach((group, groupIndex) => {
     if (groupIndex > 0) header.append(createSeparator(doc, groupIndex === HEADER_GROUPS.length - 1));
+    if (group.every((action) => action.segment)) {
+      const segments = doc.createElement('div');
+      segments.className = 'mode-switch';
+      segments.setAttribute('role', 'group');
+      segments.setAttribute('aria-label', 'Mode');
+      for (const action of group) segments.append(createButton(doc, action));
+      header.append(segments);
+      return;
+    }
     for (const action of group) header.append(createButton(doc, action));
   });
 
@@ -106,9 +137,14 @@ export function createHeader(doc) {
 
   header.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-action]');
-    if (!button || button.getAttribute('aria-disabled') === 'true') return;
+    if (!button) return;
+    const action = findAction(button.dataset.action);
+    const disabled = button.getAttribute('aria-disabled') === 'true';
     header.dispatchEvent(
-      new CustomEvent('header-action', { bubbles: true, detail: { action: button.dataset.action } }),
+      new CustomEvent('header-action', {
+        bubbles: true,
+        detail: { action: button.dataset.action, label: action?.label ?? null, disabled },
+      }),
     );
   });
 
@@ -144,6 +180,10 @@ function createButton(doc, action) {
   if (action.menu) {
     button.setAttribute('aria-haspopup', 'menu');
     button.setAttribute('aria-expanded', 'false');
+  }
+  if (action.segment) {
+    button.classList.add('mode-segment');
+    button.setAttribute('aria-pressed', 'false');
   }
   button.setAttribute('aria-disabled', 'true');
   button.title = actionTitle(action, false);

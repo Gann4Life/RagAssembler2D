@@ -1,6 +1,6 @@
 import { createEditor } from './editor.js';
 import { dispatchKey } from './hotkeys.js';
-import { createHeader, setActionEnabled, focusAdjacentAction } from './header.js';
+import { createHeader, setActionEnabled, setSegmentPressed, focusAdjacentAction } from './header.js';
 import { createViewport } from './viewport.js';
 import { createToolbar } from './viewport/toolbar.js';
 import { framingInsets } from './viewport/bounds.js';
@@ -25,6 +25,9 @@ import { setProps } from './commands/props.js';
 import { createPoseSession } from './physics/pose-session.js';
 import { createSimulateSession } from './physics/simulate-session.js';
 import { DEV_VERSION, loadVersion } from './version.js';
+import { createStatusLine } from './status-line.js';
+import { toJson } from './model/io.js';
+import { validate } from '../lib/validate.js';
 import { RagImporter } from '../lib/ragimporter.js';
 
 const { PIXI, Box2D } = globalThis;
@@ -40,7 +43,8 @@ RagImporter.configure({ Box2D, PIXI });
 const physics = Object.freeze({ startPose: (json, options) => createPoseSession(Box2D, json, options) });
 let editorVersion = DEV_VERSION;
 let player = null;
-const reportStatus = () => {};
+const statusLine = createStatusLine(document.getElementById('panel-viewport'));
+const reportStatus = (text) => statusLine.show(text);
 const playback = Object.freeze({
   get playing() {
     return player?.playing ?? false;
@@ -97,32 +101,61 @@ function startPlayback(run) {
   }
 }
 
+let validationErrors = null;
+const invalidateErrors = () => {
+  validationErrors = null;
+};
+model.on('change', invalidateErrors);
+model.on('reset', invalidateErrors);
+const hasErrors = () => {
+  validationErrors ??= validate(toJson(model, DEV_VERSION)).errors.length > 0;
+  return validationErrors;
+};
+const FIX_ERRORS = 'fix the errors in Problems';
+const busy = () => history.inGesture;
 const transportReason = (enabled, stateReason) => () => {
-  if (enabled()) return null;
+  if (enabled() || busy()) return null;
   if (modes.mode === 'edit') return 'only in Animate and Simulate modes';
   return stateReason();
 };
-actions.register('toggle-play', { run: () => startPlayback(() => player.toggle()), isEnabled: () => player.canPlay() });
+const canStartFromEdit = () => modes.mode !== 'edit' || !hasErrors();
+actions.register('toggle-play', {
+  run: () => startPlayback(() => player.toggle()),
+  isEnabled: () => player.canPlay() && (player.playing || canStartFromEdit()),
+  reason: () => (modes.mode === 'edit' && hasErrors() && !busy() ? FIX_ERRORS : null),
+});
 actions.register('play', {
   run: () => startPlayback(() => player.play()),
-  isEnabled: () => player.canPlay() && !player.playing,
-  reason: () => (player.playing ? 'already playing' : null),
+  isEnabled: () => player.canPlay() && !player.playing && canStartFromEdit(),
+  reason: () => {
+    if (busy()) return null;
+    if (player.playing) return 'already playing';
+    return modes.mode === 'edit' && hasErrors() ? FIX_ERRORS : null;
+  },
 });
 actions.register('pause', {
   run: () => player.pause(),
   isEnabled: () => player.playing,
-  reason: transportReason(() => player.playing, () => 'not playing'),
+  reason: transportReason(() => player.playing, () => (modes.mode === 'simulate' ? 'already paused' : 'not playing')),
 });
+const atCycleLimit = () => modes.clip !== null && model.prop(modes.clip, 'loop') === true;
 actions.register('next-frame', {
   run: () => player.nextFrame(),
   isEnabled: () => player.canNextFrame(),
-  reason: transportReason(() => player.canNextFrame(), () => (modes.clip === null ? 'open a clip' : 'at the end of the clip')),
+  reason: transportReason(() => player.canNextFrame(), () => (atCycleLimit() ? 'cycle limit reached' : 'at the end of the clip')),
   repeatable: true,
 });
 actions.register('stop', {
   run: () => player.stop(),
   isEnabled: () => player.canStop(),
   reason: transportReason(() => player.canStop(), () => 'not playing'),
+});
+actions.register('simulate', {
+  run: () => {
+    if (modes.mode !== 'simulate') startPlayback(() => player.simulate());
+  },
+  isEnabled: () => !busy() && (modes.mode === 'simulate' || (modes.can('play') && !hasErrors())),
+  reason: () => (busy() ? null : FIX_ERRORS),
 });
 const timeline = createTimeline(dock.panelElement('timeline'), editor, player);
 attachFileDrop(document.getElementById('panel-viewport'), (read) => editor.loadFrom(read), () => actions.isEnabled('load'));
@@ -131,7 +164,7 @@ blockFileNavigation(document);
 const viewportHost = document.getElementById('viewport-host');
 const toolbar = createToolbar(document.getElementById('panel-viewport'), {
   host: viewportHost,
-  onActivate: (id) => actions.run('tool:' + id),
+  onActivate: (id) => actions.run('tool:' + id, { label: TOOL_SPECS.find((tool) => tool.id === id)?.label ?? id }),
 });
 const versionLabel = document.createElement('div');
 versionLabel.className = 'version-label';
@@ -195,12 +228,84 @@ for (const id of Object.keys(PANELS)) {
 }
 actions.register('reset-layout', { run: () => dock.reset() });
 
+const RIG_ITEMS = Object.freeze([
+  [
+    ['rename', 'Rename', 'F2'],
+    ['duplicate', 'Duplicate', 'Ctrl+D'],
+    ['delete', 'Delete', 'Del'],
+  ],
+  [
+    ['group', 'Group', 'Ctrl+G'],
+    ['ungroup', 'Ungroup', 'Ctrl+Shift+G'],
+    ['split', 'Split', 'Alt+G'],
+  ],
+  [['set-root-body', 'Set as root body', 'Shift+R']],
+  [['sprite-edit', 'Sprite edit', 'S', 'checkbox']],
+]);
+const VIEW_ITEMS = Object.freeze([
+  [
+    ['frame-selection', 'Frame selection', 'F'],
+    ['frame-all', 'Frame all', 'Home'],
+  ],
+]);
+
+function actionItems(groups) {
+  return groups.flatMap((group, index) => [
+    ...(index > 0 ? [{ id: `separator-${index}`, label: '', kind: 'separator' }] : []),
+    ...group.map(([id, label, shortcut, kind = 'item']) => ({
+      id,
+      label,
+      shortcut,
+      kind,
+      checked: false,
+      disabled: !actions.isEnabled(id),
+      reason: actions.reason(id),
+    })),
+  ]);
+}
+
+const actionMenus = new Map();
+
+function toggleActionMenu(id, groups, align, focus = 'first') {
+  const button = header.querySelector(`[data-action="${id}"]`);
+  if (button.getAttribute('aria-expanded') === 'true') {
+    actionMenus.get(id)?.close();
+    return;
+  }
+  actionMenus.set(
+    id,
+    openMenu(button, actionItems(groups), {
+      focus,
+      align,
+      onSelect: (item) => actions.run(item.id, { label: item.label }),
+      onRefuse: (item) => actions.run(item.id, { label: item.label }),
+      onNavigate: (key) => focusAdjacentAction(header, button, key),
+    }),
+  );
+}
+
+actions.register('rig', { run: () => toggleActionMenu('rig', RIG_ITEMS, 'left') });
+actions.register('view', { run: () => toggleActionMenu('view', VIEW_ITEMS, 'right') });
+for (const [id, groups, align] of [['rig', RIG_ITEMS, 'left'], ['view', VIEW_ITEMS, 'right']]) {
+  header.querySelector(`[data-action="${id}"]`).addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    if (header.querySelector(`[data-action="${id}"]`).getAttribute('aria-expanded') !== 'true') {
+      toggleActionMenu(id, groups, align, event.key === 'ArrowUp' ? 'last' : 'first');
+    }
+  });
+}
+
 const headerButtons = [...header.querySelectorAll('button[data-action]')];
+
+const SEGMENT_MODES = Object.freeze({ 'mode:edit': 'edit', 'mode:animate': 'animate', simulate: 'simulate' });
 
 function refreshHeader() {
   for (const button of headerButtons) {
     const id = button.dataset.action;
-    setActionEnabled(button, actions.isEnabled(id), actions.reason(id));
+    const mode = SEGMENT_MODES[id];
+    setActionEnabled(button, actions.isEnabled(id), actions.reason(id), mode ? editor.modeTitle(mode) : null);
+    if (mode) setSegmentPressed(button, modes.mode === mode);
   }
 }
 
@@ -224,7 +329,8 @@ selection.on('selection', refreshHeader);
 model.on('reset', refreshDocumentViews);
 
 header.addEventListener('header-action', (event) => {
-  actions.run(event.detail.action);
+  const { action, label } = event.detail;
+  actions.run(action, { label });
 });
 
 windowButton.addEventListener('keydown', (event) => {
