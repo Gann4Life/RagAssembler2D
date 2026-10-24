@@ -42,25 +42,11 @@ export function poseTestJson(json) {
   return copy;
 }
 
-function holdOf(body, grabbed) {
-  if (body === undefined) return null;
-  const center = body.GetWorldCenter();
-  const local = body.GetLocalCenter();
-  return {
-    body,
-    free: body === grabbed,
-    angle: body.GetAngle(),
-    center: { x: center.get_x(), y: center.get_y() },
-    local: { x: local.get_x(), y: local.get_y() },
-  };
-}
 
 /**
  * Starts a pose test: a zero-gravity LiquidFun world holding the ragdoll at `options.root` in rest pose, or with the
  * bodies of `options.start` placed at those root-local transforms, every body damped, motors off, and a mouse joint
- * pulling `options.bodyId` from `options.point`. With `options.holdRoot`, after every step `rootBody` is put back
- * at its press center of mass with zero linear velocity and, unless it is the grabbed body, at its press angle with zero
- * angular velocity. Owns every native
+ * pulling `options.bodyId` from `options.point`. Every body, `rootBody` included, moves freely. Owns every native
  * object it creates until `destroy`.
  * @param {*} Box2D The liquidfun.js namespace.
  * @param {object} json A `.rag.json` document.
@@ -70,7 +56,7 @@ function holdOf(body, grabbed) {
  *   native is created.
  * @throws {Error} When the body id is unknown or a native call fails; everything built is released first.
  */
-export function createPoseSession(Box2D, json, { root, bodyId, point, start = null, holdRoot = false }) {
+export function createPoseSession(Box2D, json, { root, bodyId, point, start = null }) {
   const def = RagImporter.parse(poseTestJson(json));
   const gravity = new Box2D.b2Vec2(0, 0);
   const world = new Box2D.b2World(gravity);
@@ -79,7 +65,6 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
   let rag = null;
   let ground = null;
   let mouse = null;
-  let held = null;
 
   const release = () => {
     if (mouse !== null) world.DestroyJoint(mouse);
@@ -127,25 +112,13 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
     } finally {
       Box2D.destroy(jointDef);
     }
-    held = holdRoot ? holdOf(rag.bodies.get(json?.ragdoll?.rootBody), grabbed) : null;
+
     grabbed.SetAwake(true);
   } catch (error) {
     release();
     throw error;
   }
 
-  const restoreRoot = () => {
-    const angle = held.free ? held.body.GetAngle() : held.angle;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    scratch.set_x(held.center.x - (held.local.x * cos - held.local.y * sin));
-    scratch.set_y(held.center.y - (held.local.x * sin + held.local.y * cos));
-    held.body.SetTransform(scratch, angle);
-    scratch.set_x(0);
-    scratch.set_y(0);
-    held.body.SetLinearVelocity(scratch);
-    if (!held.free) held.body.SetAngularVelocity(0);
-  };
 
   const toRoot = invertTransform(root);
   const target = { x: point.x, y: point.y };
@@ -173,7 +146,6 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
       const steps = Math.min(whole, POSE.maxSteps);
       for (let i = 0; i < steps; i++) {
         world.Step(POSE.step, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
-        if (held !== null) restoreRoot();
       }
     },
     pose() {

@@ -71,9 +71,6 @@
  * @property {import('../../lib/geometry.js').Vec2} point Grabbed point, world meters.
  * @property {Map<string, import('../../lib/geometry.js').Transform>|null} [start] Root-local transforms by body id
  *   the test starts from at rest, e.g. the displayed pose in Animate mode; the rest pose when omitted or `null`.
- * @property {boolean} [holdRoot] Keeps `rootBody` where it was at the press: after every step its center of mass returns to
- *   its press position with zero linear velocity and, unless it is the grabbed body, its angle returns to the press
- *   angle with zero angular velocity. Defaults to `false`.
  */
 
 /**

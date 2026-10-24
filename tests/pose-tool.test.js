@@ -242,9 +242,9 @@ test('Animate: the press starts from exactly the displayed bodies', () => {
   const env = animateEnvironment();
   env.view.displayed = new Map(env.bodies.map((uid, index) => [uid, { x: index, y: 0.25, angle: 0.7 + index }]));
   send(env.tools, 'down', 260, 190);
-  const { start, holdRoot } = env.physics.starts[0].options;
+  const { start } = env.physics.starts[0].options;
   assert.deepEqual(start, new Map(env.ids.map((id, index) => [id, { x: index, y: 0.25, angle: 0.7 + index }])));
-  assert.equal(holdRoot, true);
+  assert.equal('holdRoot' in env.physics.starts[0].options, false);
   env.actions.run('escape');
   assert.equal(env.view.poses.at(-1), null);
   assert.deepEqual(env.playback.holds, []);
@@ -538,7 +538,7 @@ test('a press the physics service refuses shows not-allowed until the release', 
   assert.equal(cancelled.tools.cancel(), false);
 });
 
-test('Animate: the session holds rootBody and release keys the root bodyAngle with the joint angles', () => {
+test('Animate: release keys the root bodyAngle with the joint angles', () => {
   const env = animateEnvironment({ turn: 0 });
   env.history.execute(setProps([ROOT_UID], { rootBody: env.ids[0] }));
   const original = env.physics.startPose.bind(env.physics);
@@ -553,7 +553,6 @@ test('Animate: the session holds rootBody and release keys the root bodyAngle wi
     return session;
   };
   drag(env);
-  assert.equal(env.physics.starts[0].options.holdRoot, true);
   const root = angleKeys(env).find((track) => track.channel === 'bodyAngle');
   assert.equal(root.target, 'root');
   assert.equal(root.keys.length, 1);
@@ -563,8 +562,8 @@ test('Animate: the session holds rootBody and release keys the root bodyAngle wi
   assert.equal(env.snapshot().json, env.before.json);
 });
 
-test('Edit: the session does not hold rootBody', () => {
+test('Edit: the session gets no root pin option', () => {
   const env = createEnvAndPress();
-  assert.notEqual(env.physics.starts[0].options.holdRoot, true);
+  assert.equal('holdRoot' in env.physics.starts[0].options, false);
   send(env.tools, 'up', 260, 190);
 });

@@ -66,7 +66,7 @@ function jointKeys(model, def, resolved, pressed, result) {
  * Builds the Pose tool: a left press on a shape starts a physics test through `ctx.physics`, pulling the shape's
  * body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`. In Edit mode the
  * test starts from the rest pose and the result is discarded on release. In Animate mode it starts from exactly the
- * displayed bodies (`ctx.displayedPose`, the FK pose when nothing is shown) with `rootBody` held; a press while
+ * displayed bodies (`ctx.displayedPose`, the FK pose when nothing is shown), `rootBody` free like every body; a press while
  * playing pauses first (`ctx.playback.pause`, the playhead at the displayed step) and grabs in the same press. On a
  * release after a drag, with autokey on, every joint whose measured angle changed by more than 0.1° since the press gets
  * a key there worth its evaluated `angle` at the playhead plus that change, and the root `bodyAngle` likewise, in one
@@ -160,7 +160,6 @@ export function poseTool() {
       bodyId: body.props.id,
       point: { x: e.world.x, y: e.world.y },
       start: keying === null ? null : byId(ctx.model, keying.from),
-      holdRoot: keying !== null,
     });
   }
 

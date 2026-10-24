@@ -369,39 +369,33 @@ test('no heap growth over 500 start, drag, advance, destroy cycles', () => {
   assert.equal(heapProbe(), before);
 });
 
-test('holdRoot keeps rootBody center and angle while a limb is dragged and lets a grabbed rootBody only turn', () => {
+test('rootBody moves freely: a dragged limb pulls it along and a grabbed rootBody follows the pointer', () => {
   const json = ragFile();
   const rootId = json.ragdoll.rootBody;
-  const press = restWorld(json, 'b_head');
   const rootCenter = (pose) => {
     const body = json.bodies.find((item) => item.id === rootId);
-    const center = bodyMassData(body.fixtures).center;
-    return transformPoint(pose.get(rootId), center);
+    return transformPoint(pose.get(rootId), bodyMassData(body.fixtures).center);
   };
-  const limb = create(Box2D, json, { root: ROOT, bodyId: 'b_head', point: press, holdRoot: true });
+  const press = restWorld(json, 'b_head');
+  const limb = create(Box2D, json, { root: ROOT, bodyId: 'b_head', point: press, start: new Map() });
   try {
-    const before = limb.pose();
-    limb.drag({ x: press.x + 1, y: press.y - 0.5 });
-    run(limb, 1);
-    const after = limb.pose();
-    near(rootCenter(after).x, rootCenter(before).x, 'center x');
-    near(rootCenter(after).y, rootCenter(before).y, 'center y');
-    near(after.get(rootId).angle, before.get(rootId).angle, 'angle');
-    assert.ok(Math.hypot(after.get('b_head').x - before.get('b_head').x, after.get('b_head').y - before.get('b_head').y) > 0.05);
+    const before = rootCenter(limb.pose());
+    limb.drag({ x: press.x + 3, y: press.y - 2 });
+    run(limb, 2);
+    const after = rootCenter(limb.pose());
+    assert.ok(Math.hypot(after.x - before.x, after.y - before.y) > 0.2, 'rootBody pulled along');
   } finally {
     limb.destroy();
   }
   const grab = restWorld(json, rootId);
-  const turned = create(Box2D, json, { root: ROOT, bodyId: rootId, point: grab, holdRoot: true });
+  const moved = create(Box2D, json, { root: ROOT, bodyId: rootId, point: grab, start: new Map() });
   try {
-    const before = turned.pose();
-    turned.drag({ x: grab.x + 0.3, y: grab.y + 0.3 });
-    run(turned, 1);
-    const after = turned.pose();
-    near(rootCenter(after).x, rootCenter(before).x, 'center x');
-    near(rootCenter(after).y, rootCenter(before).y, 'center y');
-    assert.ok(Math.abs(after.get(rootId).angle - before.get(rootId).angle) > 0.05, 'turned');
+    const before = rootCenter(moved.pose());
+    moved.drag({ x: grab.x + 0.5, y: grab.y + 0.5 });
+    run(moved, 2);
+    const after = rootCenter(moved.pose());
+    assert.ok(Math.hypot(after.x - before.x, after.y - before.y) > 0.3, 'rootBody translated');
   } finally {
-    turned.destroy();
+    moved.destroy();
   }
 });
