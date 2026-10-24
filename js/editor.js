@@ -297,9 +297,9 @@ export function createEditor({
     torqueNote = change;
     if (!holdTorqueMessage) say(torqueMessage(change));
   };
-  const history = new History(model, { finalize });
-  const selection = new Selection(model);
   const modes = new Modes(model);
+  const selection = new Selection(model);
+  const history = new History(model, { finalize });
   const camera = new Camera();
   const tools = new ToolRegistry(
     { model, history, selection, modes, settings, camera, physics, editorVersion, playback, autokey, status: say },

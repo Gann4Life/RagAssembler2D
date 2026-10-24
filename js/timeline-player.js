@@ -546,8 +546,8 @@ export class TimelinePlayer {
       this.#origin = null;
       this.#open = null;
       this.#cycle = 1;
-      this.#clips?.close();
       this.#available = false;
+      this.#clips?.close();
     }
     this.#emitter.emit('progress');
     this.#emitView(true);
