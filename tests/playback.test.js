@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fakeInstance } from './helpers/fake-instance.js';
+import { MOTOR, fakeInstance } from './helpers/fake-instance.js';
+
+const LOOKAHEAD = (1 + MOTOR.damping) / MOTOR.gain;
 
 function clip(key, { layer = 0, loop = true, hold = true, length = 1, speed = 1, keys } = {}) {
   return {
@@ -119,7 +121,32 @@ test('the highest active layer drives the pose', () => {
   assert.equal(rag.activeClip(0), 'walk');
   rag.stop('aim');
   rag.update(0);
-  near(targetOf(joints), 0.5);
+  near(targetOf(joints), 0.5 + LOOKAHEAD);
+});
+
+test('the motor pulls toward the clip angle (1 + D) / G − dt ahead, the time it lags by', () => {
+  const { rag, joints } = fakeInstance({ clips: [clip('walk', { length: 2 })] });
+  rag.play('walk');
+  rag.update(0.1);
+  near(targetOf(joints), 0.1 + LOOKAHEAD - 0.1);
+  rag.update(1 / 60);
+  near(targetOf(joints), 0.1 + LOOKAHEAD);
+  const { rag: once, joints: held } = fakeInstance({ clips: [clip('dead', { loop: false, length: 1 })] });
+  once.play('dead');
+  once.update(0.9);
+  once.update(1 / 60);
+  near(targetOf(held), 1);
+  const { rag: looped, joints: wrapped } = fakeInstance({ clips: [clip('walk', { length: 1 })] });
+  looped.play('walk');
+  looped.update(0.9);
+  looped.update(1 / 60);
+  near(targetOf(wrapped), 0.9 + LOOKAHEAD - 1);
+});
+
+test('without a clip or with no gain the motor pulls toward the resolved angle', () => {
+  const { rag, joints } = fakeInstance({ angle: 0.2 });
+  rag.update(1 / 60);
+  near(targetOf(joints), 0);
 });
 
 test('flipX negates the angle channel', () => {

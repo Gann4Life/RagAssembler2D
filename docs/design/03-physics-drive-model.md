@@ -4,10 +4,12 @@ LiquidFun (Box2D 2.3) has no spring on revolute joints. RagImporter emulates one
 
 ```
 target   = resolved angle (rad, relative to rest): clip layers, then procedural overrides (§4.4)
-error    = target − jointAngle
 S        = jointStrength × rootStrength × runtimeStrength
 G        = jointGain     × rootGain     × runtimeGain    × motor.gain
 D        = jointDamping  × rootDamping  × runtimeDamping × motor.damping
+lead     = G > 0 and a clip plays ? max(0, (1 + D) / G − dt) : 0      seconds
+ahead    = target resolved at clip time t + lead × clip speed × play speed
+error    = ahead − jointAngle
 
 motorSpeed     = clamp(G · error − D · jointSpeed, −motor.maxSpeed, motor.maxSpeed)
 maxMotorTorque = S · motor.maxTorque
@@ -18,6 +20,7 @@ enableMotor    = S > 0
 - The channels `strength`, `gain` and `damping` (joint and root) are **multipliers in 0–1, default 1**.
 - `S = 0` → the joint is fully limp, but **limits are still enforced**.
 - `jointAngle` and `jointSpeed` are `GetJointAngle()` and `GetJointSpeed()` of the `b2RevoluteJoint` (rad, rad/s, relative to the reference angle, so 0 at rest). The outputs go to `SetMotorSpeed`, `SetMaxMotorTorque` and `EnableMotor`. These methods exist only on the `b2RevoluteJoint` wrapper ([§7.2](07-ragimporter.md#72-spawn-and-flipx)). This loop allocates nothing on the Emscripten heap ([§7.4](07-ragimporter.md#74-native-memory)).
+- **Look-ahead.** Alone, this PD over a velocity motor follows its target like a first-order lag of time constant (1 + D) / G (0.15 s at the defaults), so a joint reached each key about that late. The motor therefore pulls toward the target `lead` seconds ahead in the clip (wrapping like the clip; a non-looping clip holds its last value): on a steady ramp the joint is on the target at every frame, and, since a first-order lag of the shifted target only averages target values, the joint never passes a keyed extreme by itself (no overshoot from the controller; momentum the motor torque cannot stop, contacts and joint limits still can). At a key where the motion changes speed the joint is short by about 0.37 · (1 + D) / G times the change of speed. `− dt` accounts for the target being resolved at the end of the step. Without a clip, with `G = 0` or when `dt` exceeds the lag, `ahead = target`. Measured with the editor's clip simulation at the defaults: key error on a keyed pole 14.8° → 6.3°, the demo sample 33° → 23°, a humanoid clip RMS 16.7° → 14.6°.
 - This model is the same in the editor and at runtime. The editor's Simulate mode uses RagImporter itself, so **preview equals production**.
 
 ## 3.1 Suggested motor torque
@@ -57,7 +60,7 @@ R        = rootBody and every body connected to it with mass > 0 (§6.4 edge rul
 C, V     = mass-weighted world center and velocity of R;  r_b = c_b − C for each body b of R
 I        = Σ (I_b + m_b · |r_b|²)                          current inertia of R about C
 ω        = Σ (I_b · ω_b + m_b · r_b × (v_b − V)) / I        angular velocity of R as one piece
-target   = resolved root bodyAngle (rad, relative to rest; negated with flipX)
+target   = root bodyAngle resolved `lead` ahead as in §3, with this G and D (rad, relative to rest; negated with flipX)
 θ*       = θ₀ + target                     θ₀ = rootBody's world angle right after spawn
 error    = wrapToPi(θ* − rootBody.GetAngle())
 S        = rootStrength × runtimeStrength
