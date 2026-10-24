@@ -13,7 +13,7 @@ export const SIMULATE_WORLD = Object.freeze({
   friction: 0.8,
 });
 
-const VELOCITY_ITERATIONS = 8;
+const VELOCITY_ITERATIONS = 16;
 const POSITION_ITERATIONS = 3;
 
 function rootTransform(json) {

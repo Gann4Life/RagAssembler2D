@@ -6,7 +6,7 @@ import { composeTransforms, shapeBounds } from '../lib/geometry.js';
 import { SIMULATE_WORLD, createSimulateSession } from '../js/physics/simulate-session.js';
 import { SIMULATE_STEP } from '../js/timeline-player.js';
 import { ragFile } from './helpers/rag-file.js';
-import { addHoldClip, humanoidRig } from './helpers/rigs.js';
+import { addHoldClip, fitTorque, humanoidRig } from './helpers/rigs.js';
 
 const require = createRequire(import.meta.url);
 const Box2D = require('../vendor/liquidfun.js');
@@ -130,6 +130,26 @@ test('a posed spawn stands on the rest pose ground: its lowest point is moved to
       posed.destroy();
     }
     assert.equal(heapProbe(), before);
+  }
+});
+
+test('a humanoid holding a pose on one foot stands still instead of hopping', () => {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const { json, pose } = humanoidRig();
+  fitTorque(json);
+  addHoldClip(json, pose, 1);
+  const session = createSimulateSession(Box2D, json, { clip: 'hold' });
+  try {
+    run(session, 4);
+    const heights = [];
+    for (let i = 0; i < 120; i++) {
+      session.step(SIMULATE_STEP);
+      heights.push(session.pose().get('b_pelvis').y);
+    }
+    const range = Math.max(...heights) - Math.min(...heights);
+    assert.ok(range < 0.003, `pelvis height range ${range} m`);
+  } finally {
+    session.destroy();
   }
 });
 

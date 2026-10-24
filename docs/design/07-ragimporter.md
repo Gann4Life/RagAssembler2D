@@ -40,7 +40,7 @@ app.stage.on('pointermove', ev => rag.lookAt('neck', rag.toWorld(ev.global), { w
 // game loop, fixed step recommended
 app.ticker.add(() => {
   rag.update(dt);           // animation + procedural → motors
-  world.Step(dt, 8, 3);
+  world.Step(dt, 16, 3);
   rag.sync();               // physics → PIXI sprites
 });
 ```
