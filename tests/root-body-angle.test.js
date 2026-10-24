@@ -67,32 +67,18 @@ function balanceScene() {
   return { editor, joint, shapes, suggestion: () => balanceTorqueSuggestion(toJson(model, 'dev')) };
 }
 
-test('fit-motor-torque also sets the balance torque when no joint or the root is selected, in one undo step', () => {
-  const { editor, joint, shapes, suggestion } = balanceScene();
+test('the balance torque follows rig changes and rootBody in the same undo step', () => {
+  const { editor, shapes, suggestion } = balanceScene();
   const { model, history, selection, actions } = editor;
-  const original = model.prop(ROOT_UID, 'balance.maxTorque');
-  assert.notEqual(original, suggestion());
-  selection.set([joint]);
-  actions.run('fit-motor-torque');
-  assert.equal(model.prop(ROOT_UID, 'balance.maxTorque'), original);
-  history.undo();
-  selection.set([shapes[0]]);
-  actions.run('fit-motor-torque');
   assert.equal(model.prop(ROOT_UID, 'balance.maxTorque'), suggestion());
-  assert.equal(history.state.undoLabel, 'Fit motor torque');
-  history.undo();
-  assert.equal(model.prop(ROOT_UID, 'balance.maxTorque'), original);
-  selection.set([ROOT_UID, joint]);
-  actions.run('fit-motor-torque');
+  const before = model.prop(ROOT_UID, 'balance.maxTorque');
+  selection.set([shapes[1]]);
+  actions.run('set-root-body');
   assert.equal(model.prop(ROOT_UID, 'balance.maxTorque'), suggestion());
+  assert.equal(history.state.undoLabel, 'Set as root body');
   history.undo();
-  assert.equal(model.prop(ROOT_UID, 'balance.maxTorque'), original);
-  actions.run('fit-motor-torque');
-  const fitted = history.state.undoLabel;
-  actions.run('fit-motor-torque');
-  assert.equal(history.state.undoLabel, fitted);
+  assert.equal(model.prop(ROOT_UID, 'balance.maxTorque'), before);
 });
-
 test('loading a version 1 file migrates it and saving writes version 2', () => {
   const doc = ragFile();
   doc.version = 1;
@@ -100,7 +86,8 @@ test('loading a version 1 file migrates it and saving writes version 2', () => {
   const editor = createEditor();
   const result = loadJson(editor.model, JSON.stringify(doc));
   assert.equal(result.ok, true);
-  assert.deepEqual(result.notes, ['Migrated from format version 1 to 2']);
+  assert.equal(result.notes[0], 'Migrated from format version 1 to 2');
+  assert.match(result.notes.at(-1), /^Motor torque set to the suggestion: /);
   assert.equal(typeof editor.model.prop(ROOT_UID, 'balance.maxTorque'), 'number');
   const saved = saveJson(editor.model, 'dev');
   assert.equal(saved.ok, true);

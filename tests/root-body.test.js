@@ -272,7 +272,7 @@ test('set-root-body needs Edit mode, no gesture and exactly one non-root body in
   history.cancelGesture();
   modes.openClip(clipUid(model, 'walk'));
   assert.equal(actions.isEnabled('set-root-body'), false);
-  assert.equal(actions.reason('set-root-body'), 'not available in Animate mode');
+  assert.equal(actions.reason('set-root-body'), 'only in Edit mode');
   const event = { key: 'R', shiftKey: true, target: { tagName: 'BODY' }, preventDefault() {} };
   dispatchKey(event, { actions });
   assert.equal(model.prop(ROOT_UID, 'rootBody'), 'torso');

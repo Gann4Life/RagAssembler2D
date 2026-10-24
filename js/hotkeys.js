@@ -6,6 +6,7 @@ import { TOOL_SPECS } from './tools/tool.js';
  * @typedef {object} Hotkey
  * @property {string} keys Key combination, e.g. `Ctrl+Shift+Z`.
  * @property {import('./actions.js').ActionId} action Action run by the combination.
+ * @property {string} label Label of the action's visible control, used when the action refuses to run.
  */
 
 /**
@@ -15,28 +16,27 @@ import { TOOL_SPECS } from './tools/tool.js';
  */
 export const HOTKEYS = Object.freeze(
   [
-    ...TOOL_SPECS.map((tool) => ({ keys: tool.hotkey, action: `tool:${tool.id}` })),
-    { keys: 'S', action: 'sprite-edit' },
-    { keys: 'Del', action: 'delete' },
-    { keys: 'Ctrl+Z', action: 'undo' },
-    { keys: 'Ctrl+Shift+Z', action: 'redo' },
-    { keys: 'Ctrl+Y', action: 'redo' },
-    { keys: 'Ctrl+S', action: 'save' },
-    { keys: 'Ctrl+O', action: 'load' },
-    { keys: 'Ctrl+G', action: 'group' },
-    { keys: 'Ctrl+Shift+G', action: 'ungroup' },
-    { keys: 'Alt+G', action: 'split' },
-    { keys: 'Ctrl+D', action: 'duplicate' },
-    { keys: 'Space', action: 'toggle-play' },
-    { keys: '.', action: 'next-frame' },
-    { keys: 'K', action: 'key-selected' },
-    { keys: 'F', action: 'frame-selection' },
-    { keys: 'Home', action: 'frame-all' },
-    { keys: 'Esc', action: 'escape' },
-    { keys: 'Z', action: 'pivot-mode' },
-    { keys: 'F2', action: 'rename' },
-    { keys: 'Shift+M', action: 'fit-motor-torque' },
-    { keys: 'Shift+R', action: 'set-root-body' },
+    ...TOOL_SPECS.map((tool) => ({ keys: tool.hotkey, action: `tool:${tool.id}`, label: tool.label })),
+    { keys: 'S', action: 'sprite-edit', label: 'Sprite edit' },
+    { keys: 'Del', action: 'delete', label: 'Delete' },
+    { keys: 'Ctrl+Z', action: 'undo', label: 'Undo' },
+    { keys: 'Ctrl+Shift+Z', action: 'redo', label: 'Redo' },
+    { keys: 'Ctrl+Y', action: 'redo', label: 'Redo' },
+    { keys: 'Ctrl+S', action: 'save', label: 'Save' },
+    { keys: 'Ctrl+O', action: 'load', label: 'Load' },
+    { keys: 'Ctrl+G', action: 'group', label: 'Group' },
+    { keys: 'Ctrl+Shift+G', action: 'ungroup', label: 'Ungroup' },
+    { keys: 'Alt+G', action: 'split', label: 'Split' },
+    { keys: 'Ctrl+D', action: 'duplicate', label: 'Duplicate' },
+    { keys: 'F2', action: 'rename', label: 'Rename' },
+    { keys: 'Shift+R', action: 'set-root-body', label: 'Set as root body' },
+    { keys: 'Space', action: 'toggle-play', label: 'Play' },
+    { keys: '.', action: 'next-frame', label: 'Next frame' },
+    { keys: 'K', action: 'key-selected', label: 'Key selected' },
+    { keys: 'F', action: 'frame-selection', label: 'Frame selection' },
+    { keys: 'Home', action: 'frame-all', label: 'Frame all' },
+    { keys: 'Z', action: 'pivot-mode', label: 'Pivot' },
+    { keys: 'Esc', action: 'escape', label: 'Esc' },
   ].map((row) => Object.freeze(row)),
 );
 
@@ -55,7 +55,7 @@ function parseKeys(keys) {
   };
 }
 
-const BINDINGS = HOTKEYS.map((row) => ({ ...parseKeys(row.keys), action: row.action }));
+const BINDINGS = HOTKEYS.map((row) => ({ ...parseKeys(row.keys), action: row.action, label: row.label }));
 
 function eventKey(event) {
   const key = String(event.key ?? '');
@@ -91,23 +91,24 @@ function keyMatches(row, key, code) {
  * @returns {import('./actions.js').ActionId|null} Bound action, or `null`.
  */
 export function matchHotkey(event) {
+  return bindingOf(event)?.action ?? null;
+}
+
+function bindingOf(event) {
   const key = eventKey(event);
   const code = String(event.code ?? '');
   const ctrl = Boolean(event.ctrlKey || event.metaKey);
   const shift = Boolean(event.shiftKey);
   const alt = Boolean(event.altKey);
-  const binding = BINDINGS.find(
-    (row) => keyMatches(row, key, code) && row.ctrl === ctrl && row.shift === shift && row.alt === alt,
-  );
-  return binding?.action ?? null;
+  return BINDINGS.find((row) => keyMatches(row, key, code) && row.ctrl === ctrl && row.shift === shift && row.alt === alt) ?? null;
 }
 
 /**
  * Routes a `keydown` event: ignored when already handled or typed into a text field; offered to the active
  * tool while the viewport has focus (the registry never offers Escape, so it reaches the `escape` action);
- * otherwise matched against {@link HOTKEYS}. A match calls `preventDefault` and runs the action, except on
- * key repeat for actions that are not repeatable. Space matches only when the viewport has focus or the
- * target is the page body. Reads only the event and its target.
+ * otherwise matched against {@link HOTKEYS}. A match calls `preventDefault` and runs the action with the row's label,
+ * so a refused action reports its reason, except on key repeat for actions that are not repeatable. Space matches only
+ * when the viewport has focus or the target is the page body. Reads only the event and its target.
  * @param {KeyboardEvent} event Keyboard event.
  * @param {{ actions: import('./actions.js').ActionRegistry,
  *   tools: Pick<import('./tools/registry.js').ToolRegistry, 'key'>|null, viewportFocused: boolean }} context
@@ -117,10 +118,10 @@ export function matchHotkey(event) {
 export function dispatchKey(event, { actions, tools = null, viewportFocused = false }) {
   if (event.defaultPrevented || isTextField(event.target)) return false;
   if (viewportFocused && tools && tools.key(event)) return true;
-  const action = matchHotkey(event);
-  if (action === null) return false;
+  const binding = bindingOf(event);
+  if (binding === null) return false;
   if (event.key === SPACE && !viewportFocused && !isPageBody(event.target)) return false;
   event.preventDefault();
-  if (!event.repeat || actions.isRepeatable(action)) actions.run(action);
+  if (!event.repeat || actions.isRepeatable(binding.action)) actions.run(binding.action, { label: binding.label });
   return true;
 }

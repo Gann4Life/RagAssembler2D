@@ -41,6 +41,7 @@ const POLICY_ROW_OF = {
   history: 'New, Load, Save; Undo, Redo',
   play: 'Play',
   'simulate.control': 'Pause, Next frame, Stop',
+  'mode.switch': 'Mode switch',
   'settings.editor': 'Editor settings',
   layout: 'Editor settings',
   camera: 'Editor settings',

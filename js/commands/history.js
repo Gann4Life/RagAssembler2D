@@ -110,18 +110,26 @@ export class History {
   #busy = false;
   #applied = false;
   #generation = 0;
+  #finalize = null;
   #last;
 
   /**
    * Creates an empty history for a model and subscribes to its `change` and `reset` events.
    * @param {import('../model/model.js').Model} model Document model.
-   * @param {{ limit?: number }} [options] `limit`: maximum number of undo steps (positive integer).
+   * @param {{ limit?: number, finalize?: ((tx: Transaction, ops: ReadonlyArray<object>) => void)|null }} [options]
+   *   `limit`: maximum number of undo steps (positive integer). `finalize`: runs at the end of every new undo step,
+   *   with the step's applied operations, and writes through `tx` into the same step: after a command executed
+   *   outside a gesture (in its batch), and when a gesture with changes ends (in a batch of its own). Never on undo,
+   *   redo, cancelled gestures or commands inside a gesture.
    * @throws {RangeError} When `limit` is not a positive integer.
+   * @throws {TypeError} When `finalize` is given and is not a function.
    */
-  constructor(model, { limit = HISTORY_LIMIT } = {}) {
+  constructor(model, { limit = HISTORY_LIMIT, finalize = null } = {}) {
     if (!Number.isInteger(limit) || limit < 1) throw new RangeError(`History limit must be a positive integer, got ${limit}`);
+    if (finalize !== null && typeof finalize !== 'function') throw new TypeError('finalize must be a function');
     this.#model = model;
     this.#limit = limit;
+    this.#finalize = finalize;
     model.on('change', () => {
       this.#applied = true;
     });
@@ -193,6 +201,7 @@ export class History {
       try {
         this.#model.batch(() => {
           result = command.run(tx.api);
+          if (this.#finalize !== null && this.#gesture === null && kept.length > 0) this.#finalize(tx.api, [...kept]);
           returned = true;
         });
       } catch (error) {
@@ -287,17 +296,19 @@ export class History {
     if (!this.#gesture) return false;
     this.#enter();
     let recorded = false;
+    let failure = null;
     try {
       const pending = this.#gesture;
       this.#gesture = null;
       if (!isNetNoop(pending.ops)) {
+        failure = this.#finalizeGesture(pending.ops);
         this.#push(pending);
         recorded = true;
       }
     } finally {
       this.#busy = false;
     }
-    this.#publish(null);
+    this.#publish(failure);
     return recorded;
   }
 
@@ -328,6 +339,19 @@ export class History {
   markSaved() {
     this.#enter();
     this.#saved = this.#currentToken();
+    this.#busy = false;
+    this.#publish(null);
+  }
+
+  /**
+   * Marks the current state as unsaved, so `dirty` is `true` until a later `markSaved` or reset. Used when loading
+   * changed the document after reading it.
+   * @returns {void}
+   * @throws {Error} When another history call is in progress.
+   */
+  markUnsaved() {
+    this.#enter();
+    this.#saved = null;
     this.#busy = false;
     this.#publish(null);
   }
@@ -399,6 +423,27 @@ export class History {
       if (!this.#applied) throw error;
       return { error };
     }
+  }
+
+  #finalizeGesture(ops) {
+    if (this.#finalize === null) return null;
+    const added = [];
+    const tx = this.#transaction(added);
+    let returned = false;
+    let failure = null;
+    try {
+      this.#model.batch(() => {
+        this.#finalize(tx.api, [...ops]);
+        returned = true;
+      });
+    } catch (error) {
+      failure = { error };
+      if (!returned) added.length = 0;
+    } finally {
+      tx.close();
+    }
+    for (const op of added) this.#mergeInto(ops, op);
+    return failure;
   }
 
   #cancelOpenGesture() {

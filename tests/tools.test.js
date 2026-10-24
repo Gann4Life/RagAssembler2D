@@ -249,35 +249,43 @@ test('activate follows the mode policy and emits tool', () => {
   assert.deepEqual(events, [{ id: 'box', previous: 'select' }]);
   assert.deepEqual(log, ['select:activate', 'select:cancel', 'select:deactivate', 'box:activate']);
   services.modes.openClip(addClip(services.history));
-  assert.equal(registry.active.id, 'select');
+  assert.equal(registry.active.id, 'box');
+  assert.equal(registry.usable, false);
   assert.equal(registry.canActivate('box'), false);
   assert.equal(registry.activate('box'), false);
   assert.equal(registry.canActivate('pose'), true);
   assert.equal(registry.activate('pose'), true);
-  assert.deepEqual(events.slice(1), [{ id: 'select', previous: 'box' }, { id: 'pose', previous: 'select' }]);
+  assert.equal(registry.usable, true);
+  assert.deepEqual(events.slice(1), [{ id: 'pose', previous: 'box' }]);
 });
 
-test('a mode change without Select falls back to no tool', () => {
-  const services = core();
-  const registry = new ToolRegistry(services, [dragTool('box').tool, dragTool('pose').tool]);
+test('a mode change never changes the active tool; an unusable tool gets no input and a press reports the reason', () => {
+  const messages = [];
+  const services = { ...core(), status: (text) => messages.push(text) };
+  const log = [];
+  const box = dragTool('box', log);
+  const registry = new ToolRegistry(services, [box.tool, dragTool('pose').tool]);
   const events = [];
   registry.on('tool', (event) => events.push(event));
-  registry.activate('pose');
-  services.modes.openClip(addClip(services.history));
-  assert.equal(registry.active.id, 'pose');
   registry.activate('box');
-  assert.equal(registry.active.id, 'pose');
+  log.length = 0;
+  services.modes.openClip(addClip(services.history));
+  assert.equal(registry.active.id, 'box');
+  assert.equal(registry.usable, false);
+  registry.pointer({ type: 'down', button: 0, buttons: 1, screen: { x: 1, y: 1 }, shift: false, ctrl: false, alt: false, clicks: 1 });
+  registry.pointer({ type: 'move', button: -1, buttons: 1, screen: { x: 9, y: 9 }, shift: false, ctrl: false, alt: false, clicks: 0 });
+  registry.pointer({ type: 'up', button: 0, buttons: 0, screen: { x: 9, y: 9 }, shift: false, ctrl: false, alt: false, clicks: 1 });
+  assert.equal(registry.key({ key: 'x' }), false);
+  registry.tick(1 / 60);
+  assert.equal(registry.handleAt({ x: 1, y: 1 }), null);
+  assert.equal(registry.readout(), null);
+  assert.deepEqual(messages, ['Box: only in Edit mode']);
+  assert.deepEqual(log.filter((entry) => !entry.endsWith(':cancel')), []);
+  assert.equal(services.history.inGesture, false);
   services.modes.openClip(null);
-  registry.activate('box');
-  services.modes.openClip(addClip(services.history));
-  assert.equal(registry.active, null);
-  assert.deepEqual(events, [
-    { id: 'pose', previous: null },
-    { id: 'box', previous: 'pose' },
-    { id: null, previous: 'box' },
-  ]);
+  assert.equal(registry.usable, true);
+  assert.deepEqual(events, [{ id: 'box', previous: null }]);
 });
-
 test('a left press, drag and release is one undo step', () => {
   const services = core();
   const { tool, log } = dragTool('select');

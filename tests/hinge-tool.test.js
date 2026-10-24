@@ -422,7 +422,7 @@ test('Undo mid-drag aborts the drag and undoes nothing else', () => {
   assert.deepEqual(overlayOf(registry), []);
 });
 
-test('a mode change mid-drag creates nothing and the tool leaves', () => {
+test('a mode change mid-drag creates nothing and the tool stays active but unusable', () => {
   const { model, registry, view, history, modes, shapes } = environment();
   const clip = addClip(history);
   view.hits = [shapes[1], shapes[0]];
@@ -431,7 +431,8 @@ test('a mode change mid-drag creates nothing and the tool leaves', () => {
   modes.openClip(clip);
   send(registry, 'up', 300, 200);
   assert.deepEqual(jointsOf(model), []);
-  assert.notEqual(registry.active?.id, 'hinge');
+  assert.equal(registry.active?.id, 'hinge');
+  assert.equal(registry.usable, false);
   assert.equal(registry.canActivate('hinge'), false);
 });
 
