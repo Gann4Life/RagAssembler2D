@@ -108,8 +108,8 @@ function cycleSteps(spec) {
  * 60 Hz step within a per-frame time budget and stored per step. A non-looping clip is spawned in the rest pose and
  * run to `length`; a looping clip is spawned in its pose at time 0 (`pose` option of the simulator) and run
  * continuously through its cycles up to the horizon: the later of cycle 2 and the cycle after the playhead's, never
- * past the cycle limit. Ghosts read a separate non-looping pass of a looping clip (spawned in the rest pose, one pass
- * from 0 to `length`); for a non-looping clip they read the main run. After a committed change the run restarts
+ * past the cycle limit. Ghosts read the same run as the main figure, in the playhead cycle, so a ghost and the main
+ * figure at the same time are the same simulation state. After a committed change the run restarts
  * `debounce` ms later; the previous run is kept until the new one reaches its horizon. Never changes the document.
  * Emits `update` (no payload) after every frame that computed something, and when runs start, fail or are dropped.
  */
@@ -121,8 +121,6 @@ export class ClipSimulation {
   #spec = null;
   #current = null;
   #previous = null;
-  #ghost = null;
-  #ghostPrevious = null;
   #failed = false;
   #restartAt = null;
   #cycle = 1;
@@ -222,17 +220,6 @@ export class ClipSimulation {
   }
 
   /**
-   * Step of a clip time in the ghost pass.
-   * @param {number} t Clip time, seconds.
-   * @returns {number} Step index.
-   */
-  ghostStepOf(t) {
-    const spec = this.#spec;
-    if (spec === null) return 0;
-    return Math.max(0, Math.round(Math.min(t, spec.length) / stepSeconds(spec)));
-  }
-
-  /**
    * Pose of the main figure at a playhead time: the current run's step once reached, else the previous run's step
    * when it reached it, else the latest step the current run reached.
    * @param {number} cycle Playhead cycle.
@@ -246,15 +233,15 @@ export class ClipSimulation {
   }
 
   /**
-   * Pose of a ghost at a clip time: the current ghost pass once it reached it, else the previous one, else none.
+   * Pose of a ghost at a playhead time: the same step as {@link ClipSimulation#pose}, from the current run once it
+   * reached it, else from the previous run, else none.
+   * @param {number} cycle Playhead cycle.
    * @param {number} t Clip time, seconds.
    * @returns {RunPose|null}
    */
-  ghostPose(t) {
+  ghostPose(cycle, t) {
     if (!this.available) return null;
-    const step = this.ghostStepOf(t);
-    const loop = this.#spec.loop;
-    return this.#read(loop ? [this.#ghost, this.#ghostPrevious] : [this.#current, this.#previous], step, false);
+    return this.#read([this.#current, this.#previous], this.stepOf(cycle, t), false);
   }
 
   /**
@@ -310,17 +297,7 @@ export class ClipSimulation {
   #start() {
     const spec = this.#spec;
     try {
-      const main = new Run(this.#nextId++, spec, this.#simulator(spec.json, { clip: spec.clip, pose: spec.loop ? spec.clip : null }), this.#mainTarget(spec));
-      this.#current = main;
-      if (spec.loop) {
-        try {
-          this.#ghost = new Run(this.#nextId++, spec, this.#simulator(spec.json, { clip: spec.clip, pose: null }), cycleSteps(spec));
-        } catch (error) {
-          this.#current.release();
-          this.#current = null;
-          throw error;
-        }
-      }
+      this.#current = new Run(this.#nextId++, spec, this.#simulator(spec.json, { clip: spec.clip, pose: spec.loop ? spec.clip : null }), this.#mainTarget(spec));
       this.#failed = false;
     } catch {
       this.#failed = true;
@@ -333,9 +310,7 @@ export class ClipSimulation {
   #restart() {
     this.#restartAt = null;
     this.#previous = this.#keepFurther(this.#previous, this.#current);
-    this.#ghostPrevious = this.#keepFurther(this.#ghostPrevious, this.#ghost);
     this.#current = null;
-    this.#ghost = null;
     this.#start();
   }
 
@@ -348,11 +323,9 @@ export class ClipSimulation {
   }
 
   #dropAll() {
-    for (const run of [this.#current, this.#previous, this.#ghost, this.#ghostPrevious]) run?.release();
+    for (const run of [this.#current, this.#previous]) run?.release();
     this.#current = null;
     this.#previous = null;
-    this.#ghost = null;
-    this.#ghostPrevious = null;
   }
 
   #now() {
@@ -377,35 +350,23 @@ export class ClipSimulation {
       this.#restart();
       changed = true;
     }
-    let budget = this.#options.maxStepsPerFrame;
-    for (const run of [this.#current, this.#ghost]) {
-      while (run !== null && run.session !== null && !run.done && budget > 0) {
-        if (budget < this.#options.maxStepsPerFrame && this.#now() - started >= this.#options.budget) {
-          budget = 0;
-          break;
-        }
-        try {
-          run.advance(stepSeconds(run.spec));
-        } catch {
-          this.#failed = true;
-          this.#dropAll();
-          this.#emit();
-          return;
-        }
-        budget--;
-        changed = true;
+    const run = this.#current;
+    for (let budget = this.#options.maxStepsPerFrame; run !== null && run.session !== null && !run.done && budget > 0; budget--) {
+      if (budget < this.#options.maxStepsPerFrame && this.#now() - started >= this.#options.budget) break;
+      try {
+        run.advance(stepSeconds(run.spec));
+      } catch {
+        this.#failed = true;
+        this.#dropAll();
+        this.#emit();
+        return;
       }
-      if (run !== null && run.done && !(run === this.#current && run.spec.loop && run.target < this.cycleLimit * cycleSteps(run.spec))) {
-        run.release();
-      }
+      changed = true;
     }
-    if (this.#current?.done && this.#previous !== null) {
+    if (run !== null && run.done && !(run.spec.loop && run.target < this.cycleLimit * cycleSteps(run.spec))) run.release();
+    if (run?.done && this.#previous !== null) {
       this.#previous.release();
       this.#previous = null;
-    }
-    if (this.#ghost?.done && this.#ghostPrevious !== null) {
-      this.#ghostPrevious.release();
-      this.#ghostPrevious = null;
     }
     if (this.#hasWork()) this.#schedule();
     if (changed) this.#emit();
@@ -413,7 +374,8 @@ export class ClipSimulation {
 
   #hasWork() {
     if (this.#restartAt !== null) return true;
-    return [this.#current, this.#ghost].some((run) => run !== null && run.session !== null && !run.done);
+    const run = this.#current;
+    return run !== null && run.session !== null && !run.done;
   }
 
   #emit() {

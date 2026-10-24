@@ -43,6 +43,41 @@ function restBounds(Box2D, rag, root) {
   return { top: lowest, centerX: (left + right) / 2 };
 }
 
+function lowerBy(Box2D, rag, drop) {
+  if (drop === 0 || !Number.isFinite(drop)) return;
+  const scratch = new Box2D.b2Vec2(0, 0);
+  try {
+    for (const body of rag.bodies.values()) {
+      const position = body.GetPosition();
+      scratch.set_x(position.get_x());
+      scratch.set_y(position.get_y() - drop);
+      body.SetTransform(scratch, body.GetAngle());
+    }
+  } finally {
+    Box2D.destroy(scratch);
+  }
+}
+
+function spawnOnGround(Box2D, world, def, root, pose) {
+  const spawn = { x: root.x, y: root.y, angle: root.angle, flipX: false };
+  const rest = def.spawn(world, spawn);
+  if (pose === null) return { rag: rest, bounds: restBounds(Box2D, rest, root) };
+  let bounds;
+  try {
+    bounds = restBounds(Box2D, rest, root);
+  } finally {
+    rest.destroy();
+  }
+  const rag = def.spawn(world, { ...spawn, pose });
+  try {
+    lowerBy(Box2D, rag, restBounds(Box2D, rag, root).top - bounds.top);
+  } catch (error) {
+    rag.destroy();
+    throw error;
+  }
+  return { rag, bounds };
+}
+
 function createGround(Box2D, world, { top, centerX }) {
   const bodyDef = new Box2D.b2BodyDef();
   let body;
@@ -66,7 +101,8 @@ function createGround(Box2D, world, { top, centerX }) {
 /**
  * Starts a Simulate mode run: a LiquidFun world with the document's `preview.gravity`, the ragdoll spawned through RagImporter at its root
  * transform in rest pose, or in the pose of clip `options.pose` at time 0 (RagImporter's posed spawn), a static
- * ground whose top touches the lowest point of the spawned bodies, and the clip with key `options.clip` playing from
+ * ground whose top touches the lowest point of the rest pose, a posed spawn being moved vertically so that its lowest
+ * point touches it too, and the clip with key `options.clip` playing from
  * 0 (none when `null`: the motors hold the rest pose). Owns every native object it creates until `destroy`.
  * @param {*} Box2D The liquidfun.js namespace.
  * @param {object} json A `.rag.json` document.
@@ -94,8 +130,9 @@ export function createSimulateSession(Box2D, json, { clip, pose = null }) {
   };
 
   try {
-    rag = def.spawn(world, { x: root.x, y: root.y, angle: root.angle, flipX: false, ...(pose === null ? {} : { pose }) });
-    ground = createGround(Box2D, world, restBounds(Box2D, rag, root));
+    const spawned = spawnOnGround(Box2D, world, def, root, pose);
+    rag = spawned.rag;
+    ground = createGround(Box2D, world, spawned.bounds);
     if (clip !== null) rag.play(clip, { restart: true });
   } catch (error) {
     release();

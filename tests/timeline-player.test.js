@@ -237,7 +237,7 @@ test('scrub and the transport do nothing outside Animate mode, and leaving Anima
   assert.equal(player.setCycle(2), false);
   editor.modes.openClip(clip);
   clock.settle();
-  assert.equal(clipFake.sessions.length, 2);
+  assert.equal(clipFake.sessions.length, 1);
   player.setCycle(4);
   editor.modes.openClip(null);
   assert.ok(clipFake.sessions.every((session) => session.destroyed));
@@ -262,7 +262,7 @@ test('the figure is the clip simulation at the playhead and does not move the mo
   assert.equal(JSON.stringify(toJson(editor.model, 'dev')), before);
 });
 
-test('ghosts sit at key times other than the playhead step, green ahead and red behind, from one non-looping pass', () => {
+test('ghosts sit at key times other than the playhead step, green ahead and red behind, from the main run in the playhead cycle', () => {
   const { editor, clip, clock, player } = setup({ loop: true });
   const joint = editor.history.execute({
     label: 'joint',
@@ -279,8 +279,9 @@ test('ghosts sit at key times other than the playhead step, green ahead and red 
     [1, 'ahead'],
   ]);
   const body = editor.model.children(ROOT_UID, 'bodies')[0];
-  assert.equal(ghosts[1].pose.get(body).x, 0);
-  assert.equal(ghosts[1].pose.get(body).y, -60);
+  assert.equal(ghosts[1].pose.get(body).x, 1);
+  assert.equal(ghosts[1].pose.get(body).y, -120);
+  assert.equal(ghosts[0].pose.get(body).y, -60);
   assert.equal(player.figure().pose.get(body).x, 1);
   assert.equal(player.figure().pose.get(body).y, -90);
 });
@@ -383,7 +384,7 @@ test('simulate() from Animate runs the open clip live from 0, a looping clip spa
   assert.equal(player.stop(), true);
   assert.equal(editor.modes.mode, 'animate');
   assert.equal(editor.modes.playhead, 0.5);
-  assert.equal(clipFake.sessions.length, 4);
+  assert.equal(clipFake.sessions.length, 2);
 });
 
 test('a long Simulate frame runs at most the step cap and a model reset ends it in Edit mode', () => {

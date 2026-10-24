@@ -102,8 +102,8 @@ test('a non-looping clip spawns in the rest pose at once and runs to length, sto
   assert.deepEqual(sim.pose(5, 2).pose.get('b_a').y, -60);
   assert.equal(sim.upToDate(1, 1), true);
   assert.deepEqual(sim.progress(), { current: 1, previous: null, pending: false });
-  assert.equal(sim.ghostPose(0.25).step, 15);
-  assert.equal(sim.ghostPose(0.25).run, read.run);
+  assert.equal(sim.ghostPose(1, 0.25).step, 15);
+  assert.equal(sim.ghostPose(1, 0.25).run, read.run);
 });
 
 test('scrubbing back reads the stored step: no new session, same pose', () => {
@@ -117,18 +117,13 @@ test('scrubbing back reads the stored step: no new session, same pose', () => {
   assert.equal(sessions.length, 1);
 });
 
-test('a looping clip spawns in its pose at 0, runs two cycles, and extends its horizon with the playhead cycle', () => {
+test('a looping clip spawns in its pose at 0 in one run, runs two cycles, and extends its horizon with the playhead cycle', () => {
   const { sim, sessions, clock } = simulation();
   sim.open(spec({ loop: true }));
-  assert.deepEqual(sessions.map((session) => session.options), [
-    { clip: 'walk', pose: 'walk' },
-    { clip: 'walk', pose: null },
-  ]);
+  assert.deepEqual(sessions.map((session) => session.options), [{ clip: 'walk', pose: 'walk' }]);
   clock.settle();
   assert.equal(sessions[0].steps, 120);
   assert.equal(sessions[0].destroyed, false);
-  assert.equal(sessions[1].steps, 60);
-  assert.equal(sessions[1].destroyed, true);
   assert.equal(sim.pose(2, 0.5).step, 90);
   assert.equal(sim.pose(2, 0.5).pose.get('b_a').x, 100);
   assert.equal(sim.pose(1, 1).step, sim.pose(2, 0).step);
@@ -141,9 +136,9 @@ test('a looping clip spawns in its pose at 0, runs two cycles, and extends its h
   assert.equal(sessions[0].steps, 8 * 60);
   assert.equal(sessions[0].destroyed, true);
   assert.equal(sim.upToDate(8, 1), true);
-  assert.equal(sim.ghostPose(0.5).pose.get('b_a').x, 0);
-  assert.equal(sim.ghostPose(0.5).step, 30);
-  assert.equal(sim.ghostPose(0.5).run, 2);
+  assert.deepEqual(sim.ghostPose(3, 0.5), sim.pose(3, 0.5));
+  assert.equal(sim.ghostPose(3, 0.5).step, 150);
+  assert.equal(sim.ghostPose(1, 0.5).pose.get('b_a').x, 100);
 });
 
 test('each frame stays within the time budget and the step cap', () => {
@@ -211,7 +206,7 @@ test('the main figure shows the latest step reached when no run has the step', (
   const read = sim.pose(1, 9);
   assert.equal(read.exact, false);
   assert.equal(read.step, CLIP_SIMULATION.maxStepsPerFrame);
-  assert.equal(sim.ghostPose(9), null);
+  assert.equal(sim.ghostPose(1, 9), null);
 });
 
 test('a document that cannot be simulated makes the clip simulation unavailable until a change fixes it', () => {
@@ -220,7 +215,7 @@ test('a document that cannot be simulated makes the clip simulation unavailable 
   sim.open(spec());
   assert.equal(sim.available, false);
   assert.equal(sim.pose(1, 0), null);
-  assert.equal(sim.ghostPose(0), null);
+  assert.equal(sim.ghostPose(1, 0), null);
   assert.equal(sim.upToDate(1, 0), false);
   assert.deepEqual(sim.progress(), { current: null, previous: null, pending: false });
   broken = false;
@@ -232,13 +227,6 @@ test('a document that cannot be simulated makes the clip simulation unavailable 
   assert.equal(sim.upToDate(1, 1), true);
 });
 
-test('a failing ghost pass releases the main run too', () => {
-  const { sim, sessions } = simulation({ throws: (json, options) => options.pose === null });
-  sim.open(spec({ loop: true }));
-  assert.equal(sim.available, false);
-  assert.equal(sessions[0].destroyed, true);
-});
-
 test('close and open release every session and start over', () => {
   const { sim, sessions, clock } = simulation();
   sim.open(spec({ loop: true }));
@@ -247,13 +235,13 @@ test('close and open release every session and start over', () => {
   clock.time = 300;
   clock.run();
   sim.open(spec({ loop: true }));
-  assert.ok(sessions.slice(0, 4).every((session) => session.destroyed));
+  assert.ok(sessions.slice(0, 2).every((session) => session.destroyed));
   sim.close();
   assert.ok(sessions.every((session) => session.destroyed));
   assert.equal(sim.available, false);
   assert.equal(sim.pose(1, 0), null);
   clock.settle();
-  assert.equal(sessions.length, 6);
+  assert.equal(sessions.length, 3);
 });
 
 test('the speed scales the step: clip time per step is 1/60 s times speed', () => {

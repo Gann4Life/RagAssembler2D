@@ -44,9 +44,8 @@ import { ghostTimes, keyTimes } from './model/key-times.js';
  * @property {() => void} close Drops every run.
  * @property {(cycle: number) => void} setCycle Moves the horizon with the playhead cycle.
  * @property {(cycle: number, t: number) => number} stepOf Run step of a playhead time.
- * @property {(t: number) => number} ghostStepOf Step of a clip time in the ghost pass.
  * @property {(cycle: number, t: number) => ClipRunPose|null} pose Main figure pose at a playhead time.
- * @property {(t: number) => ClipRunPose|null} ghostPose Ghost pose at a clip time.
+ * @property {(cycle: number, t: number) => ClipRunPose|null} ghostPose Ghost pose at a playhead time, from the same run.
  * @property {(cycle: number, t: number) => boolean} upToDate Whether a run started after the last change reached the
  *   playhead's step.
  * @property {() => { current: number|null, previous: number|null, pending: boolean }} progress Run time reached,
@@ -419,15 +418,15 @@ export class TimelinePlayer {
   }
 
   /**
-   * Ghosts of the open clip at its key times, from the clip simulation's ghost pass.
+   * Ghosts of the open clip at its key times in the playhead cycle, from the run the main figure shows.
    * @returns {Ghost[]} Empty when the clip simulation is not available.
    */
   ghosts() {
     if (!this.#animating() || !this.simulationAvailable) return [];
     const times = keyTimes(this.#model, this.#open);
     const ghosts = [];
-    for (const { t, side } of ghostTimes(times, this.#modes.playhead, (time) => this.#clips.ghostStepOf(time))) {
-      const read = this.#clips.ghostPose(t);
+    for (const { t, side } of ghostTimes(times, this.#modes.playhead, (time) => this.#clips.stepOf(this.#cycle, time))) {
+      const read = this.#clips.ghostPose(this.#cycle, t);
       if (read !== null) ghosts.push(Object.freeze({ t, side, pose: this.#uidPose(read), key: `${read.run}:${read.step}:${side}` }));
     }
     return ghosts;

@@ -81,7 +81,6 @@ test('a looping clip runs continuously from its pose at 0: cycle 2 starts where 
   assert.deepEqual(sim.pose(1, 2).pose, sim.pose(2, 0).pose);
   assert.deepEqual(sim.pose(2, 1).pose, expected.get(180));
   assert.notDeepEqual(sim.pose(2, 0).pose, sim.pose(1, 0).pose);
-  const ghost = continuousPoses(json, { clip: 'walk', pose: null }, [60]);
-  assert.deepEqual(sim.ghostPose(1).pose, ghost.get(60));
+  assert.deepEqual(sim.ghostPose(2, 1).pose, expected.get(180));
   sim.close();
 });

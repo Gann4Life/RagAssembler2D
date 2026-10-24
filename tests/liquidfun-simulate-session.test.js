@@ -2,10 +2,11 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { RagImporter, RagFormatError } from '../lib/ragimporter.js';
-import { composeTransforms } from '../lib/geometry.js';
+import { composeTransforms, shapeBounds } from '../lib/geometry.js';
 import { SIMULATE_WORLD, createSimulateSession } from '../js/physics/simulate-session.js';
 import { SIMULATE_STEP } from '../js/timeline-player.js';
 import { ragFile } from './helpers/rag-file.js';
+import { addHoldClip, humanoidRig } from './helpers/rigs.js';
 
 const require = createRequire(import.meta.url);
 const Box2D = require('../vendor/liquidfun.js');
@@ -98,6 +99,37 @@ test('gravity pulls the ragdoll down and the ground under its rest pose stops it
     }
   } finally {
     session.destroy();
+  }
+});
+
+function lowestOf(json, pose) {
+  let lowest = Infinity;
+  for (const body of json.bodies) {
+    for (const entry of body.fixtures) lowest = Math.min(lowest, shapeBounds(entry.shape, pose.get(body.id)).minY);
+  }
+  return lowest;
+}
+
+test('a posed spawn stands on the rest pose ground: its lowest point is moved to the rest lowest point', () => {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  for (const [pose, label] of [[new Map([['j_shinL', 1.2], ['j_shinR', 1.2]]), 'raised'], [new Map([['j_footR', 0.8]]), 'lowered']]) {
+    const { json } = humanoidRig();
+    json.ragdoll.position = [3, 2];
+    addHoldClip(json, pose, 1);
+    json.clips[0].tracks.forEach((track) => track.keys.shift());
+    const rest = createSimulateSession(Box2D, json, { clip: 'hold' });
+    const restLowest = lowestOf(json, rest.pose());
+    rest.destroy();
+    const before = heapProbe();
+    const posed = createSimulateSession(Box2D, json, { clip: 'hold', pose: 'hold' });
+    try {
+      const spawned = posed.pose();
+      assert.ok(Math.abs(lowestOf(json, spawned) - restLowest) < 0.02, `${label}: ${lowestOf(json, spawned)} vs ${restLowest}`);
+      assert.ok(Math.abs(spawned.get('b_shinR').angle - spawned.get('b_thighR').angle - (pose.get('j_shinR') ?? 0)) < TOLERANCE);
+    } finally {
+      posed.destroy();
+    }
+    assert.equal(heapProbe(), before);
   }
 });
 
