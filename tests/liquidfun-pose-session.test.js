@@ -6,6 +6,7 @@ import { RagDef } from '../lib/def.js';
 import { bodyMassData, transformPoint } from '../lib/geometry.js';
 import { POSE, createPoseSession, poseTestJson } from '../js/physics/pose-session.js';
 import { ragFile } from './helpers/rag-file.js';
+import { bipedRig, humanoidRig } from './helpers/rigs.js';
 
 const require = createRequire(import.meta.url);
 const Box2D = require('../vendor/liquidfun.js');
@@ -103,7 +104,22 @@ function start(json, bodyId, point = restWorld(json, bodyId)) {
 test('POSE holds the spec constants and is frozen', () => {
   assert.deepEqual(
     { ...POSE },
-    { step: 1 / 60, maxSteps: 4, linearDamping: 10, angularDamping: 10, forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7 },
+    {
+      step: 1 / 60,
+      maxSteps: 4,
+      linearDamping: 10,
+      angularDamping: 10,
+      forcePerKg: 1000,
+      frequencyHz: 5,
+      dampingRatio: 0.7,
+      falloffFrequencyHz: 15,
+      falloffVelocityIterations: 64,
+      holdScale: 0.1,
+      holdBase: 10,
+      holdGain: 20,
+      holdMaxSpeed: 20,
+      holdMaxHops: 6,
+    },
   );
   assert.equal(Object.isFrozen(POSE), true);
 });
@@ -366,6 +382,123 @@ test('no heap growth over 500 start, drag, advance, destroy cycles', () => {
   cycle(0);
   const before = heapProbe();
   for (let i = 1; i <= 500; i++) cycle(i);
+  assert.equal(heapProbe(), before);
+});
+
+const FLAT = Object.freeze({ x: 0, y: 0, angle: 0 });
+const KEY_THRESHOLD = (0.1 * Math.PI) / 180;
+
+function massCenter(json, bodyId, pose) {
+  const body = json.bodies.find((item) => item.id === bodyId);
+  return transformPoint(pose.get(bodyId), bodyMassData(body.fixtures).center);
+}
+
+function hopDistances(json, bodyId) {
+  const hops = new Map([[bodyId, 0]]);
+  for (let grown = true; grown; ) {
+    grown = false;
+    for (const joint of json.joints) {
+      for (const [from, to] of [[joint.bodyA, joint.bodyB], [joint.bodyB, joint.bodyA]]) {
+        if (hops.has(from) && !hops.has(to)) {
+          hops.set(to, hops.get(from) + 1);
+          grown = true;
+        }
+      }
+    }
+  }
+  return hops;
+}
+
+function jointChanges(json, before, after, bodyId) {
+  const hops = hopDistances(json, bodyId);
+  return json.joints.map((joint) => ({
+    id: joint.id,
+    d: Math.min(hops.get(joint.bodyA) ?? Infinity, hops.get(joint.bodyB) ?? Infinity),
+    change: Math.abs(
+      after.get(joint.bodyB).angle - after.get(joint.bodyA).angle - (before.get(joint.bodyB).angle - before.get(joint.bodyA).angle),
+    ),
+  }));
+}
+
+function falloffDrag(json, bodyId, offset, falloff) {
+  RagImporter.configure({ Box2D, PIXI });
+  const restPose = new Map(json.bodies.map((body) => [body.id, { x: body.position[0], y: body.position[1], angle: body.angle }]));
+  const press = massCenter(json, bodyId, restPose);
+  const target = { x: press.x + offset.x, y: press.y + offset.y };
+  const session = createPoseSession(Box2D, json, { root: FLAT, bodyId, point: press, start: new Map(), falloff });
+  try {
+    const before = session.pose();
+    for (let i = 1; i <= 60; i++) {
+      session.drag({ x: press.x + (offset.x * i) / 60, y: press.y + (offset.y * i) / 60 });
+      session.advance(POSE.step);
+    }
+    run(session, 0.5);
+    const { anchor } = session.grab();
+    return { changes: jointChanges(json, before, session.pose(), bodyId), miss: Math.hypot(anchor.x - target.x, anchor.y - target.y) };
+  } finally {
+    session.destroy();
+  }
+}
+
+for (const [name, rig, bodyId, offset] of [
+  ['humanoid shin', humanoidRig, 'b_shinR', { x: 0.3, y: 0.2 }],
+  ['humanoid forearm', humanoidRig, 'b_foreL', { x: 0.25, y: 0.15 }],
+  ['biped shin', bipedRig, 'b_shinR', { x: 0.1, y: 0.08 }],
+]) {
+  test(`falloff: dragging the ${name} bends the near joints, reaches the pointer and leaves joints two hops away unchanged`, () => {
+    const { json } = rig();
+    const held = falloffDrag(json, bodyId, offset, true);
+    assert.ok(held.miss < 0.05, `grabbed point ${held.miss} m from the pointer`);
+    assert.ok(held.changes.some((joint) => joint.d === 0 && joint.change > 0.05), 'a joint of the grabbed body bends');
+    for (const joint of held.changes.filter((item) => item.d >= 2)) {
+      assert.ok(joint.change < KEY_THRESHOLD, `${joint.id} at ${joint.d} hops changed ${joint.change} rad`);
+    }
+    const free = falloffDrag(json, bodyId, offset, false);
+    assert.ok(free.changes.some((joint) => joint.d >= 2 && joint.change > KEY_THRESHOLD), 'without falloff the drag reaches far joints');
+  });
+}
+
+test('falloff: every joint motor holds, every other body gets a ground hold, the pull is stiffer and solved longer', () => {
+  const { json } = humanoidRig();
+  const original = Box2D.b2World.prototype.Step;
+  const iterations = [];
+  Box2D.b2World.prototype.Step = function step(dt, velocity, position) {
+    iterations.push(velocity);
+    return original.call(this, dt, velocity, position);
+  };
+  try {
+    capturingSpawn((spawned) => {
+      RagImporter.configure({ Box2D, PIXI });
+      const press = restWorld(json, 'b_shinR');
+      const session = createPoseSession(Box2D, json, { root: FLAT, bodyId: 'b_shinR', point: press, falloff: true });
+      try {
+        const [rag] = spawned;
+        for (const joint of rag.joints.values()) assert.equal(joint.IsMotorEnabled(), 1);
+        const world = rag.bodies.get('b_shinR').GetWorld();
+        assert.equal(world.GetJointCount(), json.joints.length + 1 + json.bodies.length - 1);
+        session.advance(POSE.step);
+        assert.deepEqual(iterations, [POSE.falloffVelocityIterations]);
+      } finally {
+        session.destroy();
+      }
+    });
+  } finally {
+    Box2D.b2World.prototype.Step = original;
+  }
+});
+
+test('falloff: no heap growth over 200 start, drag, advance, destroy cycles', () => {
+  const { json } = humanoidRig();
+  const press = restWorld(json, 'b_foreL');
+  const cycle = (i) => {
+    const session = create(Box2D, json, { root: FLAT, bodyId: 'b_foreL', point: press, falloff: true });
+    session.drag({ x: press.x + (i % 5) * 0.1, y: press.y });
+    session.advance(POSE.step * 2);
+    session.destroy();
+  };
+  cycle(0);
+  const before = heapProbe();
+  for (let i = 1; i <= 200; i++) cycle(i);
   assert.equal(heapProbe(), before);
 });
 

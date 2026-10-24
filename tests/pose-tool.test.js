@@ -245,6 +245,7 @@ test('Animate: the press starts from exactly the displayed bodies', () => {
   const { start } = env.physics.starts[0].options;
   assert.deepEqual(start, new Map(env.ids.map((id, index) => [id, { x: index, y: 0.25, angle: 0.7 + index }])));
   assert.equal('holdRoot' in env.physics.starts[0].options, false);
+  assert.equal(env.physics.starts[0].options.falloff, true);
   env.actions.run('escape');
   assert.equal(env.view.poses.at(-1), null);
   assert.deepEqual(env.playback.holds, []);
@@ -587,8 +588,9 @@ test('Animate: release keys the root bodyAngle with the joint angles', () => {
   assert.equal(env.snapshot().json, env.before.json);
 });
 
-test('Edit: the session gets no root pin option', () => {
+test('Edit: the session gets no root pin option and no falloff', () => {
   const env = createEnvAndPress();
   assert.equal('holdRoot' in env.physics.starts[0].options, false);
+  assert.equal(env.physics.starts[0].options.falloff, false);
   send(env.tools, 'up', 260, 190);
 });

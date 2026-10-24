@@ -160,6 +160,7 @@ export function poseTool() {
       bodyId: body.props.id,
       point: { x: e.world.x, y: e.world.y },
       start: keying === null ? null : byId(ctx.model, keying.from),
+      falloff: keying !== null,
     });
   }
 
