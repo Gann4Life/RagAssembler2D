@@ -1038,6 +1038,8 @@ body.dock-resizing-column * {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .timeline-labels {
@@ -1052,8 +1054,11 @@ body.dock-resizing-column * {
 }
 
 .timeline-ruler {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 1;
   flex: none;
+  background: var(--surface);
   height: 24px;
   border-bottom: 1px solid var(--border);
   cursor: ew-resize;
