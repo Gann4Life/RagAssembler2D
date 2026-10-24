@@ -26,25 +26,38 @@ function evaluated(model, def, clip, time) {
   return resolveChannels(def, clipDef ? [{ clip: clipDef, time }] : []);
 }
 
-function rootKey(model, resolved, result) {
-  const id = model.prop(ROOT_UID, 'rootBody');
-  const uid = typeof id === 'string' ? model.uidOf(id) : null;
-  if (uid === null || uid === undefined || !result.has(uid)) return null;
-  const angle = result.get(uid).angle - model.prop(uid, 'angle');
-  const base = Number.isFinite(resolved.root.bodyAngle) ? resolved.root.bodyAngle : 0;
-  return Number.isFinite(angle) && Math.abs(angle - base) > KEY_THRESHOLD ? angle : null;
+function finiteOr(value, fallback) {
+  return Number.isFinite(value) ? value : fallback;
 }
 
-function jointKeys(model, def, resolved, result) {
-  const resultIds = byId(model, result);
-  const keys = [];
+function rootKey(model, resolved, pressed, result) {
+  const id = model.prop(ROOT_UID, 'rootBody');
+  const uid = typeof id === 'string' ? model.uidOf(id) : null;
+  if (uid === null || uid === undefined || !result.has(uid) || !pressed.has(uid)) return null;
+  const delta = result.get(uid).angle - pressed.get(uid).angle;
+  if (!Number.isFinite(delta) || Math.abs(delta) <= KEY_THRESHOLD) return null;
+  return finiteOr(resolved.root.bodyAngle, 0) + delta;
+}
+
+function jointAngles(model, def, pose) {
+  const ids = byId(model, pose);
+  const angles = new Map();
   for (const [body, joint] of jointTree(model).parent) {
-    if (!result.has(body)) continue;
-    const jointId = model.prop(joint, 'id');
-    const angle = jointAngleForBody(def, jointId, result.get(body).angle, resultIds);
-    if (angle === null || !Number.isFinite(angle)) continue;
-    const base = resolved.joints.get(jointId)?.angle ?? 0;
-    if (Math.abs(angle - (Number.isFinite(base) ? base : 0)) > KEY_THRESHOLD) keys.push([joint, angle]);
+    if (!pose.has(body)) continue;
+    const angle = jointAngleForBody(def, model.prop(joint, 'id'), pose.get(body).angle, ids);
+    if (angle !== null && Number.isFinite(angle)) angles.set(joint, angle);
+  }
+  return angles;
+}
+
+function jointKeys(model, def, resolved, pressed, result) {
+  const before = jointAngles(model, def, pressed);
+  const keys = [];
+  for (const [joint, angle] of jointAngles(model, def, result)) {
+    if (!before.has(joint)) continue;
+    const delta = angle - before.get(joint);
+    if (Math.abs(delta) <= KEY_THRESHOLD) continue;
+    keys.push([joint, finiteOr(resolved.joints.get(model.prop(joint, 'id'))?.angle, 0) + delta]);
   }
   return keys;
 }
@@ -55,8 +68,9 @@ function jointKeys(model, def, resolved, result) {
  * test starts from the rest pose and the result is discarded on release. In Animate mode it starts from exactly the
  * displayed bodies (`ctx.displayedPose`, the FK pose when nothing is shown) with `rootBody` held; a press while
  * playing pauses first (`ctx.playback.pause`, the playhead at the displayed step) and grabs in the same press. On a
- * release after a drag, with autokey on, every joint whose measured angle differs from its evaluated `angle` at the
- * playhead by more than 0.1° gets a key there, and the root `bodyAngle` likewise, in the press's undo step; with
+ * release after a drag, with autokey on, every joint whose measured angle changed by more than 0.1° since the press gets
+ * a key there worth its evaluated `angle` at the playhead plus that change, and the root `bodyAngle` likewise, in one
+ * undo step, so joints the drag did not move keep their keys; with
  * autokey off nothing is written and the status line says so. A click writes nothing. Every Animate release hands the
  * released bodies to `ctx.playback.hold`. Cancel always discards. A press the physics service refuses shows
  * `not-allowed` until the release. Never changes the selection.
@@ -119,14 +133,14 @@ export function poseTool() {
 
   function release() {
     if (session === null || animate === null) return;
-    const { clip, time, dragged } = animate;
+    const { clip, time, from, dragged } = animate;
     if (ctx.model.get(clip)?.type !== 'clip') return;
     const result = uidPose(session.pose());
     if (dragged) {
       const def = toJson(ctx.model, PREVIEW_VERSION);
       const resolved = evaluated(ctx.model, def, clip, time);
-      const joints = jointKeys(ctx.model, def, resolved, result);
-      const bodyAngle = rootKey(ctx.model, resolved, result);
+      const joints = jointKeys(ctx.model, def, resolved, from, result);
+      const bodyAngle = rootKey(ctx.model, resolved, from, result);
       const keying = joints.length > 0 || bodyAngle !== null;
       if (keying && !ctx.autokey()) {
         ctx.status(AUTOKEY_OFF);

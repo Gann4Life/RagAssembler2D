@@ -290,15 +290,72 @@ test('Animate: a drag release keys the changed joint angle at the playhead, unsn
   assert.notEqual(env.history.state.undoLabel, 'Pose');
 });
 
-test('Animate: keys compare the measured angles with the evaluated values, not with the start', () => {
+test('Animate: a displayed pose that lags the keys is not keyed when the drag does not move it', () => {
   const env = animateEnvironment({ turn: 0 });
-  const fk = new Map(env.bodies.map((uid) => [uid, { x: env.model.prop(uid, 'position')[0], y: 0, angle: 0 }]));
-  fk.set(env.bodies[1], { ...fk.get(env.bodies[1]), angle: 0.2 });
-  env.view.displayed = fk;
+  const lagging = new Map(env.bodies.map((uid) => [uid, { x: env.model.prop(uid, 'position')[0], y: 0, angle: 0 }]));
+  lagging.set(env.bodies[1], { ...lagging.get(env.bodies[1]), angle: 0.2 });
+  env.view.displayed = lagging;
+  drag(env);
+  assert.deepEqual(env.snapshot(), env.before);
+});
+
+function seedJointKey(env, value) {
+  env.history.execute({
+    label: 'seed',
+    run: (tx) => tx.add(env.clip, 'tracks', undefined, {
+      type: 'track',
+      props: { target: env.model.prop(env.joint, 'id'), channel: 'angle' },
+      children: { keys: [{ type: 'key', props: { t: 0, v: value, interp: 'linear' } }] },
+    }),
+  });
+}
+
+test('Animate: keys are the evaluated values plus the change since the press, so untouched channels keep theirs', () => {
+  const env = animateEnvironment({ turn: 0.3 });
+  env.history.execute(setProps([ROOT_UID], { rootBody: env.ids[0] }));
+  seedJointKey(env, 0.4);
+  const before = env.snapshot();
+  env.view.displayed = new Map([
+    [env.bodies[0], { x: 0, y: -0.02, angle: 0.05 }],
+    [env.bodies[1], { x: 1, y: -0.1, angle: 0.05 + 0.35 }],
+  ]);
   drag(env);
   const tracks = angleKeys(env);
   assert.equal(tracks.length, 1);
-  assert.ok(Math.abs(tracks[0].keys[0][1] - 0.2) < 1e-9);
+  assert.equal(tracks[0].channel, 'angle');
+  const key = tracks[0].keys.find(([t]) => Math.abs(t - 0.5) < 1e-9);
+  assert.ok(Math.abs(key[1] - 0.7) < 1e-9, `v ${key[1]}`);
+  env.history.undo();
+  assert.equal(env.snapshot().json, before.json);
+});
+
+test('Animate: repeated drags that turn back and forth leave the keys where they started', () => {
+  const turns = [0.3, -0.3, 0.3, -0.3];
+  const env = animateEnvironment({ turn: 0 });
+  seedJointKey(env, 0.4);
+  let index = 0;
+  const original = env.physics.startPose.bind(env.physics);
+  env.physics.startPose = (json, options) => {
+    const session = original(json, options);
+    const turn = turns[index++];
+    session.pose = () => {
+      const pose = new Map(options.start);
+      const child = pose.get(env.ids[1]);
+      pose.set(env.ids[1], { ...child, angle: child.angle + turn });
+      return pose;
+    };
+    return session;
+  };
+  const restAngle = env.model.prop(env.bodies[1], 'angle');
+  for (let i = 0; i < turns.length; i++) {
+    env.view.displayed = new Map([
+      [env.bodies[0], { x: 0, y: 0, angle: 0 }],
+      [env.bodies[1], { x: 1, y: -0.1, angle: restAngle + 0.1 }],
+    ]);
+    drag(env);
+  }
+  const key = angleKeys(env)[0].keys.find(([t]) => Math.abs(t - 0.5) < 1e-9);
+  assert.ok(Math.abs(key[1] - 0.4) < 1e-9, `v ${key[1]}`);
 });
 
 test('Animate: a click writes nothing but still holds the released bodies', () => {
