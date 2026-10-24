@@ -178,6 +178,40 @@ test('Simulate shows the live pose, and ghosts are applied only when they change
   assert.equal(shown.at(-1), player.livePose);
 });
 
+test('with onion skins off no ghost is read or applied, and refresh brings them back when on', () => {
+  const env = loaded();
+  const player = fakePlayer();
+  let reads = 0;
+  player.ghosts = () => {
+    reads++;
+    return player.ghostList;
+  };
+  let on = false;
+  const ghosts = [];
+  const view = bindAnimateView({
+    model: env.editor.model,
+    modes: env.editor.modes,
+    player,
+    clock: fakeClock(),
+    apply: () => {},
+    applyGhosts: (list) => ghosts.push(list),
+    ghostsOn: () => on,
+  });
+  env.editor.modes.openClip(env.clip);
+  player.ghostList = [{ t: 0.5, side: 'ahead', pose: pose(1), key: '1:30:ahead' }];
+  player.view(false);
+  assert.equal(reads, 0);
+  assert.deepEqual(ghosts, []);
+  on = true;
+  view.refresh();
+  assert.equal(reads, 1);
+  assert.deepEqual(ghosts, [player.ghostList]);
+  on = false;
+  view.refresh();
+  assert.deepEqual(ghosts.at(-1), []);
+  assert.equal(reads, 1);
+});
+
 test('the FK pose follows document changes, and destroy unsubscribes', () => {
   const { editor, clip, uid, player, shown, view } = bound();
   editor.modes.openClip(clip);

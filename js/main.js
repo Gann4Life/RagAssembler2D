@@ -247,7 +247,9 @@ const VIEW_ITEMS = Object.freeze([
     ['frame-selection', 'Frame selection', 'F'],
     ['frame-all', 'Frame all', 'Home'],
   ],
+  [['onion-skins', 'Onion skins', undefined, 'checkbox']],
 ]);
+const MENU_CHECKED = Object.freeze({ 'onion-skins': () => settings.get('display.ghosts') });
 
 function actionItems(groups) {
   return groups.flatMap((group, index) => [
@@ -257,7 +259,7 @@ function actionItems(groups) {
       label,
       shortcut,
       kind,
-      checked: false,
+      checked: MENU_CHECKED[id]?.() ?? false,
       disabled: !actions.isEnabled(id),
       reason: actions.reason(id),
     })),
@@ -366,13 +368,17 @@ const viewport = await createViewport(PIXI, viewportHost, {
   onSpaceTap: () => actions.run('toggle-play'),
 });
 
-bindAnimateView({
+const animateView = bindAnimateView({
   model,
   modes,
   player,
   clock: frameClock,
   apply: (pose) => viewport.setBasePose(pose),
   applyGhosts: (ghosts) => viewport.setGhosts(ghosts),
+  ghostsOn: () => settings.get('display.ghosts'),
+});
+settings.on('settings', ({ key }) => {
+  if (key === 'display.ghosts') animateView.refresh();
 });
 player.on('playing', refreshHeader);
 player.on('view', ({ instant }) => {

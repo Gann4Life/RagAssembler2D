@@ -6,7 +6,7 @@ const DEFAULTS = {
   version: 1,
   grid: { visible: true, size: 1, subdivisions: 10 },
   snap: { grid: false },
-  display: { mode: 'both' },
+  display: { mode: 'both', ghosts: true },
   overlay: { names: false, centers: false, contacts: false },
   gizmo: { pivot: 'center' },
 };
@@ -19,6 +19,7 @@ test('defaults follow DESIGN §5.3', () => {
     'grid.subdivisions',
     'snap.grid',
     'display.mode',
+    'display.ghosts',
     'overlay.names',
     'overlay.centers',
     'overlay.contacts',
@@ -47,6 +48,19 @@ test('a version 1 record without overlays restores them to their defaults withou
   assert.deepEqual(warnings, []);
   assert.equal(settings.get('grid.visible'), false);
   assert.deepEqual(settings.toJSON().overlay, { names: false, centers: false, contacts: false });
+});
+
+test('onion skins are on by default and a record stored without them restores them on', () => {
+  const settings = new Settings();
+  assert.equal(settings.get('display.ghosts'), true);
+  assert.throws(() => settings.set('display.ghosts', 'off'), RangeError);
+  settings.set('display.ghosts', false);
+  const { settings: restored, warnings } = Settings.restore(JSON.parse(JSON.stringify(settings.toJSON())));
+  assert.deepEqual(warnings, []);
+  assert.equal(restored.get('display.ghosts'), false);
+  const old = Settings.restore({ version: 1, display: { mode: 'shapes' } });
+  assert.deepEqual(old.warnings, []);
+  assert.equal(old.settings.get('display.ghosts'), true);
 });
 
 test('get and set unknown keys throw', () => {

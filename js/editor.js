@@ -345,6 +345,7 @@ export function createEditor({
     run: () => settings.set('gizmo.pivot', settings.get('gizmo.pivot') === 'center' ? 'last' : 'center'),
     isEnabled: () => !history.inGesture,
   });
+  actions.register('onion-skins', { run: () => settings.set('display.ghosts', !settings.get('display.ghosts')) });
 
   const canEditRest = () => modes.can('edit.rest') && !history.inGesture;
   const canDelete = (uids) => {

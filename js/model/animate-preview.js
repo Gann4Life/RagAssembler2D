@@ -80,9 +80,11 @@ const BLEND_FROM = new Set(['hold', 'fk']);
  *   pose to show; `null` is the rest pose.
  * @param {(ghosts: ReadonlyArray<import('../timeline-player.js').Ghost>) => void} [options.applyGhosts] Receives the
  *   ghosts to draw whenever they change.
+ * @param {() => boolean} [options.ghostsOn] Whether ghosts are shown (onion skins on); when it returns `false` the
+ *   ghosts are not read and none are applied. Call `refresh` after it changes. On when omitted.
  * @returns {{ refresh: () => void, destroy: () => void }} `refresh` recomputes and applies; `destroy` unsubscribes.
  */
-export function bindAnimateView({ model, modes, player, clock, apply, applyGhosts = () => {} }) {
+export function bindAnimateView({ model, modes, player, clock, apply, applyGhosts = () => {}, ghostsOn = () => true }) {
   let def = null;
   let shown = null;
   let source = null;
@@ -112,8 +114,8 @@ export function bindAnimateView({ model, modes, player, clock, apply, applyGhost
     }
   };
 
-  const showGhosts = () => {
-    const ghosts = player.ghosts();
+  const updateGhosts = () => {
+    const ghosts = ghostsOn() ? player.ghosts() : [];
     const key = ghosts.map((ghost) => `${ghost.t}/${ghost.key}`).join('|');
     if (key === ghostKey) return;
     ghostKey = key;
@@ -142,7 +144,7 @@ export function bindAnimateView({ model, modes, player, clock, apply, applyGhost
       shown = pose;
       apply(pose);
     }
-    showGhosts();
+    updateGhosts();
   }
 
   const offs = [

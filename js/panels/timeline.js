@@ -8,6 +8,8 @@ import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '.
 
 const REST_POSE = '';
 const RULER_LABEL = 'Playhead';
+const ONION_TITLE = 'Onion skins: ghosts of the nearest key times in Animate';
+const GHOSTS_SETTING = 'display.ghosts';
 
 /**
  * @typedef {object} Timeline
@@ -38,7 +40,8 @@ function formatSeconds(value) {
 
 /**
  * Mounts the Timeline panel into a dock panel element, replacing its content: a header with the clip selector,
- * New and Delete buttons, the length field and the loop toggle, then a ruler with the playhead. Clip edits run
+ * New and Delete buttons, the length field, the loop toggle, the cycle control and the Onion skins toggle (the
+ * `onion-skins` action, pressed while `display.ghosts` is on), then a ruler with the playhead. Clip edits run
  * as commands through `editor.history`; opening a clip and moving the playhead go through `editor.modes`.
  * @param {HTMLElement} element Panel element given by the dock.
  * @param {import('../editor.js').Editor} editor Editor core.
@@ -46,7 +49,7 @@ function formatSeconds(value) {
  * @returns {Timeline}
  */
 export function createTimeline(element_, editor, player) {
-  const { model, history, modes, selection } = editor;
+  const { model, history, modes, selection, settings } = editor;
   const doc = element_.ownerDocument;
 
   const header = element(doc, 'div', 'timeline-header');
@@ -77,7 +80,10 @@ export function createTimeline(element_, editor, player) {
   const cycleNext = button(doc, '›');
   cycleNext.setAttribute('aria-label', 'Next cycle');
   cycleGroup.append(cyclePrev, cycleLabel, cycleNext);
-  header.append(playButton, select, newButton, deleteButton, lengthLabel, loopLabel, cycleGroup);
+  const onionButton = button(doc, 'Onion skins');
+  onionButton.setAttribute('aria-pressed', 'false');
+  onionButton.title = ONION_TITLE;
+  header.append(playButton, select, newButton, deleteButton, lengthLabel, loopLabel, cycleGroup, onionButton);
 
   const body = element(doc, 'div', 'timeline-body');
   const labels = element(doc, 'div', 'timeline-labels');
@@ -190,8 +196,13 @@ export function createTimeline(element_, editor, player) {
     setReason(cycleNext, cycle >= limit ? 'cycle limit reached' : null);
   }
 
+  function renderOnion() {
+    onionButton.setAttribute('aria-pressed', String(settings.get(GHOSTS_SETTING) === true));
+  }
+
   function renderControls() {
     const open = modes.clip !== null;
+    renderOnion();
     playButton.textContent = player.playing ? 'Pause' : 'Play';
     playButton.setAttribute('aria-label', playButton.textContent);
     playButton.setAttribute('aria-disabled', String(!player.canPlay()));
@@ -403,6 +414,10 @@ export function createTimeline(element_, editor, player) {
     if (node.getAttribute('aria-disabled') === 'true') return;
     player.setCycle(player.cycle + delta);
   };
+  const onSettings = ({ key }) => {
+    if (key === GHOSTS_SETTING) renderOnion();
+  };
+  onionButton.addEventListener('click', () => editor.actions.run('onion-skins'));
   cyclePrev.addEventListener('click', () => stepCycle(-1));
   cycleNext.addEventListener('click', () => stepCycle(1));
   select.addEventListener('change', onSelect);
@@ -434,6 +449,7 @@ export function createTimeline(element_, editor, player) {
     player.on('cycle', renderCycle),
     player.on('progress', renderProgress),
     history.on('history', renderControls),
+    settings.on('settings', onSettings),
   ];
   render();
 

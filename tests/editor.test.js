@@ -282,6 +282,18 @@ test('pivot-mode toggles gizmo.pivot in every mode and is disabled during a gest
   assert.equal(settings.get('gizmo.pivot'), 'center');
 });
 
+test('onion-skins toggles display.ghosts in every mode', () => {
+  const editor = createEditor();
+  const { actions, settings, modes } = editor;
+  assert.equal(settings.get('display.ghosts'), true);
+  assert.equal(actions.isEnabled('onion-skins'), true);
+  assert.equal(actions.run('onion-skins'), true);
+  assert.equal(settings.get('display.ghosts'), false);
+  modes.openClip(addClip(editor));
+  assert.equal(actions.run('onion-skins'), true);
+  assert.equal(settings.get('display.ghosts'), true);
+});
+
 test('undo through the action during a gesture only cancels it', () => {
   const { history, actions, model } = createEditor();
   history.execute(setProps([ROOT_UID], { 'meta.name': 'kept' }));

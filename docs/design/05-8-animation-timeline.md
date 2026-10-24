@@ -2,7 +2,7 @@
 Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modeled after Godot's animation panel.
 
 ```
-┌ [▶] [clip ▾ walk] [+ New] [⧉ Duplicate] [🗑]  length [1.00]s snap [1/30] [⟲ loop] [‹ cycle 2 ›] [● autokey] [◆ Key selected (K)] ┐
+┌ [▶] [clip ▾ walk] [+ New] [⧉ Duplicate] [🗑]  length [1.00]s snap [1/30] [⟲ loop] [‹ cycle 2 ›] [Onion skins] [● autokey] [◆ Key selected (K)] ┐
 │ Preview stack: [✓ alive] [ pain] [ dead] ...     Procedural: [ Look at cursor] weight ──○──          zoom ──○──   │
 ├──────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────┤
 │                          │ 0.0     0.2     0.4     0.6     0.8     1.0     ▼ playhead                             │
@@ -43,6 +43,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
   - The snap step defaults to 1/30 s.
 - **Loop toggle and length field** mirror the clip properties.
 - **Cycle control** (`‹ cycle c ›`, after the loop toggle): shown only for a looping clip in Animate mode. It shows the playhead cycle ([§5.1](05-1-modes.md#51-editor-modes), Clip simulation) and follows it while playing. ‹ and › move the playhead to the previous or next cycle at the same clip time, as a scrub does (pausing playback, no handover). ‹ is disabled at cycle 1 ("first cycle") and › at the cycle limit ("cycle limit reached"). Its accessible name is "Cycle *c* of 8". Hidden for a non-looping clip and in Edit and Simulate mode.
+- **Onion skins toggle** (after the cycle control): a toggle button (`aria-pressed`, tooltip "Onion skins: ghosts of the nearest key times in Animate") that shows or hides the ghosts ([§5.1](05-1-modes.md#51-editor-modes), Ghosts). On by default; an editor setting, saved like the others ([§5.3](05-3-header.md#53-header)), shown in every mode and mirrored by View › Onion skins. Off, no ghost is drawn and the ghost poses are not read.
 - **Autokey (●):** while it is on, Pose releases in Animate mode create keys automatically from the posed simulation ([§5.5](05-5-tools.md#55-tools)). Select never keys.
 - **Key selected (K):** keys the `angle` of all selected joints, or of all joints of the selected bodies, at the playhead, with the evaluated (FK) value at the playhead, whatever the viewport shows; the displayed simulated pose is keyed only by a Pose release ([§5.5](05-5-tools.md#55-tools)).
 - **Preview stack:** checkboxes for other clips to evaluate together with the open clip, in both FK preview and Simulate mode (e.g. `alive` + `pain`); the clip simulation and its ghosts play the open clip alone ([§5.1](05-1-modes.md#51-editor-modes)). During Simulate, clicking a clip name calls `play(key)` on the running instance, so the user can rehearse how game code will trigger clips.

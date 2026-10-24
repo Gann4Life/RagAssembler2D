@@ -1030,6 +1030,10 @@ body.dock-resizing-column * {
   cursor: not-allowed;
 }
 
+.timeline-button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--focus) 35%, transparent);
+}
+
 .timeline-body {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
