@@ -27,12 +27,11 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | body angle ◆ | Animate mode only: the evaluated root `bodyAngle` at the playhead, in degrees ([§4.2](04-animation-model.md#42-channels)). No base field. |
 | balance | A group with `enabled` (checkbox), `maxTorque` (N·m), `gain` (1/s), `damping`, `maxSpeed` (rad/s) of the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)), all ≥ 0. `maxTorque` is automatic, like a joint's: read-only, shown as "auto (*value* N·m)", since every rig change sets it to the suggestion ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels), Automatic motor torque). Not animatable. |
 
-**Body**
+**Body** (a rigidbody: invisible in the viewport, its shapes define its collision area; the page has no position or angle, transforms come from the viewport tools)
 
 | Property | Notes |
 |---|---|
 | name, id (read-only) | |
-| position, angle | Root-local, rest pose. An edit moves each selected body with its **subtree** and carried anchors, as a Select move or rotation without ALT ([§5.5](05-5-tools.md#55-tools)): a position edit translates the subtree; an angle edit turns it around the anchor of the body's parent joint, the pivot of Select's rotation ring, so the body stays connected and its position changes accordingly (around the body's origin for `rootBody` and bodies without a parent joint). Several bodies are set one after the other in selection order, so each ends at the typed value. |
 | linearDamping, angularDamping | 1/s, ≥ 0. |
 | fixedRotation, bullet | bool. |
 | mass | Read-only, kg, 3 significant digits: computed from the shapes and their density (`bodyMass`). |

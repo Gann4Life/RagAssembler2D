@@ -112,19 +112,9 @@ test('inspector: body rows show display units, the mass, the shapes and the root
   editor.selection.set([uid('b_pole')]);
   const current = page();
   assert.equal(current.title, 'Body · pole');
-  assert.deepEqual(current.sections.map((section) => section.id), ['body', 'transform', 'physics', 'shapes', 'actions']);
-  const position = rowOf(current, 'position');
-  assert.equal(position.control, 'vec2');
-  assert.equal(position.unit, 'px');
-  near(position.value[0], 0);
-  near(position.value[1], 22.4);
-  assert.deepEqual(position.text, ['0', '22.4']);
-  assert.deepEqual(position.edit, { kind: 'placement', uids: [uid('b_pole')], field: 'position', label: 'Move' });
-  const angle = rowOf(current, 'angle');
-  assert.equal(angle.unit, '°');
-  near(angle.value, 0.5 * 180 / Math.PI);
-  assert.equal(angle.text, '28.6');
-  assert.equal(angle.edit.field, 'angle');
+  assert.deepEqual(current.sections.map((section) => section.id), ['body', 'physics', 'shapes', 'actions']);
+  assert.equal(rowOf(current, 'position'), undefined);
+  assert.equal(rowOf(current, 'angle'), undefined);
   const damping = rowOf(current, 'linearDamping');
   assert.equal(damping.label, 'Linear damping');
   assert.equal(damping.unit, '1/s');
@@ -160,11 +150,6 @@ test('inspector: shared values are shown once, differing ones as MIXED, per vect
   const name = rowOf(current, 'name');
   assert.equal(name.value, MIXED);
   assert.equal(name.text, '');
-  const position = rowOf(current, 'position');
-  assert.equal(position.value[0], 0);
-  assert.equal(position.value[1], MIXED);
-  assert.deepEqual(position.text, ['0', '']);
-  assert.equal(rowOf(current, 'angle').value, MIXED);
   assert.equal(rowOf(current, 'linearDamping').value, 0);
   assert.equal(rowOf(current, 'mass').value, MIXED);
   assert.equal(rowOf(current, 'mass').text, '—');
@@ -206,8 +191,6 @@ test('inspector: root rows convert units and show balance maxTorque as automatic
   assert.equal(rowOf(current, 'bodyAngle'), undefined);
   assert.equal(rowOf(current, 'name').readOnly, false);
   assert.equal(rowOf(current, 'rootBody').readOnly, false);
-  editor.selection.set([uid('b_pole')]);
-  near(rowOf(page(), 'position').value[1], 70);
 });
 
 test('inspector: a rootBody that is not set shows no value', () => {
@@ -238,8 +221,7 @@ test('inspector: Animate makes non-animated rows read-only and shows root channe
   assert.equal(model.prop(ROOT_UID, 'channels.strength'), 1);
   editor.selection.set([uid('b_pole')]);
   const body = page();
-  assert.equal(rowOf(body, 'position').readOnly, true);
-  near(rowOf(body, 'position').value[1], 22.4);
+  assert.equal(rowOf(body, 'position'), undefined);
   assert.equal(rowOf(body, 'linearDamping').reason, 'only in Edit mode');
   assert.equal(rowOf(body, 'shapes').readOnly, false);
   editor.selection.clear();
@@ -376,28 +358,10 @@ test('editCommand: a vec2 component edit of several objects keeps each other com
   assert.equal(editCommand(model, edit, 0, { component: 0, pixelsPerMeter: 32 }), null);
 });
 
-test('editCommand: placement edits move and rotate bodies with their subtrees', () => {
-  const { editor, page, rowOf, model, uid } = setup();
-  const { history } = editor;
-  editor.selection.set([uid('b_pole')]);
-  const current = page();
-  history.execute(editCommand(model, rowOf(current, 'position').edit, 32, { component: 0, pixelsPerMeter: 32 }));
-  assert.deepEqual(model.prop(uid('b_pole'), 'position'), [1, 0.7]);
-  near(model.prop(uid('b_tip'), 'position')[0], 1);
-  near(model.prop(uid('j_tip'), 'anchor')[0], 1);
-  assert.deepEqual(model.prop(uid('b_base'), 'position'), [0, 0.1]);
-  assert.equal(history.state.undoLabel, 'Move');
-  history.undo();
-  history.execute(editCommand(model, rowOf(current, 'angle').edit, 90, { pixelsPerMeter: 32 }));
-  assert.equal(history.state.undoLabel, 'Rotate');
-  near(model.prop(uid('b_pole'), 'angle'), Math.PI / 2);
-  const pole = model.prop(uid('b_pole'), 'position');
-  const pivot = model.prop(uid('j_pole'), 'anchor');
-  assert.deepEqual(pivot, [0, 0.2]);
-  near(Math.hypot(pole[0] - pivot[0], pole[1] - pivot[1]), 0.5);
-  assert.equal(editCommand(model, rowOf(current, 'angle').edit, 90, { pixelsPerMeter: 32 }), null);
-  assert.throws(() => editCommand(model, rowOf(current, 'position').edit, 3, { pixelsPerMeter: 32 }), /component/);
+test('editCommand: only props edits are commands', () => {
+  const { model, uid } = setup();
   assert.throws(() => editCommand(model, { kind: 'root-body' }, 3, { pixelsPerMeter: 32 }), /not a command/);
+  assert.throws(() => editCommand(model, { kind: 'placement', uids: [uid('b_pole')], field: 'angle', label: 'Rotate' }, 3, { pixelsPerMeter: 32 }), /not a command/);
 });
 
 test('fieldRow: a path outside the schema needs a control; derived reasons hold in every mode', () => {

@@ -1,6 +1,5 @@
 import { fieldsOf } from '../../lib/schema.js';
 import { setProps } from '../commands/props.js';
-import { placeBodies } from '../commands/transform.js';
 import { displayUnit, fromDisplay, toDisplay } from '../units.js';
 
 /**
@@ -26,12 +25,10 @@ import { displayUnit, fromDisplay, toDisplay } from '../units.js';
 /**
  * What a committed row does.
  * @typedef {{ kind: 'props', uids: ReadonlyArray<number>, path: string, unit: string, label: string }
- *   | { kind: 'placement', uids: ReadonlyArray<number>, field: 'position'|'angle', label: string }
- *   | { kind: 'root-body' }
+ * *   | { kind: 'root-body' }
  *   | { kind: 'action', action: string, label: string }
  *   | { kind: 'select' }} InspectorEdit
- *   `props`: `setProps` of the value in the data `unit`; `placement`: `placeBodies` (`position` takes the component
- *   as `x` or `y`); `root-body`: `editor.setRootBody`; `action`: `editor.actions.run` with `label`; `select`: a list
+ *   `props`: `setProps` of the value in the data `unit`; `root-body`: `editor.setRootBody`; `action`: `editor.actions.run` with `label`; `select`: a list
  *   item selects its uid. `label` is the undo step or the refused-action label.
  */
 
@@ -260,30 +257,18 @@ function propsCommand(model, edit, displayed, component, pixelsPerMeter) {
   return commands.length === 1 ? commands[0] : compositeCommand(edit.label, commands);
 }
 
-function placementCommand(model, edit, displayed, component, pixelsPerMeter) {
-  if (edit.field === 'position' && component !== 0 && component !== 1) {
-    throw new Error('A position edit needs component 0 or 1');
-  }
-  const field = edit.field === 'angle' ? 'angle' : component === 0 ? 'x' : 'y';
-  const value = field === 'angle' ? fromDisplay(displayed, 'rad') + 0 : fromDisplay(displayed, 'm', pixelsPerMeter) + 0;
-  const current = (uid) => (field === 'angle' ? model.prop(uid, 'angle') : model.prop(uid, 'position')?.[component]);
-  if (edit.uids.every((uid) => Object.is(current(uid), value))) return null;
-  return placeBodies([...edit.uids], { [field]: value }, edit.label);
-}
-
 /**
  * The command of a committed value: `setProps` for a props edit (one per object for a vec2 component, each keeping
- * its other component) or `placeBodies` for a placement edit, with the value converted to data units. Pure.
+ * its other component), with the value converted to data units. Pure.
  * @param {import('../model/model.js').Model} model Document model.
  * @param {InspectorEdit} edit Edit of the row, as captured when the field got focus.
  * @param {*} displayValue Committed value in display units (number, string or boolean).
  * @param {{ component?: 0|1, pixelsPerMeter: number }} options Vec2 component, and the document scale, px/m.
  * @returns {import('../commands/history.js').Command|null} The command, or `null` when every object already
  *   holds the value.
- * @throws {Error} When the edit is not a props or placement edit, or a position edit has no component.
+ * @throws {Error} When the edit is not a props edit.
  */
 export function editCommand(model, edit, displayValue, { component, pixelsPerMeter } = {}) {
   if (edit?.kind === 'props') return propsCommand(model, edit, displayValue, component, pixelsPerMeter);
-  if (edit?.kind === 'placement') return placementCommand(model, edit, displayValue, component, pixelsPerMeter);
   throw new Error(`An inspector edit of kind "${edit?.kind}" is not a command`);
 }

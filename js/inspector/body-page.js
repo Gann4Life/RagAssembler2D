@@ -32,9 +32,9 @@ function isRootBody(model, uid) {
 }
 
 /**
- * Sections of the Body page (`DESIGN.md` §5.7): BODY (name, id), TRANSFORM (position and angle, placed with the
- * subtree through `placeBodies`), PHYSICS (damping, `fixedRotation`, `bullet`, read-only mass), SHAPES (the shapes
- * of one body, `—` for several) and the Set as root body button ("Root body" when it already is). Pure.
+ * Sections of the Body page (`DESIGN.md` §5.7), physics only: BODY (name, id), PHYSICS (damping, `fixedRotation`,
+ * `bullet`, read-only mass), SHAPES (the shapes of one body, `—` for several) and the Set as root body button
+ * ("Root body" when it already is). Pure.
  * @param {import('./rows.js').PageContext} ctx Page context; `uids` are bodies.
  * @returns {ReadonlyArray<import('./rows.js').InspectorSection>} Frozen sections.
  */
@@ -42,14 +42,8 @@ export function bodyPage(ctx) {
   const { model, uids } = ctx;
   const row = (path, overrides) => fieldRow(ctx, path, overrides);
   const single = uids.length === 1;
-  const placement = (field, label) => Object.freeze({ kind: 'placement', uids: Object.freeze([...uids]), field, label });
   const sections = [
     { id: 'body', label: 'Body', rows: [row('name'), row('id')] },
-    {
-      id: 'transform',
-      label: 'Transform',
-      rows: [row('position', { edit: placement('position', 'Move') }), row('angle', { edit: placement('angle', 'Rotate') })],
-    },
     {
       id: 'physics',
       label: 'Physics',
