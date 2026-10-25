@@ -89,11 +89,11 @@ app.ticker.add((ticker) => {
 
 | Member | Description |
 |---|---|
-| `play(key, { fadeIn, weight = 1, speed = 1, restart = false })` | Starts the clip on its layer (crossfading the current one). |
+| `play(key, { fadeIn, weight = 1, speed = 1, restart = false })` | Starts the clip on its layer (crossfading the current one). It never respawns or moves bodies: the motors take the ragdoll from its current pose toward the clip. Throws an `Error` naming the key when no clip has it, and a `TypeError` when `speed` is not a finite number > 0. |
 | `queue(key, opts)` | See [§4.5](04-animation-model.md#45-playback-rules). |
-| `stop(key, { fadeOut })` / `stopLayer(layer, { fadeOut })` / `stopAll()` | Stops a clip, a layer or everything. |
+| `stop(key, { fadeOut })` / `stopLayer(layer, { fadeOut })` / `stopAll()` | Stops a clip, a layer or everything. `stop` of a known clip that is not active does nothing; an unknown key throws an `Error` naming it. |
 | `setWeight(key, w)` | Changes the runtime weight of an active clip. |
-| `isPlaying(key)` | Whether the clip is active. |
+| `isPlaying(key)` | Whether the clip is active; `false` for an unknown key. |
 | `activeClip(layer)` | Key of the clip active on a layer. |
 | `setStrength(v)` / `setGain(v)` / `setDamping(v)` | Runtime global multipliers, 0–1, default 1. |
 | `setBalance(enabled)` | Per-instance switch of the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)), default `true`. The controller runs only when this switch and the file's `balance.enabled` are both on, so `true` never enables a ragdoll whose file disables it. A non-boolean throws a `TypeError`. |
@@ -102,7 +102,7 @@ app.ticker.add((ticker) => {
 | `clearJointOverride(jointName, { fadeOut })` / `clearAllOverrides()` | Removes overrides. |
 | `toWorld(pixiPoint) → { x, y }` / `toPixi(worldPoint)` | Coordinate conversion through `pixelsPerMeter` and the view's parent transform. |
 | `on(type, fn)` / `off(type, fn)` | Types: `event` (custom), `start`, `loop`, `complete`, `stop`. `on` returns a function that removes the listener. |
-| `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors, applies the balance torque to `rootBody` and swaps sprite images. Call it once per physics step, **before** `world.Step`, with that step's `dt` (the balance torque is sized for it, [§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). `stepWorld` does this for every substep; hosts use it instead of calling `update` themselves. |
+| `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors, applies the balance wrench to the bodies connected to `rootBody` and swaps sprite images. Call it once per physics step, **before** `world.Step`, with that step's `dt` (the balance torque is sized for it, [§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). `stepWorld` does this for every substep; hosts use it instead of calling `update` themselves. |
 | `sync()` | Copies body transforms to the sprites. Call it **after** `world.Step`. |
 | `view` | The instance's `PIXI.Container`, with `sortableChildren` on and sprite `zIndex = z`. |
 | `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun (`Box2D.b2Body`, `Box2D.b2RevoluteJoint`, `Box2D.b2Fixture`) / PIXI objects, looked up by name; `undefined` for an unknown name. When names repeat (warning `W_DUPLICATE_NAME`), the first in file order wins. |
@@ -125,7 +125,7 @@ app.ticker.add((ticker) => {
 
 **Posed spawn** (`pose: key`). The clip's pose at time 0 is the clip alone, resolved as the only layer at weight 1 with no overrides (`resolveChannels`, [§4](04-animation-model.md)), placed by forward kinematics (`fkPose` of `lib/evaluate.js`: joint `angle` values and root `bodyAngle`, `rootBody` turned about its rest center of mass, [§5.1](05-1-modes.md#51-editor-modes), FK preview); loop joints are ignored as in FK. This gives each body a root-local transform `P` that takes the place of its rest transform `L` in the frames above (mirrored to `P′` with `flipX`). Build order is unchanged, so joints are created with the bodies at rest and keep the rest reference angles; right after step 4, every body is moved to `S × P′` with `SetTransform`, at zero velocity, before spawn returns. Joint angles then equal the clip's angles at time 0 (mirrored with `flipX`); one outside its limits is pushed back by the limit on the first step. `θ₀` stays the rest-pose value `S.angle + L′.angle` (below), so the balance target is the clip's `bodyAngle` from the first step. The pose comes from the file's clip values, never from host overrides. Example: a two-body rig whose clip keys the joint at 0.5 rad at time 0 spawns with `rag.joint(name).GetJointAngle()` = 0.5 (−0.5 with `flipX`).
 
-**Motors start off.** `update()` enables and drives them ([§3](03-physics-drive-model.md)) and applies the balance torque ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). An instance whose `update()` is never called is a passive ragdoll held only by its joint limits. Spawn records `θ₀`, `rootBody`'s world angle as created (`S.angle + L′.angle`), as the balance reference; `I_root` and `I_tot` are part of the `RagDef`, computed once by `parse`.
+**Motors start off.** `update()` enables and drives them ([§3](03-physics-drive-model.md)) and applies the balance torque ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). An instance whose `update()` is never called is a passive ragdoll held only by its joint limits. Spawn records `θ₀`, `rootBody`'s world angle as created (`S.angle + L′.angle`), as the balance reference; the mass and inertia `m_b`, `I_b` of every body of the balance set `R` are part of the `RagDef`, computed once by `parse`.
 
 **Spawn memory** ([§7.4](#74-native-memory)). Spawn uses one scratch `b2Vec2` for every position, center and anchor (each setter copies it), destroys each def and shape right after the `Create*` call that used it, and destroys the scratch vector before returning. A polygon's vertices go through one native buffer: `Box2D._malloc(8 × count)`, written as float32 `x, y` pairs through `Box2D.HEAPF32`, passed as `Box2D.wrapPointer(ptr, Box2D.b2Vec2)` and released with `Box2D._free(ptr)` right after `Set`. After `spawn` returns, only world-owned objects remain.
 

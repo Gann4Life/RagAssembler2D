@@ -8,7 +8,7 @@ Hotkeys are accelerators only ([§5](05-editor.md#visible-controls-and-feedback)
 | C, R, N, H | Circle, Box, Polygon, Hinge Joint tools | Tools overlay |
 | S | Toggle sprite edit (Select) | Header Rig › Sprite edit ([§5.3](05-3-header.md#53-header)) |
 | Del | Delete ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | Hierarchy Delete button; Rig › Delete |
-| Ctrl+C, Ctrl+V, Del (while keys hold the selection focus) | Copy keys, Paste keys at the playhead, Delete keys ([§5.8](05-8-animation-timeline.md#58-animation-timeline)) | Timeline Copy, Paste, Delete keys |
+| Ctrl+C, Ctrl+V, Del (while keys hold the selection focus) | Copy keys, Paste keys at the playhead, Delete keys ([§5.8](05-8-animation-timeline.md#58-animation-timeline)) | Timeline Copy, Paste, Delete keys (not built yet: today only Del or Backspace in the focused key lanes deletes keys, [§5.8](05-8-animation-timeline.md#58-animation-timeline)) |
 | Ctrl+Z | Undo | Header Undo |
 | Ctrl+Shift+Z, Ctrl+Y | Redo | Header Redo |
 | Ctrl+S, Ctrl+O | Save, Load | Header Save, Load |
