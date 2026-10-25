@@ -24,7 +24,7 @@ Location: top, full width. One toolbar row with six button groups divided by sep
 **Rig menu.** A menu button, always enabled, that opens below the button aligned to its left edge, kept inside the window, with the Window menu's keyboard rules (below). Items, with separators between groups:
 1. Rename (F2), Duplicate (Ctrl+D), Delete (Del) ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels));
 2. Group (Ctrl+G), Ungroup (Ctrl+Shift+G), Split (Alt+G) ([§2.2](02-object-model.md#22-bodies-and-shapes));
-3. Set as root body (Shift+R) ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)); motor torque is automatic and has no item;
+3. Set as root body (Shift+R), Clamp keys to limits (no hotkey) ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)); motor torque is automatic and has no item;
 4. Sprite edit (S), a checkbox item, checked while sprite edit is on ([§5.5](05-5-tools.md#55-tools)).
 
 Each item runs the same action as its hotkey, with the same enabled rule, and shows the hotkey right-aligned in the muted text color. Enabled state is read when the menu opens. A disabled item is dimmed, stays focusable and has the reason as its accessible description; while it is hovered (after 400 ms) or focused from the keyboard, the custom tooltip ([§5.5](05-5-tools.md#55-tools)) shows "*Label* (*Key*) (*reason*)" 8 px to its right. Choosing a disabled item keeps the menu open and shows the reason in the status line. Choosing Rename opens the rename popup ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)), and Enter or Esc in it return focus to the Rig button.

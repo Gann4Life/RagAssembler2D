@@ -51,6 +51,7 @@ Body and shape physics are never animated. The only animatable property of a sha
 - A track with a single key is constant, looping or not. A track with no keys (just added with "+ Track") has no effect on its channel.
 - Angles (joint `angle`, root `bodyAngle`) are interpolated linearly in radians, without wrapping, so a key can go beyond ±180°. The wrap segment follows the same rule: no shortest path, so a looping clip whose last key is a full turn past its first unwinds that turn on the wrap segment. A clip that keeps turning (e.g. a spin) keys `0` and `length` explicitly so that `d = 0`.
 - Keys are sorted by `t`, there is at most one key per `t` per track, and `0 ≤ t ≤ length`.
+- A joint `angle` key of an `override` clip should lie within the joint's limits when they are enabled: a target past a limit only makes the motor push against it. Since every interpolation stays between its two keys, keys within the limits keep the whole track within them. Validation warns otherwise (`W_KEY_OUTSIDE_LIMITS`, [§6.4](06-file-format.md#64-validation)), e.g. files keyed before Pose clamped its keys ([§5.5](05-5-tools.md#55-tools)), and Rig › Clamp keys to limits fixes them ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)).
 
 **Example (looping, `length` 1 s).** A knee `angle` track has keys `{t: 0.2, v: 0, linear}` and `{t: 0.6, v: 1, ease}`. The wrap segment runs from 0.6 to 1.2 (`d` = 0.6) with `ease`, from 1 back to 0:
 
