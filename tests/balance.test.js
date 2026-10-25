@@ -224,6 +224,26 @@ test('driveBalance clamps speed and torque and wraps the error the short way', (
   near(balanceOf(fakeBody(-0.01, 0), 4 * Math.PI, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60), 3);
 });
 
+test('driveBalance adds the keyed rate and clamps only the correction', () => {
+  const big = { ...BALANCE, maxTorque: 1e6 };
+  near(balanceOf(fakeBody(0, 0), 0, { S: 1, G: 10, D: 0.5, rate: 2 }, big, 0.1), 0.5 * 3 / 0.1);
+  near(balanceOf(fakeBody(0, 2), 0, { S: 1, G: 10, D: 0.5, rate: 2 }, big, 0.1), 0);
+  near(balanceOf(fakeBody(0, 0), 0, { S: 1, G: 10, D: 0.5, rate: 30 }, big, 0.1), 0.5 * 45 / 0.1);
+  near(balanceOf(fakeBody(0, 0), 3, { S: 1, G: 10, D: 0.5, rate: 30 }, big, 0.1), 0.5 * 50 / 0.1);
+});
+
+test('update feeds the bodyAngle rate forward, negated with flipX', () => {
+  const clip = rootClip([{ t: 0, v: 0, interp: 'linear' }, { t: 0.5, v: 1, interp: 'linear' }]);
+  const plain = fakeInstance({ clips: [clip], root: fakeBody(0.2, 0) });
+  plain.rag.play('tilt');
+  plain.rag.update(0.1);
+  near(plain.root.torques[0][0], 0.5 * 3 / 0.1);
+  const mirrored = fakeInstance({ clips: [clip], flipX: true, root: fakeBody(-0.2, 0) });
+  mirrored.rag.play('tilt');
+  mirrored.rag.update(0.1);
+  near(mirrored.root.torques[0][0], -0.5 * 3 / 0.1);
+});
+
 test('driveBalance does nothing when S or dt is 0 or nothing has mass', () => {
   const limp = fakeBody(1, 0);
   assert.equal(balanceOf(limp, 0, { S: 0, G: 10, D: 0.5 }, BALANCE, 1 / 60), 0);

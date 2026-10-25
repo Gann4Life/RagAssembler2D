@@ -7,7 +7,7 @@ function near(actual, expected) {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
 }
 
-test('driveMotor applies the PD formula', () => {
+test('driveMotor applies the PD formula when the target rate is 0', () => {
   const joint = fakeJoint(0.2, 1.5);
   driveMotor(joint, { angle: 0.5, S: 0.5, G: 10, D: 0.5 }, MOTOR);
   near(joint.motorSpeed, 10 * 0.3 - 0.5 * 1.5);
@@ -15,13 +15,28 @@ test('driveMotor applies the PD formula', () => {
   assert.equal(joint.enabled, true);
 });
 
-test('driveMotor clamps the motor speed to maxSpeed', () => {
+test('driveMotor adds the keyed rate and damps the speed relative to it', () => {
+  const joint = fakeJoint(0.2, 1.5);
+  driveMotor(joint, { angle: 0.5, angleRate: 4, S: 1, G: 10, D: 0.5 }, MOTOR);
+  near(joint.motorSpeed, 4 + 10 * 0.3 - 0.5 * (1.5 - 4));
+  const onTrack = fakeJoint(1, 17);
+  driveMotor(onTrack, { angle: 1, angleRate: 17, S: 1, G: 10, D: 0.5 }, MOTOR);
+  near(onTrack.motorSpeed, 17);
+});
+
+test('driveMotor clamps the correction to maxSpeed, never the keyed rate', () => {
   const up = fakeJoint(0, 0);
   driveMotor(up, { angle: 10, S: 1, G: 10, D: 0 }, MOTOR);
   assert.equal(up.motorSpeed, 20);
   const down = fakeJoint(0, 0);
   driveMotor(down, { angle: -10, S: 1, G: 10, D: 0 }, MOTOR);
   assert.equal(down.motorSpeed, -20);
+  const fast = fakeJoint(0, 0);
+  driveMotor(fast, { angle: 10, angleRate: 50, S: 1, G: 10, D: 0.5 }, MOTOR);
+  assert.equal(fast.motorSpeed, 70);
+  const behind = fakeJoint(0, 0);
+  driveMotor(behind, { angle: -10, angleRate: 30, S: 1, G: 10, D: 0 }, MOTOR);
+  assert.equal(behind.motorSpeed, 10);
 });
 
 test('driveMotor disables the motor when S is 0', () => {

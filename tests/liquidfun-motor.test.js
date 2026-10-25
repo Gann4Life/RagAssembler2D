@@ -84,13 +84,13 @@ function keyedRun(json, keys, seconds) {
   }
 }
 
-test('a feasible keyed move reaches its keys at their frames without passing them', () => {
+test('a feasible keyed move reaches its keys at their frames at speed, passing them only slightly', () => {
   const { json } = poleRig();
   fitTorque(json);
   const angles = keyedRun(json, [[0, 0], [0.5, 1], [1, 1], [1.25, 0.4], [2, 0.4]], 2.5);
   const degrees = (radians) => (radians * 180) / Math.PI;
-  assert.ok(degrees(Math.abs(angles[30] - 1)) < 7, `at 0.5 s: ${degrees(angles[30])}°`);
-  assert.ok(degrees(Math.abs(angles[75] - 0.4)) < 7, `at 1.25 s: ${degrees(angles[75])}°`);
-  assert.ok(degrees(Math.max(...angles) - 1) < 0.5, `above 1 rad by ${degrees(Math.max(...angles) - 1)}°`);
-  assert.ok(degrees(0.4 - Math.min(...angles.slice(60))) < 0.5, `below 0.4 rad by ${degrees(0.4 - Math.min(...angles.slice(60)))}°`);
+  assert.ok(degrees(Math.abs(angles[30] - 1)) < 2.5, `at 0.5 s: ${degrees(angles[30])}°`);
+  assert.ok(degrees(Math.abs(angles[75] - 0.4)) < 2.5, `at 1.25 s: ${degrees(angles[75])}°`);
+  assert.ok(degrees(Math.max(...angles) - 1) < 3, `above 1 rad by ${degrees(Math.max(...angles) - 1)}°`);
+  assert.ok(degrees(0.4 - Math.min(...angles.slice(60))) < 3, `below 0.4 rad by ${degrees(0.4 - Math.min(...angles.slice(60)))}°`);
 });
