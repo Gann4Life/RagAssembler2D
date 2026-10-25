@@ -1,6 +1,4 @@
-import { motorTorqueSuggestions } from '../../lib/motor.js';
 import { createJoint } from '../commands/create.js';
-import { toJson } from '../model/io.js';
 import { jointBetween, orderJointBodies } from '../model/queries.js';
 import { placement } from '../viewport/placement.js';
 import { snapAngle } from '../viewport/snap.js';
@@ -39,18 +37,6 @@ export function hingePair(model, hits) {
   const [first, second] = found;
   if (jointBetween(model, first, second) !== null) return null;
   return orderJointBodies(model, first, second);
-}
-
-function withSuggestedTorque(create, editorVersion) {
-  return Object.freeze({
-    label: create.label,
-    run(tx) {
-      const uid = create.run(tx);
-      const suggestion = motorTorqueSuggestions(toJson(tx.model, editorVersion())).get(tx.model.prop(uid, 'id'));
-      if (typeof suggestion === 'number') tx.set(uid, 'motor.maxTorque', suggestion);
-      return uid;
-    },
-  });
 }
 
 function wrap(angle) {
@@ -133,7 +119,7 @@ export function hingeTool() {
       ctx.invalidateOverlay();
       const spec = { ...pair, anchor: ctx.toLocal(anchor) };
       if (lower !== 0 || upper !== 0) spec.limits = { enabled: true, lower, upper };
-      const uid = ctx.history.execute(withSuggestedTorque(createJoint(spec), ctx.editorVersion));
+      const uid = ctx.history.execute(createJoint(spec));
       ctx.selection.set([uid]);
     },
     cancel() {
