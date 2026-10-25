@@ -55,7 +55,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | `balance.maxTorque` | number | `80` (the editor suggests the balance torque automatically on every rig change, `DESIGN.md` §3.2) | ≥0 | N·m | |
 | `balance.gain` | number | `10` | ≥0 | 1/s | |
 | `balance.damping` | number | `0.5` | ≥0 | — | |
-| `balance.maxSpeed` | number | `20` | ≥0 | rad/s | |
+| `balance.maxSpeed` | number | `20` | ≥0 | rad/s | Limits the correction only; the keyed `bodyAngle` rate always passes (DESIGN §3.2). |
 
 New documents and the 1 → 2 migration both write `balance.enabled = true` ([`DESIGN.md` §6.3](design/06-file-format.md#63-versioning)). The root `bodyAngle` channel ◆ has no field here: the inspector shows its evaluated value at the playhead in Animate mode.
 
@@ -142,7 +142,7 @@ In default names (`body_<n>`, `<type>_<n>`, `joint_<n>`), `<n>` is the number of
 | `motor.maxTorque` | number | `80` (the Hinge tool writes the suggested torque, `DESIGN.md` §3.1) | ≥0 | N·m | |
 | `motor.gain` | number | `10` | ≥0 | 1/s | |
 | `motor.damping` | number | `0.5` | ≥0 | — | |
-| `motor.maxSpeed` | number | `20` | ≥0 | rad/s | |
+| `motor.maxSpeed` | number | `20` | ≥0 | rad/s | Limits the correction only; the keyed `angle` rate always passes (DESIGN §3). |
 | `aimAxis` | number | `0` | — | rad | |
 
 Joint creation by the Hinge tool (#16, `createJoint`) sets `id`, `name` (`joint_<n>`), `bodyA`, `bodyB` and `anchor`, and `limits` only for a drag (enabled, `−θ`/`θ`); a pin keeps the default disabled limits, and every other field takes the default above ([`DESIGN.md` §5.5](design/05-5-tools.md#55-tools)). Hierarchy *Add joint* (#19) sets only `id`, `name` and `anchor` `[0, 0]`, leaving `bodyA` and `bodyB` `null` ([`DESIGN.md` §5.6](design/05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)). The motor defaults are provisional until the motor stability spike (#52) tunes them. `null` bodies are allowed in the model and in drafts, and are validation errors in files. The animated channels (`angle`, `strength`, `gain`, `damping` ◆) are not fields: the inspector shows their evaluated values at the playhead.
