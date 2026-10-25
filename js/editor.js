@@ -242,13 +242,13 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * @param {{ settings?: Settings, physics?: import('./tools/tool.js').PhysicsService|null,
  *   confirm?: (request: ConfirmRequest) => Promise<boolean>, notify?: (notice: Notice) => Promise<void>,
  *   files?: FileService|null, editorVersion?: () => string, uiBusy?: () => boolean,
- *   playback?: import('./tools/tool.js').PlaybackService, autokey?: () => boolean, status?: (text: string) => void }} [options]
+ *   playback?: import('./tools/tool.js').PlaybackService, status?: (text: string) => void }} [options]
  *   Restored editor settings, defaults when
  *   omitted; physics service for the Pose tool, `null` when omitted; how actions ask before a destructive step,
  *   always confirming when omitted; how actions report to the user, ignoring notices when omitted; file picker and
  *   download, `null` when omitted (`load` and `save` are then not registered); getter of the running editor's
  *   version, `dev` when omitted; whether a UI menu or dialog is open, which disables `rename`, never when omitted;
- *   Animate playback for the tools, never playing when omitted; whether autokey is on, on when omitted; status line
+ *   Animate playback for the tools, never playing when omitted; status line
  *   messages, ignored when omitted.
  * @returns {Readonly<Editor>} The editor.
  * @throws {TypeError} When `settings` is given and is not a `Settings` instance, `confirm` or `notify` is given
@@ -264,7 +264,6 @@ export function createEditor({
   editorVersion = () => DEV_VERSION,
   uiBusy = () => false,
   playback = undefined,
-  autokey = () => true,
   status = () => {},
 } = {}) {
   if (!(settings instanceof Settings)) throw new TypeError('settings must be a Settings instance');
@@ -302,7 +301,7 @@ export function createEditor({
   const history = new History(model, { finalize });
   const camera = new Camera();
   const tools = new ToolRegistry(
-    { model, history, selection, modes, settings, camera, physics, editorVersion, playback, autokey, status: say },
+    { model, history, selection, modes, settings, camera, physics, editorVersion, playback, status: say },
     TOOLS.map((createTool) => createTool()),
   );
   let confirming = false;

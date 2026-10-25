@@ -116,7 +116,6 @@
  * @property {PhysicsService|null} physics Physics service, or `null` when the editor has none.
  * @property {() => string} editorVersion Version of the running editor, read when needed; dev until known.
  * @property {PlaybackService} playback Animate playback; never playing without one.
- * @property {() => boolean} autokey Whether autokey is on.
  * @property {(text: string) => void} status Shows a status line message.
  */
 

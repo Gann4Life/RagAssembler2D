@@ -22,7 +22,6 @@ const ESCAPE_KEYS = new Set(['Escape', 'Esc']);
  * @property {import('./tool.js').PhysicsService|null} [physics] Physics service; `null` when omitted.
  * @property {() => string} [editorVersion] Version of the running editor; dev when omitted.
  * @property {import('./tool.js').PlaybackService} [playback] Animate playback; never playing when omitted.
- * @property {() => boolean} [autokey] Whether autokey is on; on when omitted.
  * @property {(text: string) => void} [status] Shows a status line message; ignored when omitted.
  */
 
@@ -304,7 +303,6 @@ export class ToolRegistry {
       physics: this.#core.physics ?? null,
       editorVersion: this.#core.editorVersion ?? (() => DEV_VERSION),
       playback: this.#core.playback ?? IDLE_PLAYBACK,
-      autokey: this.#core.autokey ?? (() => true),
       status: this.#core.status ?? (() => {}),
     });
   }

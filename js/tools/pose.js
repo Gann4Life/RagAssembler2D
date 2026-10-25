@@ -11,7 +11,6 @@ import { DRAG_THRESHOLD, defineTool } from './tool.js';
 const PRIMARY = 0;
 const PREVIEW_VERSION = 'preview';
 const KEY_THRESHOLD = (0.1 * Math.PI) / 180;
-const AUTOKEY_OFF = 'Pose: autokey is off, no keys written';
 
 function rootTransform(json) {
   const position = Array.isArray(json.ragdoll?.position) ? json.ragdoll.position : [0, 0];
@@ -81,10 +80,10 @@ function jointKeys(model, def, pressed, result) {
  * from the keyed pose (the FK pose of the clip at the playhead), translated so that the grabbed point stays where it is
  * on the displayed body (`ctx.displayedPose`), shown at once, `rootBody` free like every body, no gravity and no
  * contacts; a press while playing pauses first (`ctx.playback.pause`, the playhead at the displayed step) and grabs in
- * the same press. On a release after a drag, with autokey on, every joint whose measured angle changed by more than
+ * the same press. On a release after a drag, every joint whose measured angle changed by more than
  * 0.1° since the press gets a key there worth its released angle, clamped to its limits when they are enabled, and the
- * root `bodyAngle` likewise (unclamped), in one undo step, so joints the drag did not move keep their keys; with
- * autokey off nothing is written and the status line says so. A click writes nothing. Every Animate release hands the
+ * root `bodyAngle` likewise (unclamped), in one undo step, so joints the drag did not move keep their keys. A click
+ * writes nothing. Every Animate release hands the
  * released bodies to `ctx.playback.hold`. Cancel always discards. A press the physics service refuses shows
  * `not-allowed` until the release. Never changes the selection.
  * @returns {Readonly<import('./tool.js').Tool>} The tool.
@@ -154,9 +153,7 @@ export function poseTool() {
       const joints = jointKeys(ctx.model, def, from, result);
       const bodyAngle = rootKey(ctx.model, from, result);
       const keying = joints.length > 0 || bodyAngle !== null;
-      if (keying && !ctx.autokey()) {
-        ctx.status(AUTOKEY_OFF);
-      } else if (keying) {
+      if (keying) {
         for (const [joint, angle] of joints) {
           ctx.history.execute(setJointAngleKey(clip, joint, time, angle, 'Pose', { snap: false }));
         }

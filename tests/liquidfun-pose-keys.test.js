@@ -60,7 +60,7 @@ function playback() {
 function poseEditor(json) {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const service = playback();
-  const editor = createEditor({ physics: { startPose: (doc, options) => createPoseSession(Box2D, doc, options) }, playback: service, autokey: () => true });
+  const editor = createEditor({ physics: { startPose: (doc, options) => createPoseSession(Box2D, doc, options) }, playback: service });
   assert.equal(loadJson(editor.model, JSON.stringify(json)).ok, true);
   editor.camera.setSize(800, 800);
   editor.modes.openClip(editor.model.children(ROOT_UID, 'clips')[0]);

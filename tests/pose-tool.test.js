@@ -78,12 +78,11 @@ function fakePlayback() {
   return playback;
 }
 
-function environment({ physics = fakePhysics(), withPhysics = true, playback = fakePlayback(), autokey = true } = {}) {
+function environment({ physics = fakePhysics(), withPhysics = true, playback = fakePlayback() } = {}) {
   const statuses = [];
   const editor = createEditor({
     ...(withPhysics ? { physics } : {}),
     playback,
-    autokey: () => autokey,
     status: (text) => statuses.push(text),
   });
   const { model, history, camera, tools, selection } = editor;
@@ -203,9 +202,9 @@ test('presses that start nothing: empty space, a joint, the root, a right press,
   assert.deepEqual(noPhysics.view.poses, []);
 });
 
-function animateEnvironment({ playhead = 0.5, turn = 0.3, playback, autokey = true } = {}) {
+function animateEnvironment({ playhead = 0.5, turn = 0.3, playback } = {}) {
   const physics = fakePhysics();
-  const env = environment({ physics, playback, autokey });
+  const env = environment({ physics, playback });
   const clip = addClip(env);
   env.modes.openClip(clip);
   env.modes.setPlayhead(playhead);
@@ -406,17 +405,6 @@ test('Animate: a click writes nothing but still holds the released bodies', () =
   assert.deepEqual(env.snapshot(), env.before);
   assert.equal(env.playback.holds.length, 1);
   assert.deepEqual(env.statuses.pose, []);
-});
-
-test('Animate: with autokey off a drag writes no keys and the status line says so', () => {
-  const env = animateEnvironment({ turn: 0.5, autokey: false });
-  drag(env);
-  assert.deepEqual(env.snapshot(), env.before);
-  assert.deepEqual(env.statuses.pose, ['Pose: autokey is off, no keys written']);
-  assert.equal(env.playback.holds.length, 1);
-  const quiet = animateEnvironment({ turn: 0, autokey: false });
-  drag(quiet);
-  assert.deepEqual(quiet.statuses.pose, []);
 });
 
 test('Animate: a press while playing pauses at the displayed step and grabs in the same press', () => {

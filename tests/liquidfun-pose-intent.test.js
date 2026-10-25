@@ -86,7 +86,7 @@ function simulate(json, seconds) {
 function setup(json) {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const playback = { playing: false, holds: [], pause() {}, hold(pose) { playback.holds.push(pose); } };
-  const editor = createEditor({ physics: { startPose: (doc, options) => createPoseSession(Box2D, doc, options) }, playback, autokey: () => true });
+  const editor = createEditor({ physics: { startPose: (doc, options) => createPoseSession(Box2D, doc, options) }, playback });
   assert.equal(loadJson(editor.model, JSON.stringify(json)).ok, true);
   editor.camera.setSize(800, 800);
   editor.camera.zoomAt({ x: 400, y: 400 }, 400 / editor.camera.scale);
