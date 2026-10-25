@@ -27,6 +27,7 @@ const PLAYHEAD = 0.5;
 const STEP = 1 / 60;
 const PAST_EXTENDED = 0.3;
 const DEGREE = Math.PI / 180;
+const KEY_THRESHOLD = 0.1 * DEGREE;
 const DRAG_DEPTH = 0.2;
 const THROUGH_GROUND = 0.02;
 const STRAIGHT = 15 * DEGREE;
@@ -245,7 +246,7 @@ test('an Animate Pose drag pushes a grounded leg through the ground of the clip 
   }
 });
 
-test('an Animate Pose drag that extends a grounded leg keys the extended knee, leaves other limbs alone and makes the body jump', () => {
+test('an Animate Pose drag that extends a grounded leg keys the released knee, keeps the keys of unmoved joints and, extended by corrective drags, makes the body jump', () => {
   const json = crouchDocument();
   const env = setup(json);
   const before = allKeys(env);
@@ -263,8 +264,9 @@ test('an Animate Pose drag that extends a grounded leg keys the extended knee, l
 
   const keys = allKeys(env);
   const knee = keyAt(keys, 'j_shinL/angle', PLAYHEAD);
-  assert.ok(Math.abs(knee) < 0.5 * DEGREE, `knee key ${knee / DEGREE}° is the extended angle`);
+  assert.ok(knee > CROUCH.j_shinL / 2, `knee key ${knee / DEGREE}° is extended from the crouch`);
   for (const id of OTHER_LIMBS) {
+    if (Math.abs(jointAngle(json, released, id) - jointAngle(json, start, id)) > KEY_THRESHOLD) continue;
     assert.deepEqual(keys.get(`${id}/angle`), before.get(`${id}/angle`), `${id} keys untouched`);
   }
   for (const [name, values] of before) {
@@ -283,23 +285,30 @@ test('an Animate Pose drag that extends a grounded leg keys the extended knee, l
     assert.ok(Math.abs(value - seen) < 1e-6, `${name} keyed at its released angle`);
   }
 
+  let previous = knee;
+  for (let round = 0; round < 5 && previous < -0.5 * DEGREE; round++) {
+    const frames = simulate(toJson(env.editor.model, 'test'), PLAYHEAD + STEP);
+    dragShinStraight(env, json, frames[step], PAST_EXTENDED);
+    const again = allKeys(env);
+    for (const [name, values] of before) {
+      for (const [t, v] of values) {
+        if (Math.abs(t - PLAYHEAD) > 1e-9) assert.equal(keyAt(again, name, t), v, `round ${round}: ${name} at ${t} untouched`);
+      }
+    }
+    for (const joint of json.joints) {
+      const value = keyAt(again, `${joint.id}/angle`, PLAYHEAD);
+      if (value === undefined || joint.limits?.enabled !== true) continue;
+      assert.ok(value >= joint.limits.lower && value <= joint.limits.upper, `round ${round}: ${joint.id} key ${value} within limits`);
+    }
+    const now = keyAt(again, 'j_shinL/angle', PLAYHEAD);
+    assert.ok(now >= previous - KEY_THRESHOLD, `round ${round}: knee ${now} extends further from ${previous}`);
+    previous = now;
+  }
+  assert.ok(Math.abs(previous) < 0.5 * DEGREE, `knee key ${previous / DEGREE}° is extended after corrective drags`);
+
   const extended = simulate(toJson(env.editor.model, 'test'), 1);
   const was = rootRise(crouched);
   const now = rootRise(extended);
   assert.ok(now.top > was.top + 0.02, `the root rises: ${now.top} vs ${was.top}`);
   assert.ok(now.speed > 0.1, `the root is pushed up at ${now.speed} m/s`);
-
-  const first = allKeys(env);
-  for (let round = 0; round < 5; round++) {
-    const frames = simulate(toJson(env.editor.model, 'test'), PLAYHEAD + STEP);
-    dragShinStraight(env, json, frames[step], 0);
-    const again = allKeys(env);
-    for (const [name, values] of first) {
-      values.forEach(([t, v], index) => {
-        const [, w] = again.get(name)[index];
-        assert.ok(Math.abs(w - v) < 0.1 * DEGREE, `round ${round}: ${name} at ${t} drifted from ${v} to ${w}`);
-      });
-    }
-    assert.ok(Math.abs(keyAt(again, 'j_shinL/angle', PLAYHEAD)) < 0.5 * DEGREE, `round ${round}: knee stays extended`);
-  }
 });

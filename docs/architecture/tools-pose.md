@@ -43,10 +43,11 @@ PoseSession {
                                    Box2D.destroy(world); later calls on the session throw Error
 }
 POSE (frozen) { step: 1/60 s, maxSteps: 4, linearDamping: 10, angularDamping: 10,
-                forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7 }   s, s⁻¹, N/kg, Hz
+                forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7,
+                falloffMax: 0.8, falloffRatio: 0.5 }   s, s⁻¹, N/kg, Hz, unitless
 ```
 
-The session never calls `rag.update()`, so joint motors stay off and joints are free hinges within their limits ([`DESIGN.md` §7.2](../design/07-ragimporter.md#72-spawn-and-flipx)). It allocates nothing per step or drag ([`DESIGN.md` §7.4](../design/07-ragimporter.md#74-native-memory)).
+Edit and Animate get the same session; only `start` differs. Every joint motor is enabled at speed 0 as friction; before each step its cap is set to `falloffMax × (1 − falloffRatio^d) × |mouse GetReactionForce(1/step)| × distance(grabbed point, joint anchor)`, `d` the hops of the joint's nearer body from the grabbed body. No other joints or holds exist. The session never calls `rag.update()`, so animation motors never drive the joints, which bend within their limits ([`DESIGN.md` §7.2](../design/07-ragimporter.md#72-spawn-and-flipx)). It allocates nothing per step or drag ([`DESIGN.md` §7.4](../design/07-ragimporter.md#74-native-memory)).
 
 ## Tool contract additions
 

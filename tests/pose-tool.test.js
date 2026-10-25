@@ -259,8 +259,7 @@ test('Animate: the press starts from the keyed pose, moved so that the grabbed p
   });
   assert.equal(env.view.poses.length, 1, 'the keyed pose shows at the press');
   assert.ok(env.view.poses[0] instanceof Map);
-  assert.equal('holdRoot' in env.physics.starts[0].options, false);
-  assert.equal(env.physics.starts[0].options.falloff, true);
+  assert.deepEqual(Object.keys(env.physics.starts[0].options).sort(), ['bodyId', 'point', 'root', 'start']);
   env.actions.run('escape');
   assert.equal(env.view.poses.at(-1), null);
   assert.deepEqual(env.playback.holds, []);
@@ -603,9 +602,16 @@ test('Animate: release keys the root bodyAngle with the joint angles', () => {
   assert.equal(env.snapshot().json, env.before.json);
 });
 
-test('Edit: the session gets no root pin option and no falloff', () => {
-  const env = createEnvAndPress();
-  assert.equal('holdRoot' in env.physics.starts[0].options, false);
-  assert.equal(env.physics.starts[0].options.falloff, false);
-  send(env.tools, 'up', 260, 190);
+test('Edit and Animate start the same session: same option set, no mode-specific physics', () => {
+  const edit = createEnvAndPress();
+  const animate = animateEnvironment();
+  send(animate.tools, 'down', 260, 190);
+  const editOptions = edit.physics.starts[0].options;
+  const animateOptions = animate.physics.starts[0].options;
+  assert.deepEqual(Object.keys(editOptions).sort(), ['bodyId', 'point', 'root', 'start']);
+  assert.deepEqual(Object.keys(animateOptions).sort(), Object.keys(editOptions).sort());
+  assert.equal(editOptions.start, null);
+  assert.ok(animateOptions.start instanceof Map);
+  send(edit.tools, 'up', 260, 190);
+  send(animate.tools, 'up', 260, 190);
 });

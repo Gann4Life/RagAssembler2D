@@ -70,9 +70,7 @@
  * @property {string} bodyId File id of the grabbed body.
  * @property {import('../../lib/geometry.js').Vec2} point Grabbed point, world meters.
  * @property {Map<string, import('../../lib/geometry.js').Transform>|null} [start] Root-local transforms by body id
- *   the test starts from at rest, e.g. the displayed pose in Animate mode; the rest pose when omitted or `null`.
- * @property {boolean} [falloff] Whether the drag's influence falls off with the joint distance from the grabbed body
- *   (Animate mode): every other joint and body holds its start pose, harder the farther it is. Off when omitted.
+ *   the test starts from at rest, e.g. the keyed pose in Animate mode; the rest pose when omitted or `null`.
  */
 
 /**
