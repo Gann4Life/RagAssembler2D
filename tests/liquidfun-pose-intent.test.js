@@ -27,6 +27,9 @@ const PLAYHEAD = 0.5;
 const STEP = 1 / 60;
 const PAST_EXTENDED = 0.3;
 const DEGREE = Math.PI / 180;
+const DRAG_DEPTH = 0.2;
+const THROUGH_GROUND = 0.02;
+const STRAIGHT = 15 * DEGREE;
 const CROUCH = Object.freeze({ j_thighL: 0.2, j_shinL: -1.2, j_footL: 1, j_thighR: 0.2, j_shinR: -1.2, j_footR: 1 });
 const OTHER_LIMBS = ['j_thighR', 'j_shinR', 'j_footR', 'j_torso', 'j_head', 'j_upperL', 'j_foreL', 'j_upperR', 'j_foreR'];
 
@@ -154,12 +157,93 @@ function dragShinStraight(env, json, displayedById, past) {
   return { start, released };
 }
 
+function lowestPoint(json, pose, ids) {
+  let lowest = Infinity;
+  for (const body of json.bodies) {
+    if (ids !== undefined && !ids.includes(body.id)) continue;
+    const placed = pose.get(body.id);
+    for (const { shape } of body.fixtures) {
+      if (shape.type === 'circle') {
+        lowest = Math.min(lowest, transformPoint(placed, { x: shape.center[0], y: shape.center[1] }).y - shape.radius);
+        continue;
+      }
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const corner = transformPoint({ x: shape.center[0], y: shape.center[1], angle: shape.angle }, { x: (sx * shape.width) / 2, y: (sy * shape.height) / 2 });
+        lowest = Math.min(lowest, transformPoint(placed, corner).y);
+      }
+    }
+  }
+  return lowest;
+}
+
+function dragDown(env, displayedById, bodyId, depth) {
+  const { editor } = env;
+  const { model, tools, camera } = editor;
+  const displayed = new Map([...displayedById].map(([id, transform]) => [model.uidOf(id), transform]));
+  const shown = [];
+  tools.bindView({
+    hitTest: () => [model.children(model.uidOf(bodyId), 'fixtures')[0]],
+    boxTest: () => [],
+    setCursor() {},
+    invalidateOverlay() {},
+    setPose: (pose) => shown.push(pose),
+    displayedPose: () => displayed,
+  });
+  assert.equal(tools.activate('pose'), true);
+  const send = (type, screen) => tools.pointer({ type, screen, button: type === 'move' ? -1 : 0, buttons: type === 'up' ? 0 : 1, shift: false, ctrl: false, alt: false, clicks: 1 });
+  const grabbed = displayedById.get(bodyId);
+  const from = camera.worldToScreen(grabbed);
+  const to = camera.worldToScreen({ x: grabbed.x, y: grabbed.y - depth });
+  send('down', from);
+  for (let i = 1; i <= 60; i++) {
+    send('move', { x: from.x + ((to.x - from.x) * i) / 60, y: from.y + ((to.y - from.y) * i) / 60 });
+    tools.tick(STEP);
+  }
+  for (let i = 0; i < 60; i++) tools.tick(STEP);
+  const released = new Map([...shown.at(-1)].map(([uid, transform]) => [model.prop(uid, 'id'), transform]));
+  send('up', to);
+  assert.equal(shown.at(-1), null, 'the release hands the display back');
+  return { shown: shown.slice(0, -1).map((pose) => new Map([...pose].map(([uid, transform]) => [model.prop(uid, 'id'), transform]))), released };
+}
+
 function rootRise(frames) {
   const step = Math.round(PLAYHEAD / STEP);
   const heights = frames.slice(step, step + 30).map((pose) => pose.get('b_pelvis').y);
   const speeds = heights.slice(1).map((y, index) => (y - heights[index]) / STEP);
   return { top: Math.max(...heights), speed: Math.max(...speeds) };
 }
+
+test('an Animate Pose drag pushes a grounded leg through the ground of the clip simulation and keys it as released', () => {
+  const json = crouchDocument();
+  const env = setup(json);
+  const before = allKeys(env);
+  const frames = simulate(toJson(env.editor.model, 'test'), PLAYHEAD + STEP);
+  const shownAtPlayhead = frames[Math.round(PLAYHEAD / STEP)];
+  const ground = lowestPoint(json, restOf(json));
+  const foot = ['b_shinL', 'b_footL'];
+  const standing = lowestPoint(json, shownAtPlayhead, foot);
+  assert.ok(Math.abs(standing - ground) < 0.02, `the foot stands on the ground at the playhead: ${standing} vs ${ground}`);
+
+  const { shown, released } = dragDown(env, shownAtPlayhead, 'b_shinL', DRAG_DEPTH);
+  const deepest = Math.min(...shown.map((pose) => lowestPoint(json, pose, foot)));
+  assert.ok(deepest < ground - THROUGH_GROUND, `the leg goes ${(ground - deepest).toFixed(3)} m through the ground during the drag`);
+  const depth = ground - lowestPoint(json, released, foot);
+  assert.ok(depth > THROUGH_GROUND, `the leg is released ${depth.toFixed(3)} m through the ground`);
+  assert.ok(Math.abs(jointAngle(json, released, 'j_shinL')) < STRAIGHT, 'the leg stops at its length, straightened, not at the ground');
+  assert.equal(env.playback.holds.length, 1);
+  const held = new Map([...env.playback.holds[0]].map(([uid, transform]) => [env.editor.model.prop(uid, 'id'), transform]));
+  assert.deepEqual(held, released, 'the posed hold shows the leg through the ground');
+
+  const keys = allKeys(env);
+  const knee = keyAt(keys, 'j_shinL/angle', PLAYHEAD);
+  assert.notEqual(knee, keyAt(before, 'j_shinL/angle', PLAYHEAD), 'the knee is keyed');
+  for (const joint of ['j_thighL', 'j_shinL']) {
+    const { lower, upper } = json.joints.find((entry) => entry.id === joint).limits ?? {};
+    const angle = jointAngle(json, released, joint);
+    const expected = Number.isFinite(lower) ? Math.min(Math.max(angle, lower), upper) : angle;
+    assert.ok(Math.abs(keyAt(keys, `${joint}/angle`, PLAYHEAD) - expected) < 1e-6, `${joint} keyed at its released angle`);
+  }
+});
 
 test('an Animate Pose drag that extends a grounded leg keys the extended knee, leaves other limbs alone and makes the body jump', () => {
   const json = crouchDocument();
