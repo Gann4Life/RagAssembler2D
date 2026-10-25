@@ -26,7 +26,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | Path | Type | Default | Range | Unit | Flags |
 |---|---|---|---|---|---|
 | `format` | string | `"ragassembler"` | constant | — | R |
-| `version` | integer | `FORMAT_VERSION` (2) | supported versions | — | R |
+| `version` | integer | `FORMAT_VERSION` (3) | supported versions | — | R |
 | `meta.name` | string | `"root"` (Save writes `ragdoll.name`) | — | — | E, R |
 | `meta.editorVersion` | string | set by Save (running editor version) | — | — | E, R |
 | `units.pixelsPerMeter` | number | `32` | >0 | px/m | |
@@ -79,13 +79,14 @@ Inspector-only, derived: `size` (native px and m), `used by`.
 | `name` | string | `body_<n>` | — | — | |
 | `position` | vec2 | `[0, 0]` | — | m | |
 | `angle` | number | `0` | — | rad | |
+| `mass` | number | `1` | >0 | kg | Distributed over the shapes by area, sensors excluded (DESIGN §3.3). Added in version 3. |
 | `linearDamping` | number | `0` | ≥0 | 1/s | |
 | `angularDamping` | number | `0` | ≥0 | 1/s | |
 | `fixedRotation` | boolean | `false` | — | — | |
 | `bullet` | boolean | `false` | — | — | |
 | `fixtures` | list:shape | — | ≥1 item | — | |
 
-Inspector-only, derived: `mass` (kg, from `lib/geometry.js`), `shapes` list.
+Inspector-only, derived: `shapes` list.
 
 ## shape (`fixtures[]`)
 
@@ -100,7 +101,6 @@ Inspector-only, derived: `mass` (kg, from `lib/geometry.js`), `shapes` list.
 | `shape.height` | number | `0.5` | >0 | m | V box |
 | `shape.angle` | number | `0` | — | rad | V box |
 | `shape.vertices` | vec2[] | set by the Polygon tool | 3–8 items | m | V polygon |
-| `density` | number | `1` | ≥0 | kg/m² | |
 | `friction` | number | `0.6` | ≥0 | — | |
 | `restitution` | number | `0` | ≥0 | — | |
 | `isSensor` | boolean | `false` | — | — | |
