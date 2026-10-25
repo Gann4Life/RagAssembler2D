@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-25
+
+### Added
+- Inspector panel with Ragdoll and Body pages: name, position, angle, damping, fixed rotation, bullet, computed mass, shape list, root body dropdown, preview gravity, drive multipliers and balance.
+- Select several bodies to edit them together; values that differ are shown as —.
+- Inspector values are shown in px, ° and %.
+- The Ragdoll page shows when nothing is selected.
+- A body angle typed in the Inspector rotates the body around its parent joint and carries its children.
+- The Inspector is read-only in Animate (showing values at the playhead) and in Simulate.
+
 ## [0.16.0] - 2026-10-25
 
 ### Added

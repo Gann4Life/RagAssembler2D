@@ -31,7 +31,7 @@
 - [x] #17 Manipulate tool: move and rotate root and body subtrees
 - [x] #18 Group and Ungroup bodies
 - [x] #19 Hierarchy panel with tree, search, delete and add
-- [ ] #20 Inspector framework with root and body properties
+- [x] #20 Inspector framework with root and body properties
 - [ ] #21 Assets panel with import, drag-assign, usage and delete guard
 - [ ] #22 Inspector: shape and sprite properties
 - [ ] #23 Inspector: joint properties
@@ -158,6 +158,7 @@
 - [ ] #182 Demo controls: hit, kill, revive, debug toggle and respawn
 - [x] #183 Load a .rag.json in the demo with a file picker or drag-and-drop
 - [x] #196 Demo breaks with the robot rig: step like the editor
+- [ ] #205 Add example library browser
 
 ## No milestone
 - [x] #80 Assign models to project agents by role
