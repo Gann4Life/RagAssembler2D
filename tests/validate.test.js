@@ -204,7 +204,7 @@ const cases = [
     mutate: (j) => void j.joints.push(joint('j_loop', 'loop', 'b_torso', 'b_thigh_l', [0, 0.85], { enabled: false, lower: 0, upper: 0 })),
     path: '/joints/3',
   },
-  { code: 'W_ANCHOR_OUTSIDE', mutate: (j) => void (j.joints[1].anchor = [5, 5]), path: '/joints/1/anchor' },
+  { code: 'W_ANCHOR_OUTSIDE', mutate: (j) => void (j.joints[1].anchor = [0.5, 0.35]), path: '/joints/1/anchor' },
   { code: 'W_BODY_ZERO_MASS', mutate: (j) => void (j.bodies[1].fixtures[0].density = 0), path: '/bodies/1' },
   { code: 'W_MOTOR_OVERPOWERED', mutate: (j) => void (j.joints[2].motor.maxTorque = 1e6), path: '/joints/2/motor/maxTorque' },
   { code: 'W_MOTOR_UNDERPOWERED', mutate: (j) => void (j.joints[2].motor.maxTorque = 0.001), path: '/joints/2/motor/maxTorque' },

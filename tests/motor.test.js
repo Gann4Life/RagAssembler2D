@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { driveMotor } from '../lib/instance.js';
+import { balanceTorqueSuggestion, motorTorqueSuggestions } from '../lib/motor.js';
 import { MOTOR, fakeJoint, fakeInstance } from './helpers/fake-instance.js';
+import { bipedRig, creatureRig, humanoidRig } from './helpers/rigs.js';
 
 function near(actual, expected) {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
@@ -37,6 +39,19 @@ test('driveMotor clamps the correction to maxSpeed, never the keyed rate', () =>
   const behind = fakeJoint(0, 0);
   driveMotor(behind, { angle: -10, angleRate: 30, S: 1, G: 10, D: 0 }, MOTOR);
   assert.equal(behind.motorSpeed, 10);
+});
+
+test('the suggested torques of the test rigs (DESIGN §3.1, α = 1000 rad/s², balance α = 100 rad/s²)', () => {
+  const creature = motorTorqueSuggestions(creatureRig().json);
+  assert.equal(creature.get('j_finger'), 2.4);
+  assert.equal(creature.get('j_hip'), 150);
+  assert.equal(balanceTorqueSuggestion(creatureRig().json), 55);
+  const humanoid = motorTorqueSuggestions(humanoidRig().json);
+  assert.deepEqual([humanoid.get('j_handL'), humanoid.get('j_footL'), humanoid.get('j_shinL'), humanoid.get('j_thighL')], [8.1, 22, 110, 290]);
+  assert.equal(balanceTorqueSuggestion(humanoidRig().json), 98);
+  const biped = [...motorTorqueSuggestions(bipedRig().json).values()];
+  assert.deepEqual([Math.min(...biped), Math.max(...biped)], [3.7, 39]);
+  assert.equal(balanceTorqueSuggestion(bipedRig().json), 14);
 });
 
 test('driveMotor disables the motor when S is 0', () => {

@@ -162,7 +162,7 @@ test('a light creature held at rest by zero-gain motors stays still at the defau
 test('the suggested torque of the light creature matches the DESIGN §3.1 examples', () => {
   const suggestions = applySuggestedTorque(lightCreature({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }));
   assert.equal(suggestions.get('j_finger'), 2.4);
-  assert.equal(suggestions.get('j_hip'), 53);
+  assert.equal(suggestions.get('j_hip'), 150);
   assert.ok([...suggestions.values()].every((value) => typeof value === 'number' && value >= 0.001));
 });
 

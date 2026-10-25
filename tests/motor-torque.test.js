@@ -24,12 +24,20 @@ function boxInertia(mass, width, height, distance) {
 }
 
 function need(a, b, totalMass, lever) {
-  return ((a * b) / (a + b)) * 100 + 2 * totalMass * 10 * lever;
+  return ((a * b) / (a + b)) * 1000 + 2 * totalMass * 10 * lever;
 }
 
 test('MOTOR_TORQUE holds the frozen constants of DESIGN §3.1', () => {
   assert.ok(Object.isFrozen(MOTOR_TORQUE));
-  assert.deepEqual({ ...MOTOR_TORQUE }, { alpha: 100, gravity: 10, min: 0.001, overpoweredFactor: 1000, margin: 2 });
+  assert.deepEqual({ ...MOTOR_TORQUE }, { alpha: 1000, balanceAlpha: 100, gravity: 10, min: 0.001, overpoweredFactor: 1000, margin: 2 });
+});
+
+test('the DESIGN §3.1 example: two 1 kg boxes hinged between them get 75 N·m', () => {
+  const doc = {
+    bodies: [boxBody('a', [0, 0], 0.5, 0.5, 4), boxBody('b', [0, 0.5], 0.5, 0.5, 4)],
+    joints: [joint('j', 'a', 'b', [0, 0.25])],
+  };
+  assert.equal(motorTorqueSuggestions(doc).get('j'), 75);
 });
 
 test('a two-body joint gets roundUp2(I_eff * alpha + margin * M * g * shorter reach)', () => {
@@ -99,7 +107,7 @@ test('rounding up to two significant digits and the minimum', () => {
   const expected = need(boxInertia(16, 4, 4, 2), boxInertia(2, 2, 1, 1), 18, Math.hypot(2, 0.5));
   const value = motorTorqueSuggestions(large).get('j');
   assert.equal(value, roundUp2(expected));
-  assert.equal(value, 1100);
+  assert.equal(value, 3600);
   assert.ok(value > expected);
 });
 
