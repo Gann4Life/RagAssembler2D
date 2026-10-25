@@ -22,6 +22,8 @@ Tools overlay ([`DESIGN.md` §5.5](../design/05-5-tools.md#55-tools)):
 
 Hierarchy: right after `createDock` (step 7), `js/main.js` calls `createHierarchy(dock.panelElement('hierarchy'), editor)`, which replaces the placeholder content of that element ([Hierarchy and deletion](hierarchy-and-deletion.md#hierarchy-and-deletion)). The panel element exists while the panel is closed, so the Hierarchy is created once and keeps its state across close and reopen.
 
+Inspector (#20): right after the Hierarchy, `js/main.js` calls `createInspector(dock.panelElement('inspector'), editor)`, which replaces the placeholder content of that element and subscribes to the editor's events itself ([Inspector](inspector.md#inspector)); like the Hierarchy it is created once and survives close and reopen.
+
 Files (#28): step 5 also passes `notify: (notice) => noticeDialog(document, notice)` and `files: { openText: () => pickTextFile(document, RAG_FILE_ACCEPT), saveText: (name, text) => saveTextFile(document, name, text) }` to `createEditor`. Right after `createDock` (step 7) it calls `attachFileDrop(#panel-viewport, (read) => editor.loadFrom(read), () => actions.isEnabled('load'))` (the panel, so drops on the Tools overlay load too) and `blockFileNavigation(document)`. The header and `Ctrl+O`/`Ctrl+S` already route to `actions.run('load' | 'save')`.
 
-**(planned)** Boot grows: `main.js` mounts the other panels (Hierarchy is mounted) and passes them the editor object, and offers draft recovery ([`DESIGN.md` §1](../design/01-conventions.md#1-conventions)).
+**(planned)** Boot grows: `main.js` mounts the other panels (Hierarchy and Inspector are mounted) and passes them the editor object, and offers draft recovery ([`DESIGN.md` §1](../design/01-conventions.md#1-conventions)).
