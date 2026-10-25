@@ -119,7 +119,7 @@ function fakeRag(name, calls) {
 }
 
 test('STEP_SETTINGS holds the editor stepping and is frozen', () => {
-  assert.deepEqual({ ...STEP_SETTINGS }, { dt: 1 / 60, substeps: 8, velocityIterations: 8, positionIterations: 3 });
+  assert.deepEqual({ ...STEP_SETTINGS }, { dt: 1 / 60, substeps: 8, velocityIterations: 80, positionIterations: 3 });
   assert.equal(Object.isFrozen(STEP_SETTINGS), true);
 });
 
@@ -133,7 +133,7 @@ test('stepWorld updates every instance in order before each of the substeps', ()
   stepWorld(fakeWorld(calls), [fakeRag('a', calls), fakeRag('b', calls)], 0.08);
   const substep = 0.08 / 8;
   const expected = [];
-  for (let i = 0; i < 8; i++) expected.push(['a', substep], ['b', substep], ['Step', substep, 8, 3]);
+  for (let i = 0; i < 8; i++) expected.push(['a', substep], ['b', substep], ['Step', substep, 80, 3]);
   assert.deepEqual(calls, expected);
 });
 
@@ -152,7 +152,7 @@ test('stepWorld updates the instances of a one-shot iterator in every substep', 
 test('stepWorld defaults to one STEP_SETTINGS.dt frame and no instances', () => {
   const calls = [];
   stepWorld(fakeWorld(calls));
-  assert.deepEqual(calls, Array.from({ length: 8 }, () => ['Step', STEP_SETTINGS.dt / 8, 8, 3]));
+  assert.deepEqual(calls, Array.from({ length: 8 }, () => ['Step', STEP_SETTINGS.dt / 8, 80, 3]));
 });
 
 test('stepWorld rejects a world without Step, non-iterable instances and a bad dt', () => {
