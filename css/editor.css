@@ -1246,8 +1246,10 @@ body.dock-resizing-column * {
 
 .dock-panel.inspector-panel {
   display: block;
+  place-items: stretch;
   container-type: inline-size;
   overflow: auto;
+  scroll-padding-top: 36px;
 }
 
 .inspector-title {
