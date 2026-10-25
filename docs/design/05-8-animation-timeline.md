@@ -2,7 +2,7 @@
 Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modeled after Godot's animation panel.
 
 ```
-┌ [▶] [clip ▾ walk] [+ New] [⧉ Duplicate] [🗑]  length [1.00]s snap [1/30] [⟲ loop] [‹ cycle 2 ›] [Onion skins] [● autokey] [◆ Key selected (K)] ┐
+┌ [▶] [clip ▾ walk] [Rename] [+ New] [⧉ Duplicate] [🗑]  length [1.00]s snap [1/30] [⟲ loop] [‹ cycle 2 ›] [Onion skins] [● autokey] [◆ Key selected (K)] ┐
 │ Preview stack: [✓ alive] [ pain] [ dead] ...     Procedural: [ Look at cursor] weight ──○──          zoom ──○──   │
 ├──────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────┤
 │                          │ 0.0     0.2     0.4     0.6     0.8     1.0     ▼ playhead                             │
@@ -19,7 +19,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
 ```
 
 - **Play button (▶ / ❚❚):** first in the Timeline bar, as in Godot, so the animating loop needs no trip to the header. It runs the same Play / Pause toggle as the header (Space), with the same enabled rule and reason, and shows ❚❚ with the label "Pause" while playing ([§5.1](05-1-modes.md#51-editor-modes), Playback in Animate).
-- **Clip selector:** "(rest pose)" = Edit mode, plus every clip; it mirrors the header mode switch ([§5.3](05-3-header.md#53-header)). New / Duplicate / Delete buttons. New creates a clip and opens it, entering Animate mode: its tooltip says so ("New clip: creates and opens it in Animate mode"). The selected clip's properties appear in the inspector.
+- **Clip selector:** "(rest pose)" = Edit mode, plus every clip; it mirrors the header mode switch ([§5.3](05-3-header.md#53-header)). Rename / New / Duplicate / Delete buttons. **Rename** (also a double-click on the selector) swaps the selector for a text field holding the open clip's `name`: Enter or leaving the field commits it as one undo step "Rename clip", Esc cancels, an empty name is refused with the status line reason "Rename clip: the name cannot be empty". Disabled with the tooltip reason "open a clip" while no clip is open (Edit mode) and in Simulate; the selector shows the new name at once, and the clip `key` follows the name by the key-follows-name rule ([§4](04-animation-model.md)). New clips are named "New Clip", "New Clip 2", "New Clip 3", … (the first name no clip uses). New creates a clip and opens it, entering Animate mode: its tooltip says so ("New clip: creates and opens it in Animate mode"). The selected clip's properties appear in the inspector.
 - **Tracks:**
   - The root track group always comes first.
   - Then one group per joint, with sub-tracks for the channels that have keys.

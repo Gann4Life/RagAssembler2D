@@ -57,6 +57,8 @@ export function createTimeline(element_, editor, player) {
   select.setAttribute('aria-label', 'Clip');
   const playButton = button(doc, 'Play');
   playButton.setAttribute('aria-label', 'Play');
+  const renameButton = button(doc, 'Rename');
+  renameButton.setAttribute('aria-label', 'Rename clip');
   const newButton = button(doc, '+ New');
   newButton.setAttribute('aria-label', 'New clip');
   const deleteButton = button(doc, 'Delete');
@@ -83,7 +85,7 @@ export function createTimeline(element_, editor, player) {
   const onionButton = button(doc, 'Onion skins');
   onionButton.setAttribute('aria-pressed', 'false');
   onionButton.title = ONION_TITLE;
-  header.append(playButton, select, newButton, deleteButton, lengthLabel, loopLabel, cycleGroup, onionButton);
+  header.append(playButton, select, renameButton, newButton, deleteButton, lengthLabel, loopLabel, cycleGroup, onionButton);
 
   const body = element(doc, 'div', 'timeline-body');
   const labels = element(doc, 'div', 'timeline-labels');
@@ -111,6 +113,7 @@ export function createTimeline(element_, editor, player) {
   let signature = '';
   let scrubPointer = null;
   let keyDrag = null;
+  let nameField = null;
 
   const canOpen = () => modes.can('clip.open') && !history.inGesture;
   const canEditClip = () => modes.clip !== null && modes.can('edit.animation') && !history.inGesture;
@@ -208,6 +211,7 @@ export function createTimeline(element_, editor, player) {
     playButton.setAttribute('aria-disabled', String(!player.canPlay()));
     renderCycle();
     select.disabled = !canOpen();
+    setReason(renameButton, renameReason());
     for (const [node, enabled] of [[newButton, canOpen()], [deleteButton, canOpen() && open]]) {
       node.setAttribute('aria-disabled', String(!enabled));
     }
@@ -276,6 +280,71 @@ export function createTimeline(element_, editor, player) {
     if (newButton.getAttribute('aria-disabled') === 'true') return;
     const uid = history.execute(createClip());
     modes.openClip(uid);
+  }
+
+  function renameReason() {
+    if (!modes.can('clip.rename')) return 'not available in this mode';
+    if (history.inGesture) return 'finish the current gesture first';
+    if (modes.clip === null) return 'open a clip';
+    return null;
+  }
+
+  function closeNameField() {
+    if (nameField === null) return;
+    const field = nameField;
+    nameField = null;
+    field.remove();
+    select.hidden = false;
+    renameButton.focus();
+  }
+
+  function finishRename(commit) {
+    if (nameField === null) return;
+    const clip = modes.clip;
+    const value = nameField.value.trim();
+    if (!commit || clip === null || value === model.prop(clip, 'name')) {
+      closeNameField();
+      return;
+    }
+    if (value === '') {
+      editor.status('Rename clip: the name cannot be empty');
+      closeNameField();
+      return;
+    }
+    closeNameField();
+    history.execute(setProps([clip], { name: value }, 'Rename clip'));
+  }
+
+  function startRename() {
+    if (nameField !== null) return;
+    const reason = renameReason();
+    if (reason !== null) {
+      editor.status(`Rename clip: ${reason}`);
+      return;
+    }
+    const field = element(doc, 'input', 'timeline-select timeline-rename');
+    field.type = 'text';
+    field.spellcheck = false;
+    field.autocomplete = 'off';
+    field.setAttribute('aria-label', 'Clip name');
+    field.value = model.prop(modes.clip, 'name');
+    field.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.isComposing) return;
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        finishRename(true);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        finishRename(false);
+      }
+    });
+    field.addEventListener('blur', () => finishRename(true));
+    nameField = field;
+    select.hidden = true;
+    select.after(field);
+    field.focus();
+    field.select();
   }
 
   function removeClip() {
@@ -422,6 +491,8 @@ export function createTimeline(element_, editor, player) {
   cycleNext.addEventListener('click', () => stepCycle(1));
   select.addEventListener('change', onSelect);
   playButton.addEventListener('click', togglePlay);
+  renameButton.addEventListener('click', startRename);
+  select.addEventListener('dblclick', startRename);
   newButton.addEventListener('click', addClip);
   deleteButton.addEventListener('click', removeClip);
   lengthInput.addEventListener('change', commitLength);

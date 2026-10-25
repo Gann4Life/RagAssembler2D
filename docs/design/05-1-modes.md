@@ -49,6 +49,7 @@ Sprites follow the evaluated clip at the playhead in every case.
 | Asset import | ✓ | ✓ | — |
 | Asset delete | ✓ | — | — |
 | Clip selector, New clip | ✓ | ✓ | — |
+| Rename clip | ✓ | ✓ | — |
 | Mode switch | ✓ | ✓ | ✓ (below) |
 | Scrub | — | ✓ | — |
 | Preview stack | — | ✓ | ✓ |

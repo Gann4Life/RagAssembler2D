@@ -18,6 +18,7 @@
 | `edit.animation` | Animation edits |
 | `assets.import`, `assets.delete` | Asset import / Asset delete |
 | `clip.open` | Clip selector, New clip |
+| `clip.rename` | Rename clip |
 | `timeline.scrub` | Scrub |
 | `preview.stack`, `preview.procedural` | Preview stack / Procedural preview |
 | `file`, `history` | New/Load/Save, Undo/Redo |

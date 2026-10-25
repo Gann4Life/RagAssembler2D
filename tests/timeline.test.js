@@ -36,8 +36,40 @@ test('createClip avoids a key taken by a renamed clip', () => {
   history.execute(setProps([first], { key: 'new_clip_2' }));
   const second = history.execute(createClip());
   const third = history.execute(createClip());
-  assert.equal(model.prop(second, 'key'), 'new_clip');
+  assert.equal(model.prop(second, 'key'), 'new_clip_2_2');
   assert.equal(model.prop(third, 'key'), 'new_clip_3');
+});
+
+test('createClip gives each new clip the first unused default name', () => {
+  const { model, history } = createEditor();
+  const names = () => clipsOf({ model }).map((uid) => model.prop(uid, 'name'));
+  const first = history.execute(createClip());
+  const second = history.execute(createClip());
+  history.execute(createClip());
+  assert.deepEqual(names(), ['New Clip', 'New Clip 2', 'New Clip 3']);
+  history.execute(setProps([first], { name: 'Walk' }));
+  history.execute(createClip());
+  assert.deepEqual(names().slice(3), ['New Clip']);
+  history.execute(deleteClip(second));
+  const again = history.execute(createClip());
+  assert.equal(model.prop(again, 'name'), 'New Clip 2');
+});
+
+test('renaming a clip is one undo step in Animate and the capability is allowed in Edit', () => {
+  const { model, history, modes } = createEditor();
+  const uid = history.execute(createClip());
+  assert.equal(modes.can('clip.rename'), true);
+  modes.openClip(uid);
+  assert.equal(modes.can('clip.rename'), true);
+  history.execute(setProps([uid], { name: 'Walk' }, 'Rename clip'));
+  assert.equal(model.prop(uid, 'name'), 'Walk');
+  assert.equal(model.prop(uid, 'key'), 'walk');
+  assert.equal(history.state.undoLabel, 'Rename clip');
+  history.undo();
+  assert.equal(model.prop(uid, 'name'), 'New Clip');
+  assert.equal(model.prop(uid, 'key'), 'new_clip');
+  modes.startSimulate();
+  assert.equal(modes.can('clip.rename'), false);
 });
 
 test('deleteClip removes the clip, undo restores it, and a non-clip is refused', () => {
