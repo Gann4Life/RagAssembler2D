@@ -1,4 +1,5 @@
 import { rovingIndex } from './roving-focus.js';
+import { attachTooltip } from './tooltip.js';
 
 /**
  * @typedef {object} MenuItem
@@ -7,6 +8,8 @@ import { rovingIndex } from './roving-focus.js';
  * @property {'item' | 'checkbox' | 'separator'} kind
  * @property {boolean} [checked] State of a checkbox item.
  * @property {boolean} [disabled] Disabled items stay focusable but cannot be chosen.
+ * @property {string} [shortcut] Hotkey shown right-aligned in the muted color.
+ * @property {string|null} [reason] Why a disabled item is disabled: its accessible description and tooltip.
  */
 
 /**
@@ -14,12 +17,15 @@ import { rovingIndex } from './roving-focus.js';
  * @property {(item: MenuItem) => void} [onSelect] Called after the menu closed, with the chosen item.
  * @property {(key: 'ArrowLeft' | 'ArrowRight') => void} [onNavigate] Called after Left/Right closed the menu; focus is on the button.
  * @property {'first' | 'last'} [focus] Item focused on open; `'first'` by default.
+ * @property {'left' | 'right'} [align] Button edge the menu aligns to; `'right'` by default.
+ * @property {(item: MenuItem) => void} [onRefuse] Called when a disabled item is chosen; the menu stays open.
  */
 
 let menuCount = 0;
 
 /**
- * Opens a popup menu below a button, aligned to its right edge, and moves focus into it. The menu is labelled
+ * Opens a popup menu below a button, aligned to its right (or left) edge and kept inside the window, and moves focus
+ * into it. Disabled items with a reason show "*Label* (*Key*) (*reason*)" in a tooltip. The menu is labelled
  * with the button's `aria-label`, or its text content when it has none. Sets `aria-expanded` and `aria-controls` on the button while open. Closes on choice, Esc, Tab,
  * Left/Right and outside pointer presses.
  * @param {HTMLElement} button The menu button.
@@ -27,7 +33,7 @@ let menuCount = 0;
  * @param {MenuOptions} [options]
  * @returns {{ close: () => void }} Closing is idempotent and does not move focus.
  */
-export function openMenu(button, items, { onSelect, onNavigate, focus = 'first' } = {}) {
+export function openMenu(button, items, { onSelect, onNavigate, onRefuse, focus = 'first', align = 'right' } = {}) {
   const doc = button.ownerDocument;
   const menu = doc.createElement('div');
   menu.className = 'menu';
@@ -36,6 +42,7 @@ export function openMenu(button, items, { onSelect, onNavigate, focus = 'first' 
   menu.setAttribute('aria-label', button.getAttribute('aria-label') || button.textContent);
 
   const entries = [];
+  const tooltips = [];
   for (const item of items) {
     if (item.kind === 'separator') {
       const separator = doc.createElement('div');
@@ -46,13 +53,20 @@ export function openMenu(button, items, { onSelect, onNavigate, focus = 'first' 
     }
     const element = createItem(doc, item);
     entries.push({ item, element });
+    if (item.disabled && item.reason) {
+      const base = item.shortcut ? `${item.label} (${item.shortcut})` : item.label;
+      tooltips.push(attachTooltip(element, () => `${base} (${item.reason})`));
+    }
     menu.append(element);
   }
 
   const anchor = button.getBoundingClientRect();
   menu.style.top = `${Math.round(anchor.bottom + 2)}px`;
-  menu.style.right = `${Math.round(doc.documentElement.clientWidth - anchor.right)}px`;
+  if (align === 'left') menu.style.left = `${Math.round(anchor.left)}px`;
+  else menu.style.right = `${Math.round(doc.documentElement.clientWidth - anchor.right)}px`;
   doc.body.append(menu);
+  const overflow = menu.getBoundingClientRect().right - doc.documentElement.clientWidth;
+  if (align === 'left' && overflow > 0) menu.style.left = `${Math.max(0, Math.round(anchor.left - overflow))}px`;
   button.setAttribute('aria-expanded', 'true');
   button.setAttribute('aria-controls', menu.id);
 
@@ -62,6 +76,7 @@ export function openMenu(button, items, { onSelect, onNavigate, focus = 'first' 
   const close = () => {
     if (!open) return;
     open = false;
+    for (const tooltip of tooltips) tooltip.detach();
     doc.removeEventListener('pointerdown', onOutsidePointer, true);
     menu.remove();
     button.setAttribute('aria-expanded', 'false');
@@ -69,7 +84,10 @@ export function openMenu(button, items, { onSelect, onNavigate, focus = 'first' 
   };
 
   const choose = (entry) => {
-    if (entry.item.disabled) return;
+    if (entry.item.disabled) {
+      onRefuse?.(entry.item);
+      return;
+    }
     close();
     button.focus();
     onSelect?.(entry.item);
@@ -144,5 +162,13 @@ function createItem(doc, item) {
   const label = doc.createElement('span');
   label.textContent = item.label;
   element.append(check, label);
+  if (item.shortcut) {
+    const shortcut = doc.createElement('span');
+    shortcut.className = 'menu-shortcut';
+    shortcut.textContent = item.shortcut;
+    element.append(shortcut);
+    element.setAttribute('aria-keyshortcuts', item.shortcut.replace(/Ctrl/g, 'Control').replace(/^Del$/, 'Delete'));
+  }
+  if (item.disabled && item.reason) element.setAttribute('aria-description', item.reason);
   return element;
 }

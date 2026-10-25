@@ -21,7 +21,7 @@ function stubWorld(overrides = {}) {
 test('RagImporter is frozen and exposes configure, parse, validate and supportedVersions', () => {
   assert.ok(Object.isFrozen(RagImporter));
   assert.deepEqual(Object.keys(RagImporter).sort(), ['configure', 'parse', 'supportedVersions', 'validate']);
-  assert.deepEqual([...RagImporter.supportedVersions], [1]);
+  assert.deepEqual([...RagImporter.supportedVersions], [2]);
   assert.ok(Object.isFrozen(RagImporter.supportedVersions));
 });
 
@@ -93,7 +93,7 @@ test('parse reports an unsupported version with the supported list', () => {
   json.version = 7;
   assert.throws(() => RagImporter.parse(json), {
     name: 'RagFormatError',
-    message: 'Unsupported .rag.json version 7; supported: 1',
+    message: 'Unsupported .rag.json version 7; supported: 2',
   });
 });
 

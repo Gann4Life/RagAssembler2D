@@ -51,7 +51,7 @@ function joint(id, name, bodyA, bodyB, anchor, limits, aimAxis) {
 export function ragFile() {
   return {
     format: 'ragassembler',
-    version: 1,
+    version: 2,
     meta: { name: 'sample', editorVersion: '0.1.0' },
     units: { pixelsPerMeter: 40 },
     preview: { gravity: [0, -10] },
@@ -62,6 +62,7 @@ export function ragFile() {
       angle: 1.2,
       rootBody: 'b_torso',
       channels: { strength: 1, gain: 1, damping: 1 },
+      balance: { enabled: true, maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 },
     },
     sprites: [
       { id: 's_a', name: 'a', src: 'parts/a.png' },

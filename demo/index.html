@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RagImporter demo</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="../vendor/pixi.min.js"></script>
+  <script src="../vendor/liquidfun.js"></script>
+</head>
+<body>
+  <div id="stage"></div>
+  <aside id="panel">
+    <h1>RagImporter demo</h1>
+    <p id="file-name"></p>
+    <label class="row">
+      <span>Load .rag.json</span>
+      <input id="file-input" type="file" accept=".json,.rag.json,application/json">
+    </label>
+    <div class="row"><button id="respawn" type="button">Respawn</button></div>
+    <label class="row">
+      <span>Strength <output id="strength-value">1.00</output></span>
+      <input id="strength" type="range" min="0" max="1" step="0.01" value="1">
+    </label>
+    <h2>Clips</h2>
+    <div id="clips"></div>
+    <pre id="error" hidden></pre>
+  </aside>
+  <div id="drop-hint" hidden>Drop a .rag.json to load it</div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 Newest first. See the [index](../decisions.md).
 
 ## 2026-10-23
+- **Select only selects in Animate mode again; the #125 rotation ring into joint `angle` / root `bodyAngle` keys is removed (owner rule: Pose is the animation tool).** Mode changes no longer switch the active tool. See [visible-controls.md](visible-controls.md), 2026-10-23; supersedes the #128 / #125 entry of 2026-10-16 below. (DESIGN §5.1, §5.5)
 - **Moving or rotating a selected joint carries its child body's subtree (the body it is the parent joint of) with the carried anchors; ALT moves or rotates only the joint's anchor; a joint with no child body (loop joint) moves only its anchor; each body moves once when targets overlap.** Owner decision (#168). Reason: a joint is a handle on the hierarchy, as a body is, and ALT keeps the "this object alone" meaning it has for bodies. The ring of a single joint with rotatable limits keeps editing the limits, so limit editing is not lost. (DESIGN §5.5, §2.4)
 
 ## 2026-10-16

@@ -26,6 +26,10 @@ const OVERLAYS = Object.freeze([
   Object.freeze({ key: 'overlay.centers', label: 'Centers of mass' }),
   Object.freeze({ key: 'overlay.contacts', label: 'Contacts' }),
 ]);
+const PIVOT_MODES = Object.freeze([
+  Object.freeze({ value: 'center', label: 'Center' }),
+  Object.freeze({ value: 'last', label: 'Last selected' }),
+]);
 const DISPLAY_DECIMALS = 4;
 const CONVERSION_PRECISION = 12;
 
@@ -107,6 +111,13 @@ export function openSettings(button, { settings, document: documentData }) {
   });
   const displayGroup = group('Display', radios.map((radio) => radio.row));
   displayGroup.setAttribute('role', 'radiogroup');
+  const pivots = PIVOT_MODES.map((mode) => {
+    const input = element('input', { type: 'radio', name: fieldId('pivot'), value: mode.value, id: fieldId(`pivot-${mode.value}`) });
+    return { input, row: element('label', { className: 'settings-check' }, [input, mode.label]) };
+  });
+  const pivotGroup = group('Gizmo', [element('div', { className: 'settings-row', textContent: 'Pivot' }), ...pivots.map((radio) => radio.row)]);
+  pivotGroup.setAttribute('role', 'radiogroup');
+  pivotGroup.setAttribute('aria-label', 'Gizmo pivot (Z)');
   const overlays = OVERLAYS.map(({ key, label }) => ({ key, ...checkbox(key.replace('.', '-'), label) }));
   const pixelsPerMeter = numberField('pixels-per-meter', 'Pixels per meter', 'px/m', { min: '0' });
 
@@ -115,6 +126,7 @@ export function openSettings(button, { settings, document: documentData }) {
     group('Snapping', [snapGrid.row]),
     displayGroup,
     group('Overlays', overlays.map((overlay) => overlay.row)),
+    pivotGroup,
     group('Document', [pixelsPerMeter.row]),
   );
 
@@ -181,6 +193,7 @@ export function openSettings(button, { settings, document: documentData }) {
     snapGrid.input.checked = settings.get('snap.grid');
     for (const radio of radios) radio.input.checked = radio.input.value === settings.get('display.mode');
     for (const overlay of overlays) overlay.input.checked = settings.get(overlay.key);
+    for (const radio of pivots) radio.input.checked = radio.input.value === settings.get('gizmo.pivot');
     const editable = documentData.editable();
     pixelsPerMeter.input.readOnly = !editable;
     pixelsPerMeter.input.title = editable ? '' : 'Pixels per meter is read-only outside Edit mode';
@@ -192,6 +205,11 @@ export function openSettings(button, { settings, document: documentData }) {
   for (const radio of radios) {
     radio.input.addEventListener('change', () => {
       if (radio.input.checked) settings.set('display.mode', radio.input.value);
+    });
+  }
+  for (const radio of pivots) {
+    radio.input.addEventListener('change', () => {
+      if (radio.input.checked) settings.set('gizmo.pivot', radio.input.value);
     });
   }
   for (const overlay of overlays) {

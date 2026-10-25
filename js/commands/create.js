@@ -1,4 +1,4 @@
-import { defaultsOf } from '../../lib/schema.js';
+import { autoClipKey, defaultsOf } from '../../lib/schema.js';
 import { ROOT_UID } from '../model/model.js';
 import { jointBetween } from '../model/queries.js';
 
@@ -116,6 +116,34 @@ export function createJoint({ bodyA, bodyB, anchor, limits } = {}, label = 'Crea
       };
       if (limits !== undefined) props.limits = { enabled: limits.enabled, lower: limits.lower + 0, upper: limits.upper + 0 };
       return tx.add(ROOT_UID, 'joints', undefined, { type: 'joint', props });
+    },
+  });
+}
+
+function uniqueName(base, names) {
+  const used = new Set(names);
+  let name = base;
+  for (let n = 2; used.has(name); n += 1) name = `${base} ${n}`;
+  return name;
+}
+
+/**
+ * Builds a command that appends one empty clip with schema defaults, a name no existing clip uses ("New Clip",
+ * "New Clip 2", ...) and a key from `autoClipKey` that no existing clip uses. `run` returns the new clip uid.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command.
+ */
+export function createClip(label = 'Create clip') {
+  return Object.freeze({
+    label,
+    run(tx) {
+      const { model } = tx;
+      const { tracks, events, ...props } = defaultsOf('clip');
+      const clips = model.children(ROOT_UID, 'clips');
+      const taken = clips.map((clip) => model.prop(clip, 'key'));
+      props.name = uniqueName(props.name, clips.map((clip) => model.prop(clip, 'name')));
+      props.key = autoClipKey(props.name, taken);
+      return tx.add(ROOT_UID, 'clips', undefined, { type: 'clip', props });
     },
   });
 }

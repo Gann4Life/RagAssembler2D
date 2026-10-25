@@ -10,8 +10,10 @@ RagImporter is the `lib/` folder of ES modules, with `lib/ragimporter.js` as its
 - `parse` and `validate` need neither library. `spawn` resolves both on every call, before it creates anything, and throws an `Error` naming the missing one (`liquidfun.js (Box2D)` or `PIXI.js (PIXI)`). A configured value wins over the global; a value is accepted when it is a non-null object or function.
 - The editor uses these same modules for validation, evaluation, Simulate mode and rendering. It may also import the internal `lib/` modules (schema, serializer, emitter); host projects and `demo/` use only `lib/ragimporter.js`.
 
+> **Hosts must step the world with `stepWorld`.** The motor torques and the PD of [§3](03-physics-drive-model.md) are tuned for the editor's stepping (`STEP_SETTINGS`: 1/60 s frames, 8 substeps of 8 velocity and 3 position iterations). A host that calls `world.Step` its own way gets ragdolls that differ from the editor preview and can gain energy and blow up. Call `stepWorld(world, instances)` once per fixed frame instead of `update` + `world.Step`, then `sync()`.
+
 ```js
-import { RagImporter } from './lib/ragimporter.js';
+import { RagImporter, stepWorld, STEP_SETTINGS } from './lib/ragimporter.js';
 // liquidfun.js (global Box2D) and PIXI.js v8 (global PIXI) loaded by the host with <script> tags.
 
 const app   = new PIXI.Application(); await app.init({ resizeTo: window });
@@ -37,11 +39,15 @@ function onRevive() { rag.stop('dead', { fadeOut: 1 }); }
 app.stage.eventMode = 'static';
 app.stage.on('pointermove', ev => rag.lookAt('neck', rag.toWorld(ev.global), { weight: 0.7 }));
 
-// game loop, fixed step recommended
-app.ticker.add(() => {
-  rag.update(dt);           // animation + procedural → motors
-  world.Step(dt, 8, 3);
-  rag.sync();               // physics → PIXI sprites
+// game loop: fixed frames of STEP_SETTINGS.dt, each stepped exactly like the editor (§3.1)
+let accumulator = 0;
+app.ticker.add((ticker) => {
+  accumulator = Math.min(accumulator + ticker.deltaMS / 1000, 0.25);
+  while (accumulator >= STEP_SETTINGS.dt) {
+    stepWorld(world, [rag]);  // 8 × (rag.update(dt / 8), world.Step(dt / 8, 8, 3))
+    accumulator -= STEP_SETTINGS.dt;
+  }
+  rag.sync();                 // physics → PIXI sprites
 });
 ```
 
@@ -57,7 +63,9 @@ app.ticker.add(() => {
 | `RagImporter.parse(json) → RagDef` | Validates with `validate(json)` and builds an immutable definition. Throws `RagFormatError` when there is at least one error; warnings never throw. The definition copies what it needs: later changes to `json` do not affect it, and unknown and editor-only fields are dropped (except `editor.color`, for `debug`). |
 | `RagFormatError` | Exported next to `RagImporter`. Extends `Error`; `name` is `"RagFormatError"`; `errors` and `warnings` are frozen copies of the arrays `validate` returned. `message`: for an unsupported `version`, `Unsupported .rag.json version <v>; supported: <list>`; otherwise `Invalid .rag.json: <n> error(s); first: <code> at <path>`. |
 | `RagImporter.validate(json) → { errors, warnings }` | Validation without throwing: two arrays of problems `{ severity, code, message, path, target }` ([§6.4](06-file-format.md#64-validation)). |
-| `RagImporter.supportedVersions` | Frozen array of the format versions `parse` and `validate` accept, e.g. `[1]`. |
+| `RagImporter.supportedVersions` | Frozen array of the format versions `parse` and `validate` accept: `[2]` ([§6.3](06-file-format.md#63-versioning)). |
+| `STEP_SETTINGS` | Exported next to `RagImporter`. Frozen `{ dt: 1/60, substeps: 8, velocityIterations: 8, positionIterations: 3 }`: the editor's frame step (seconds) and how each frame is split ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)). The editor's Simulate mode and clip simulation read it, so editor and host never drift. |
+| `stepWorld(world, instances = [], dt = STEP_SETTINGS.dt)` | Exported next to `RagImporter`. Advances one frame exactly like the editor: `substeps` times, `update(dt / substeps)` on every instance in iteration order, then `world.Step(dt / substeps, velocityIterations, positionIterations)`. Does not call `sync()`. Destroyed instances are no-ops. Throws a `TypeError` when `world` has no `Step`, `instances` is not iterable, or `dt` is not a finite number ≥ 0. The editor itself steps through it; with the same file, spawn and inputs the host gets the same body transforms as the editor ([§12](12-open-items.md)). |
 
 **`RagDef`** (one per file; can spawn many instances)
 
@@ -66,12 +74,13 @@ app.ticker.add(() => {
 | `def.name`, `def.pixelsPerMeter` | `ragdoll.name` and `units.pixelsPerMeter`. |
 | `def.clips` | Frozen array, in file order, of frozen `{ key, name, loop, layer, length }`. |
 | `def.spriteUrls(baseUrl = '') → string[]` | Image URLs to preload: `baseUrl + src` for every sprite asset, in file order, duplicates removed. Plain concatenation, so `baseUrl` ends with `/` when it is a folder. A new array on every call. |
-| `def.spawn(world, opts) → RagInstance` | Creates bodies, fixtures and joints at the spawn transform in rest pose ([§7.2](#72-spawn-and-flipx)), plus a PIXI container with the sprites. Throws an `Error` naming a missing library, a `TypeError` when `world` has no `CreateBody` function or an option has the wrong type, and an `Error` when `world.IsLocked()` (called during `world.Step`). Options below. |
+| `def.spawn(world, opts) → RagInstance` | Creates bodies, fixtures and joints at the spawn transform in rest pose, or in a clip's pose at time 0 with `pose` ([§7.2](#72-spawn-and-flipx)), plus a PIXI container with the sprites. Throws an `Error` naming a missing library, a `TypeError` when `world` has no `CreateBody` function or an option has the wrong type, an `Error` naming the key when `pose` names no clip of the definition, and an `Error` when `world.IsLocked()` (called during `world.Step`). Options below. |
 
 `spawn` options (`opts` itself is optional):
 - `parent`: PIXI container to add the view to; when absent the view is created but not attached;
 - `x`, `y`, `angle`: spawn transform (meters, radians), finite numbers, default `0`;
 - `flipX`: boolean, default `false`;
+- `pose`: a clip key (string) or `null`, default `null` (rest pose). With a key, the bodies start in that clip's pose at time 0 instead of the rest pose (Posed spawn, [§7.2](#72-spawn-and-flipx)), so a looping clip played right after spawn does not start from rest. It only places bodies: it starts no clip (the host calls `play(key)`) and fires no event. Additive: without it spawn behaves as before;
 - `baseUrl`: string, default `''`; the same value given to `spriteUrls`, used by the default texture resolver;
 - `textures`: `(src, asset) → PIXI.Texture` resolver; default `PIXI.Assets.get(baseUrl + src)`;
 - `debug`: draw shapes with `editor.color` and joint gizmos.
@@ -80,19 +89,20 @@ app.ticker.add(() => {
 
 | Member | Description |
 |---|---|
-| `play(key, { fadeIn, weight = 1, speed = 1, restart = false })` | Starts the clip on its layer (crossfading the current one). |
+| `play(key, { fadeIn, weight = 1, speed = 1, restart = false })` | Starts the clip on its layer (crossfading the current one). It never respawns or moves bodies: the motors take the ragdoll from its current pose toward the clip. Throws an `Error` naming the key when no clip has it, and a `TypeError` when `speed` is not a finite number > 0. |
 | `queue(key, opts)` | See [§4.5](04-animation-model.md#45-playback-rules). |
-| `stop(key, { fadeOut })` / `stopLayer(layer, { fadeOut })` / `stopAll()` | Stops a clip, a layer or everything. |
+| `stop(key, { fadeOut })` / `stopLayer(layer, { fadeOut })` / `stopAll()` | Stops a clip, a layer or everything. `stop` of a known clip that is not active does nothing; an unknown key throws an `Error` naming it. |
 | `setWeight(key, w)` | Changes the runtime weight of an active clip. |
-| `isPlaying(key)` | Whether the clip is active. |
+| `isPlaying(key)` | Whether the clip is active; `false` for an unknown key. |
 | `activeClip(layer)` | Key of the clip active on a layer. |
 | `setStrength(v)` / `setGain(v)` / `setDamping(v)` | Runtime global multipliers, 0–1, default 1. |
+| `setBalance(enabled)` | Per-instance switch of the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)), default `true`. The controller runs only when this switch and the file's `balance.enabled` are both on, so `true` never enables a ragdoll whose file disables it. A non-boolean throws a `TypeError`. |
 | `lookAt(jointName, worldPoint, { weight, strength, fadeIn })` | Procedural aim ([§4.8](04-animation-model.md#48-procedural-joint-control)). Calling it again updates the target and options. |
 | `setJointAngle(jointName, angle, { weight, strength, fadeIn })` | Procedural override with a direct angle (radians, relative to rest). |
 | `clearJointOverride(jointName, { fadeOut })` / `clearAllOverrides()` | Removes overrides. |
 | `toWorld(pixiPoint) → { x, y }` / `toPixi(worldPoint)` | Coordinate conversion through `pixelsPerMeter` and the view's parent transform. |
 | `on(type, fn)` / `off(type, fn)` | Types: `event` (custom), `start`, `loop`, `complete`, `stop`. `on` returns a function that removes the listener. |
-| `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors and sprite images. Call it once per physics step, **before** `world.Step`. |
+| `update(dt)` | Advances clips, fires events, resolves fades and queues, evaluates channels and overrides, writes the motors, applies the balance wrench to the bodies connected to `rootBody` and swaps sprite images. Call it once per physics step, **before** `world.Step`, with that step's `dt` (the balance torque is sized for it, [§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). `stepWorld` does this for every substep; hosts use it instead of calling `update` themselves. |
 | `sync()` | Copies body transforms to the sprites. Call it **after** `world.Step`. |
 | `view` | The instance's `PIXI.Container`, with `sortableChildren` on and sprite `zIndex = z`. |
 | `body(name)` / `joint(name)` / `shape(name)` / `sprite(shapeName)` | Native LiquidFun (`Box2D.b2Body`, `Box2D.b2RevoluteJoint`, `Box2D.b2Fixture`) / PIXI objects, looked up by name; `undefined` for an unknown name. When names repeat (warning `W_DUPLICATE_NAME`), the first in file order wins. |
@@ -113,7 +123,9 @@ app.ticker.add(() => {
 4. Joints: `b2RevoluteJointDef.Initialize(bodyA, bodyB, anchorWorld)`, then `collideConnected`, `enableLimit = limits.enabled`, `lowerAngle` / `upperAngle` (mirrored with `flipX`), `enableMotor = false`; `world.CreateJoint`, cast once (below).
 5. View: `new PIXI.Container()` with `sortableChildren = true`, added to `parent` when given; sprites per [§7.3](#73-sprites-and-rendering).
 
-**Motors start off.** `update()` enables and drives them ([§3](03-physics-drive-model.md)). An instance whose `update()` is never called is a passive ragdoll held only by its joint limits.
+**Posed spawn** (`pose: key`). The clip's pose at time 0 is the clip alone, resolved as the only layer at weight 1 with no overrides (`resolveChannels`, [§4](04-animation-model.md)), placed by forward kinematics (`fkPose` of `lib/evaluate.js`: joint `angle` values and root `bodyAngle`, `rootBody` turned about its rest center of mass, [§5.1](05-1-modes.md#51-editor-modes), FK preview); loop joints are ignored as in FK. This gives each body a root-local transform `P` that takes the place of its rest transform `L` in the frames above (mirrored to `P′` with `flipX`). Build order is unchanged, so joints are created with the bodies at rest and keep the rest reference angles; right after step 4, every body is moved to `S × P′` with `SetTransform`, at zero velocity, before spawn returns. Joint angles then equal the clip's angles at time 0 (mirrored with `flipX`); one outside its limits is pushed back by the limit on the first step. `θ₀` stays the rest-pose value `S.angle + L′.angle` (below), so the balance target is the clip's `bodyAngle` from the first step. The pose comes from the file's clip values, never from host overrides. Example: a two-body rig whose clip keys the joint at 0.5 rad at time 0 spawns with `rag.joint(name).GetJointAngle()` = 0.5 (−0.5 with `flipX`).
+
+**Motors start off.** `update()` enables and drives them ([§3](03-physics-drive-model.md)) and applies the balance torque ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). An instance whose `update()` is never called is a passive ragdoll held only by its joint limits. Spawn records `θ₀`, `rootBody`'s world angle as created (`S.angle + L′.angle`), as the balance reference; the mass and inertia `m_b`, `I_b` of every body of the balance set `R` are part of the `RagDef`, computed once by `parse`.
 
 **Spawn memory** ([§7.4](#74-native-memory)). Spawn uses one scratch `b2Vec2` for every position, center and anchor (each setter copies it), destroys each def and shape right after the `Create*` call that used it, and destroys the scratch vector before returning. A polygon's vertices go through one native buffer: `Box2D._malloc(8 × count)`, written as float32 `x, y` pairs through `Box2D.HEAPF32`, passed as `Box2D.wrapPointer(ptr, Box2D.b2Vec2)` and released with `Box2D._free(ptr)` right after `Set`. After `spawn` returns, only world-owned objects remain.
 
@@ -127,7 +139,7 @@ app.ticker.add(() => {
   - root-local and body-local x coordinates and body, box and joint-relative angles are negated;
   - polygon vertex order is reversed (to stay CCW);
   - limits become `(−upper, −lower)` (a joint angle `θ` of the original is `−θ` in the mirror);
-  - `angle` channel values are negated during evaluation;
+  - `angle` and root `bodyAngle` channel values are negated during evaluation;
   - `aimAxis` becomes `π − aimAxis`;
   - each sprite's horizontal scale and its offset x are negated.
 - Self-collision is set up at spawn time following [§2.5](02-object-model.md#25-collision-rules) and [§7.5](#75-contact-filter-and-host-integration): each fixture is registered right after `CreateFixture`, before any `world.Step` can pair it.

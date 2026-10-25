@@ -4,6 +4,38 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-25
+
+### Added
+- Timeline panel: create, rename and delete clips, set length and loop, scrub the ruler, and Play/Pause with Next frame.
+- Timeline keys: select, drag (snapped to 1/30 s) and delete with Del or the new Delete keys button; every edit is undoable.
+- Animate mode shows the clip's pose at the playhead (FK preview); The Pose tool keys joint angles and the root body angle.
+- Animate runs the clip through physics in the background: scrubbing shows the simulated pose, and onion skins (ghosts) show it at the nearest keys; toggle them from the timeline or View menu.
+- Simulate mode plays the ragdoll with gravity and a ground through RagImporter, so the preview matches a game.
+- Set as root body (Shift+R) makes any body the root; existing animations keep their look.
+- Motor torque is suggested from the load each joint carries and applied automatically when the rig changes; the editor warns about underpowered motors.
+- Mode switch, Rig and View menus and a status line in the editor header.
+- RagImporter: clip evaluator, joint motors, root body balance controller (`setBalance`), `play`/`stop`/`isPlaying`/loop, groupIndex self-collision fallback, debug drawing, and spawning in a clip pose.
+- RagImporter: `stepWorld` and `STEP_SETTINGS` (8 substeps per 1/60 s step); hosts must step the world with them to match the editor.
+- Demo page with a sample ragdoll, scene controls, and loading of a `.rag.json` by picker or drop when present in `demo/`.
+
+### Changed
+- **BREAKING:** file format v2 adds the root channel `bodyAngle` and `ragdoll.balance`; v1 files migrate automatically on load, and files saved by this version do not open in older versions.
+- **BREAKING:** RagImporter hosts must step the world with `stepWorld`/`STEP_SETTINGS`; stepping with a single `world.Step` call gains energy with the new motor torques.
+- Looping clips interpolate from the last key back to the first, so they no longer snap at the wrap.
+- Pose drags in Edit and Animate use one soft-falloff drag that moves only nearby joints; released parts are keyed at the angle they were left, within limits.
+- Timeline tracks scroll under a fixed clip bar.
+
+### Fixed
+- Shortening a clip drops keys and events beyond its new length.
+- Loading a file while Animate has a clip open no longer breaks the session.
+- Motors are sized for the worst case, so humanoid ragdolls hold themselves up and stay stable.
+- Pose drags no longer move or key joints you did not touch.
+- The demo no longer blows up on heavy rigs and spawns the ragdoll resting on the ground.
+
+### Removed
+- The autokey option; Pose always keys.
+
 ## [0.14.0] - 2026-10-23
 
 ### Added

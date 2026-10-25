@@ -8,6 +8,8 @@ import { toJson } from '../js/model/io.js';
 import { poseTool } from '../js/tools/pose.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../js/viewport/style.js';
 import { defaultsOf } from '../lib/schema.js';
+import { invertTransform, transformPoint } from '../lib/geometry.js';
+import { animatePose } from '../js/model/animate-preview.js';
 
 const NO_MODIFIERS = { shift: false, ctrl: false, alt: false };
 
@@ -58,8 +60,31 @@ function addClip(editor) {
   });
 }
 
-function environment({ physics = fakePhysics(), withPhysics = true } = {}) {
-  const editor = createEditor(withPhysics ? { physics } : {});
+function fakePlayback() {
+  const playback = {
+    playing: false,
+    pauses: 0,
+    holds: [],
+    onPause: () => {},
+    pause() {
+      playback.pauses++;
+      playback.playing = false;
+      playback.onPause();
+    },
+    hold(pose) {
+      playback.holds.push(pose);
+    },
+  };
+  return playback;
+}
+
+function environment({ physics = fakePhysics(), withPhysics = true, playback = fakePlayback() } = {}) {
+  const statuses = [];
+  const editor = createEditor({
+    ...(withPhysics ? { physics } : {}),
+    playback,
+    status: (text) => statuses.push(text),
+  });
   const { model, history, camera, tools, selection } = editor;
   camera.setSize(400, 400);
   camera.zoomAt({ x: 200, y: 200 }, 100 / camera.scale);
@@ -70,7 +95,7 @@ function environment({ physics = fakePhysics(), withPhysics = true } = {}) {
   const bodies = shapes.map((uid) => model.get(uid).parent);
   const joint = history.execute(createJoint({ bodyA: bodies[0], bodyB: bodies[1], anchor: { x: 0.5, y: 0 } }));
   selection.set([bodies[1]]);
-  const view = { hits: [], cursor: [], poses: [], invalidations: 0 };
+  const view = { hits: [], cursor: [], poses: [], invalidations: 0, displayed: null };
   tools.bindView({
     hitTest: () => view.hits,
     boxTest: () => [],
@@ -79,6 +104,7 @@ function environment({ physics = fakePhysics(), withPhysics = true } = {}) {
       view.invalidations++;
     },
     setPose: (pose) => view.poses.push(pose),
+    displayedPose: () => view.displayed,
   });
   assert.equal(tools.activate('pose'), true);
   const snapshot = () => ({
@@ -86,7 +112,8 @@ function environment({ physics = fakePhysics(), withPhysics = true } = {}) {
     selection: [...selection.objects],
     history: JSON.stringify(history.state),
   });
-  return { ...editor, physics, view, shapes, bodies, joint, snapshot, before: snapshot() };
+  const poseStatuses = () => statuses.filter((text) => text.startsWith('Pose:'));
+  return { ...editor, physics, playback, statuses: { all: statuses, get pose() { return poseStatuses(); } }, view, shapes, bodies, joint, snapshot, before: snapshot() };
 }
 
 function send(tools, type, x, y, extra = {}) {
@@ -135,7 +162,7 @@ function createEnvAndPress(options) {
   return env;
 }
 
-test('presses that start nothing: empty space, a joint, the root, a right press, modifiers, no physics, Animate', () => {
+test('presses that start nothing: empty space, a joint, the root, a right press, modifiers, no physics', () => {
   const cases = [
     (env) => {
       env.view.hits = [];
@@ -173,16 +200,253 @@ test('presses that start nothing: empty space, a joint, the root, a right press,
   send(noPhysics.tools, 'up', 10, 10);
   assert.notEqual(noPhysics.view.cursor.at(-1), 'grab');
   assert.deepEqual(noPhysics.view.poses, []);
+});
 
-  const animate = environment();
-  animate.modes.openClip(addClip(animate));
-  assert.equal(animate.tools.active?.id, 'pose');
-  const before = animate.snapshot();
-  animate.view.hits = [animate.shapes[0]];
-  send(animate.tools, 'down', 10, 10);
-  send(animate.tools, 'up', 10, 10);
-  assert.equal(animate.physics.starts.length, 0);
-  assert.deepEqual(animate.snapshot(), before);
+function animateEnvironment({ playhead = 0.5, turn = 0.3, playback } = {}) {
+  const physics = fakePhysics();
+  const env = environment({ physics, playback });
+  const clip = addClip(env);
+  env.modes.openClip(clip);
+  env.modes.setPlayhead(playhead);
+  const ids = env.bodies.map((uid) => env.model.prop(uid, 'id'));
+  const original = physics.startPose.bind(physics);
+  physics.startPose = (json, options) => {
+    const session = original(json, options);
+    session.pose = () => {
+      const pose = new Map(options.start);
+      const child = pose.get(ids[1]);
+      pose.set(ids[1], { ...child, angle: child.angle + turn });
+      return pose;
+    };
+    return session;
+  };
+  env.view.hits = [env.shapes[1]];
+  return { ...env, clip, ids, before: env.snapshot() };
+}
+
+function angleKeys(env) {
+  return env.model.children(env.clip, 'tracks').map((track) => ({
+    target: env.model.prop(track, 'target'),
+    channel: env.model.prop(track, 'channel'),
+    keys: env.model.children(track, 'keys').map((key) => [env.model.prop(key, 't'), env.model.prop(key, 'v')]),
+  }));
+}
+
+function drag(env) {
+  send(env.tools, 'down', 260, 190);
+  send(env.tools, 'move', 270, 190);
+  env.tools.tick(1 / 60);
+  send(env.tools, 'up', 270, 190);
+}
+
+test('Animate: the press starts from the keyed pose, moved so that the grabbed point stays on the displayed body', () => {
+  const env = animateEnvironment();
+  seedJointKey(env, 0.4);
+  env.view.displayed = new Map(env.bodies.map((uid, index) => [uid, { x: index, y: 0.25, angle: 0.7 + index }]));
+  send(env.tools, 'down', 260, 190);
+  const { start, root, point } = env.physics.starts[0].options;
+  const keyed = animatePose(env.model, env.clip, 0.5);
+  const press = transformPoint(invertTransform(root), point);
+  const local = transformPoint(invertTransform(env.view.displayed.get(env.bodies[1])), press);
+  const grabbed = transformPoint(start.get(env.ids[1]), local);
+  assert.ok(Math.hypot(grabbed.x - press.x, grabbed.y - press.y) < 1e-9, 'the grabbed point stays under the pointer');
+  const shift = { x: start.get(env.ids[0]).x - keyed.get(env.bodies[0]).x, y: start.get(env.ids[0]).y - keyed.get(env.bodies[0]).y };
+  env.bodies.forEach((uid, index) => {
+    const placed = start.get(env.ids[index]);
+    assert.ok(Math.abs(placed.angle - keyed.get(uid).angle) < 1e-12, 'keyed angles');
+    assert.ok(Math.abs(placed.x - keyed.get(uid).x - shift.x) < 1e-12 && Math.abs(placed.y - keyed.get(uid).y - shift.y) < 1e-12, 'one translation');
+  });
+  assert.equal(env.view.poses.length, 1, 'the keyed pose shows at the press');
+  assert.ok(env.view.poses[0] instanceof Map);
+  assert.deepEqual(Object.keys(env.physics.starts[0].options).sort(), ['bodyId', 'point', 'root', 'start']);
+  env.actions.run('escape');
+  assert.equal(env.view.poses.at(-1), null);
+  assert.deepEqual(env.playback.holds, []);
+});
+
+test('Animate: without a displayed pose the press starts from the FK pose at the playhead', () => {
+  const env = animateEnvironment();
+  env.history.execute({
+    label: 'seed',
+    run: (tx) => tx.add(env.clip, 'tracks', undefined, {
+      type: 'track',
+      props: { target: env.model.prop(env.joint, 'id'), channel: 'angle' },
+      children: { keys: [{ type: 'key', props: { t: 0, v: 0.4, interp: 'linear' } }] },
+    }),
+  });
+  send(env.tools, 'down', 260, 190);
+  assert.equal(env.physics.starts.length, 1);
+  const { start } = env.physics.starts[0].options;
+  assert.ok(start instanceof Map);
+  const restAngle = env.model.prop(env.bodies[1], 'angle');
+  assert.ok(Math.abs(start.get(env.ids[1]).angle - (restAngle + 0.4)) < 1e-9);
+  env.actions.run('escape');
+});
+
+test('Animate: a drag release keys the changed joint angle at the playhead, unsnapped, as one undo step', () => {
+  const env = animateEnvironment({ playhead: 0.51, turn: 0.3 });
+  drag(env);
+  const tracks = angleKeys(env);
+  assert.equal(tracks.length, 1);
+  assert.equal(tracks[0].target, env.model.prop(env.joint, 'id'));
+  assert.equal(tracks[0].channel, 'angle');
+  assert.equal(tracks[0].keys.length, 1);
+  const [t, v] = tracks[0].keys[0];
+  assert.ok(Math.abs(t - 0.51) < 1e-9, `t ${t}`);
+  assert.ok(Math.abs(v - 0.3) < 1e-9, `v ${v}`);
+  assert.equal(env.history.inGesture, false);
+  assert.equal(env.history.state.undoLabel, 'Pose');
+  assert.equal(env.view.poses.at(-1), null);
+  assert.equal(env.playback.holds.length, 1);
+  assert.ok(Math.abs(env.playback.holds[0].get(env.bodies[1]).angle - 0.3) < 1e-9);
+  env.history.undo();
+  assert.equal(env.snapshot().json, env.before.json);
+  assert.notEqual(env.history.state.undoLabel, 'Pose');
+});
+
+test('Animate: a displayed pose that lags the keys is not keyed when the drag does not move it', () => {
+  const env = animateEnvironment({ turn: 0 });
+  const lagging = new Map(env.bodies.map((uid) => [uid, { x: env.model.prop(uid, 'position')[0], y: 0, angle: 0 }]));
+  lagging.set(env.bodies[1], { ...lagging.get(env.bodies[1]), angle: 0.2 });
+  env.view.displayed = lagging;
+  drag(env);
+  assert.deepEqual(env.snapshot(), env.before);
+});
+
+function seedJointKey(env, value) {
+  env.history.execute({
+    label: 'seed',
+    run: (tx) => tx.add(env.clip, 'tracks', undefined, {
+      type: 'track',
+      props: { target: env.model.prop(env.joint, 'id'), channel: 'angle' },
+      children: { keys: [{ type: 'key', props: { t: 0, v: value, interp: 'linear' } }] },
+    }),
+  });
+}
+
+test('Animate: a display that lags the keys does not leak into them: the drag starts from the keyed angle', () => {
+  const env = animateEnvironment({ turn: 0.3 });
+  env.history.execute(setProps([ROOT_UID], { rootBody: env.ids[0] }));
+  seedJointKey(env, 0.4);
+  const before = env.snapshot();
+  env.view.displayed = new Map([
+    [env.bodies[0], { x: 0, y: -0.02, angle: 0.05 }],
+    [env.bodies[1], { x: 1, y: -0.1, angle: 0.05 + 0.15 }],
+  ]);
+  drag(env);
+  const tracks = angleKeys(env);
+  assert.equal(tracks.length, 1);
+  assert.equal(tracks[0].channel, 'angle');
+  const key = tracks[0].keys.find(([t]) => Math.abs(t - 0.5) < 1e-9);
+  assert.ok(Math.abs(key[1] - 0.7) < 1e-9, `v ${key[1]}`);
+  env.history.undo();
+  assert.equal(env.snapshot().json, before.json);
+});
+
+function limitJoint(env, lower, upper) {
+  env.history.execute(setProps([env.joint], { limits: { enabled: true, lower, upper } }));
+}
+
+test('Animate: repeated drags from a display that lags the keys never key past the joint limits', () => {
+  const env = animateEnvironment({ turn: 0.35 });
+  limitJoint(env, -0.5, 0.5);
+  seedJointKey(env, 0.5);
+  const restAngle = env.model.prop(env.bodies[1], 'angle');
+  for (let i = 0; i < 4; i++) {
+    env.view.displayed = new Map([
+      [env.bodies[0], { x: 0, y: 0, angle: 0 }],
+      [env.bodies[1], { x: 1, y: -0.1, angle: restAngle + 0.1 }],
+    ]);
+    drag(env);
+    const key = angleKeys(env)[0].keys.find(([t]) => Math.abs(t - 0.5) < 1e-9);
+    assert.ok(Math.abs(key[1] - 0.5) < 1e-9, `drag ${i}: v ${key[1]}`);
+  }
+});
+
+test('Animate: a released angle past an enabled limit (solver slop) is keyed at the limit', () => {
+  for (const [turn, expected] of [[0.55, 0.5], [-0.62, -0.6]]) {
+    const env = animateEnvironment({ turn });
+    limitJoint(env, -0.6, 0.5);
+    drag(env);
+    const [, v] = angleKeys(env)[0].keys[0];
+    assert.ok(Math.abs(v - expected) < 1e-9, `turn ${turn}: v ${v}`);
+  }
+  const free = animateEnvironment({ turn: 0.55 });
+  limitJoint(free, -0.6, 0.5);
+  free.history.execute(setProps([free.joint], { limits: { enabled: false, lower: -0.6, upper: 0.5 } }));
+  drag(free);
+  assert.ok(Math.abs(angleKeys(free)[0].keys[0][1] - 0.55) < 1e-9);
+});
+
+test('Animate: a joint whose child is bodyA is keyed with the Box2D sign', () => {
+  const env = animateEnvironment({ turn: 0 });
+  env.history.execute(setProps([ROOT_UID], { rootBody: env.ids[1] }));
+  const original = env.physics.startPose.bind(env.physics);
+  env.physics.startPose = (json, options) => {
+    const session = original(json, options);
+    session.pose = () => {
+      const pose = new Map(options.start);
+      const child = pose.get(env.ids[0]);
+      pose.set(env.ids[0], { ...child, angle: child.angle + 0.3 });
+      return pose;
+    };
+    return session;
+  };
+  drag(env);
+  const track = angleKeys(env).find((entry) => entry.channel === 'angle');
+  assert.ok(Math.abs(track.keys[0][1] + 0.3) < 1e-9, `v ${track.keys[0][1]}`);
+});
+
+test('Animate: a click writes nothing but still holds the released bodies', () => {
+  const env = animateEnvironment({ turn: 0.5 });
+  send(env.tools, 'down', 260, 190);
+  send(env.tools, 'move', 262, 191);
+  send(env.tools, 'up', 262, 191);
+  assert.deepEqual(env.snapshot(), env.before);
+  assert.equal(env.playback.holds.length, 1);
+  assert.deepEqual(env.statuses.pose, []);
+});
+
+test('Animate: a press while playing pauses at the displayed step and grabs in the same press', () => {
+  const playback = fakePlayback();
+  const env = animateEnvironment({ playback, playhead: 0.4, turn: 0.3 });
+  const displayed = new Map(env.bodies.map((uid) => [uid, { x: 0, y: 0, angle: 0 }]));
+  env.view.displayed = displayed;
+  playback.playing = true;
+  playback.onPause = () => env.modes.setPlayhead(0.45);
+  env.view.hits = [];
+  send(env.tools, 'down', 10, 10);
+  send(env.tools, 'up', 10, 10);
+  assert.equal(playback.pauses, 0);
+  env.view.hits = [env.shapes[1]];
+  send(env.tools, 'down', 260, 190);
+  assert.equal(playback.pauses, 1);
+  assert.equal(env.physics.starts.length, 1);
+  assert.equal(env.physics.starts[0].options.start.size, 2);
+  send(env.tools, 'move', 280, 190);
+  send(env.tools, 'up', 280, 190);
+  const [t] = angleKeys(env)[0].keys[0];
+  assert.ok(Math.abs(t - 0.45) < 1e-9, `t ${t}`);
+});
+
+test('Animate: changes under 0.1 degree and cancelled drags create no keys', () => {
+  const small = animateEnvironment({ turn: (0.05 * Math.PI) / 180 });
+  drag(small);
+  assert.deepEqual(small.snapshot(), small.before);
+
+  const cancelled = animateEnvironment({ turn: 0.5 });
+  send(cancelled.tools, 'down', 260, 190);
+  cancelled.actions.run('escape');
+  send(cancelled.tools, 'up', 260, 190);
+  assert.deepEqual(cancelled.snapshot(), cancelled.before);
+  assert.equal(cancelled.physics.sessions[0].destroyed, 1);
+});
+
+test('Edit: release discards the result and the press starts from the rest pose', () => {
+  const env = createEnvAndPress();
+  assert.equal(env.physics.starts[0].options.start, null);
+  send(env.tools, 'up', 260, 190);
+  assertUnchanged(env);
 });
 
 test('hover shows grab over a shape and the default cursor elsewhere', () => {
@@ -300,4 +564,42 @@ test('a press the physics service refuses shows not-allowed until the release', 
   assert.equal(cancelled.tools.cancel(), true);
   assert.equal(cancelled.view.cursor.at(-1), 'default');
   assert.equal(cancelled.tools.cancel(), false);
+});
+
+test('Animate: release keys the root bodyAngle with the joint angles', () => {
+  const env = animateEnvironment({ turn: 0 });
+  env.history.execute(setProps([ROOT_UID], { rootBody: env.ids[0] }));
+  const original = env.physics.startPose.bind(env.physics);
+  env.physics.startPose = (json, options) => {
+    const session = original(json, options);
+    session.pose = () => {
+      const pose = new Map(options.start);
+      const root = pose.get(env.ids[0]);
+      pose.set(env.ids[0], { ...root, angle: root.angle + 0.4 });
+      return pose;
+    };
+    return session;
+  };
+  drag(env);
+  const root = angleKeys(env).find((track) => track.channel === 'bodyAngle');
+  assert.equal(root.target, 'root');
+  assert.equal(root.keys.length, 1);
+  assert.ok(Math.abs(root.keys[0][1] - 0.4) < 1e-9);
+  assert.equal(env.history.state.undoLabel, 'Pose');
+  env.history.undo();
+  assert.equal(env.snapshot().json, env.before.json);
+});
+
+test('Edit and Animate start the same session: same option set, no mode-specific physics', () => {
+  const edit = createEnvAndPress();
+  const animate = animateEnvironment();
+  send(animate.tools, 'down', 260, 190);
+  const editOptions = edit.physics.starts[0].options;
+  const animateOptions = animate.physics.starts[0].options;
+  assert.deepEqual(Object.keys(editOptions).sort(), ['bodyId', 'point', 'root', 'start']);
+  assert.deepEqual(Object.keys(animateOptions).sort(), Object.keys(editOptions).sort());
+  assert.equal(editOptions.start, null);
+  assert.ok(animateOptions.start instanceof Map);
+  send(edit.tools, 'up', 260, 190);
+  send(animate.tools, 'up', 260, 190);
 });

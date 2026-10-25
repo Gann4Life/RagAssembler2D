@@ -50,6 +50,17 @@
  * @property {() => void} invalidateOverlay Requests a tool overlay redraw.
  * @property {(pose: import('../viewport/bounds.js').Pose|null) => void} setPose Shows body transforms (root-local)
  *   instead of the rest pose; `null` returns to the rest pose.
+ * @property {() => import('../viewport/bounds.js').Pose|null} [displayedPose] Body transforms the viewport shows
+ *   (root-local), `null` for the rest pose.
+ */
+
+/**
+ * Animate playback as tools see it.
+ * @typedef {object} PlaybackService
+ * @property {boolean} playing Whether the playhead is advancing.
+ * @property {() => void} pause Pauses with the playhead at the time of the displayed simulation step.
+ * @property {(pose: import('../viewport/bounds.js').Pose) => void} hold Shows released bodies (root-local, by uid)
+ *   as the posed hold until the clip simulation catches up.
  */
 
 /**
@@ -58,6 +69,8 @@
  * @property {import('../../lib/geometry.js').Transform} root Ragdoll position and angle, world, meters and radians.
  * @property {string} bodyId File id of the grabbed body.
  * @property {import('../../lib/geometry.js').Vec2} point Grabbed point, world meters.
+ * @property {Map<string, import('../../lib/geometry.js').Transform>|null} [start] Root-local transforms by body id
+ *   the test starts from at rest, e.g. the keyed pose in Animate mode; the rest pose when omitted or `null`.
  */
 
 /**
@@ -98,8 +111,12 @@
  * @property {() => void} invalidateOverlay Requests a tool overlay redraw.
  * @property {(pose: import('../viewport/bounds.js').Pose|null) => void} setPose Shows body transforms (root-local)
  *   instead of the rest pose, `null` for the rest pose; does nothing without a view.
+ * @property {() => import('../viewport/bounds.js').Pose|null} displayedPose Body transforms the viewport shows,
+ *   root-local by uid; `null` for the rest pose or without a view.
  * @property {PhysicsService|null} physics Physics service, or `null` when the editor has none.
  * @property {() => string} editorVersion Version of the running editor, read when needed; dev until known.
+ * @property {PlaybackService} playback Animate playback; never playing without one.
+ * @property {(text: string) => void} status Shows a status line message.
  */
 
 /**

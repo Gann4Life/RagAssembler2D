@@ -152,7 +152,8 @@ function createColumn(doc, groups, entries, states) {
 /**
  * Creates the Tools overlay and inserts it before `host` in the Viewport panel. Every button starts disabled
  * ("not available yet") and not pressed; the first one is the roving Tab stop. The overlay never activates tools
- * itself: it calls `onActivate` and is refreshed through `setActive` and `setEnabled`.
+ * itself: it calls `onActivate` (also for a disabled button, so the caller reports its reason) and is refreshed through
+ * `setActive` and `setEnabled`.
  * @param {HTMLElement} panel Viewport panel; the parent of `host`.
  * @param {{ host: HTMLElement, onActivate: (id: import('../tools/tool.js').ToolId) => void }} options `host` is the
  *   viewport host: its height decides the column count and it receives focus after a click.
@@ -216,7 +217,11 @@ export function createToolbar(panel, { host, onActivate }) {
 
   function onClick(event) {
     const button = event.target.closest('button[data-tool]');
-    if (!button || button.getAttribute('aria-disabled') === 'true') return;
+    if (!button) return;
+    if (button.getAttribute('aria-disabled') === 'true') {
+      onActivate(button.dataset.tool);
+      return;
+    }
     if (button.getAttribute('aria-pressed') !== 'true') onActivate(button.dataset.tool);
     if (event.detail > 0) host.focus({ preventScroll: true });
   }

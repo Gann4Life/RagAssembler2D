@@ -43,8 +43,9 @@ export function poseTestJson(json) {
 }
 
 /**
- * Starts a pose test: a zero-gravity LiquidFun world holding the ragdoll at `options.root` in rest pose, every
- * body damped, motors off, and a mouse joint pulling `options.bodyId` from `options.point`. Owns every native
+ * Starts a pose test: a zero-gravity LiquidFun world holding the ragdoll at `options.root` in rest pose, or with the
+ * bodies of `options.start` placed at those root-local transforms, every body damped, motors off, and a mouse joint
+ * pulling `options.bodyId` from `options.point`. Every body, `rootBody` included, moves freely. Owns every native
  * object it creates until `destroy`.
  * @param {*} Box2D The liquidfun.js namespace.
  * @param {object} json A `.rag.json` document.
@@ -54,7 +55,7 @@ export function poseTestJson(json) {
  *   native is created.
  * @throws {Error} When the body id is unknown or a native call fails; everything built is released first.
  */
-export function createPoseSession(Box2D, json, { root, bodyId, point }) {
+export function createPoseSession(Box2D, json, { root, bodyId, point, start = null }) {
   const def = RagImporter.parse(poseTestJson(json));
   const gravity = new Box2D.b2Vec2(0, 0);
   const world = new Box2D.b2World(gravity);
@@ -78,6 +79,14 @@ export function createPoseSession(Box2D, json, { root, bodyId, point }) {
     const bodies = rag.bodies;
     grabbed = bodies.get(bodyId);
     if (grabbed === undefined) throw new Error(`Pose: unknown body "${bodyId}"`);
+    for (const [id, local] of start ?? []) {
+      const body = bodies.get(id);
+      if (body === undefined) continue;
+      const placed = composeTransforms(root, local);
+      scratch.set_x(placed.x);
+      scratch.set_y(placed.y);
+      body.SetTransform(scratch, placed.angle);
+    }
     for (const body of bodies.values()) {
       body.SetLinearDamping(POSE.linearDamping);
       body.SetAngularDamping(POSE.angularDamping);
@@ -132,7 +141,9 @@ export function createPoseSession(Box2D, json, { root, bodyId, point }) {
       const whole = Math.floor(accumulated / POSE.step + STEP_EPSILON);
       accumulated = Math.max(0, accumulated - whole * POSE.step);
       const steps = Math.min(whole, POSE.maxSteps);
-      for (let i = 0; i < steps; i++) world.Step(POSE.step, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
+      for (let i = 0; i < steps; i++) {
+        world.Step(POSE.step, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
+      }
     },
     pose() {
       alive();

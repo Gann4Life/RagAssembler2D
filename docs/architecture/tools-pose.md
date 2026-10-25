@@ -24,11 +24,12 @@ poseTestJson(json) → object                       exported by js/physics/pose-
   (until #27 it also fills a missing meta.editorVersion with '0.0.0'; #27 removes that, since toJson then
   always writes meta with the real version)
 
-PoseSessionOptions { root: Transform (ragdoll position and angle, world), bodyId: string, point: Vec2 (world, m) }
+PoseSessionOptions { root: Transform (ragdoll position and angle, world), bodyId: string, point: Vec2 (world, m),
+                     start: Map<bodyId, Transform> | null (root-local start pose; null = rest pose) }
 createPoseSession(Box2D, json, options) → PoseSession
   RagImporter.parse(poseTestJson(json)) first: a RagFormatError propagates and nothing native exists yet.
   Then: b2World with gravity (0, 0) (vector destroyed after the constructor), def.spawn(world, { x, y, angle } = root,
-  flipX false, no parent), SetLinearDamping(POSE.linearDamping) and SetAngularDamping(POSE.angularDamping) on every
+  flipX false, no parent), every body of start moved there with SetTransform, SetLinearDamping(POSE.linearDamping) and SetAngularDamping(POSE.angularDamping) on every
   instance body, one static ground body without fixtures, a b2MouseJoint ground → rag.body by bodyId with
   target = point, maxForce = POSE.forcePerKg × GetMass(), frequencyHz, dampingRatio; the grabbed body SetAwake(true).
   An unknown bodyId or a native failure after the world exists destroys what was built and throws.
@@ -43,10 +44,10 @@ PoseSession {
                                    Box2D.destroy(world); later calls on the session throw Error
 }
 POSE (frozen) { step: 1/60 s, maxSteps: 4, linearDamping: 10, angularDamping: 10,
-                forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7 }   s, s⁻¹, N/kg, Hz
+                forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7 }   s, s⁻¹, N/kg, Hz, unitless
 ```
 
-The session never calls `rag.update()`, so joint motors stay off and joints are free hinges within their limits ([`DESIGN.md` §7.2](../design/07-ragimporter.md#72-spawn-and-flipx)). It allocates nothing per step or drag ([`DESIGN.md` §7.4](../design/07-ragimporter.md#74-native-memory)).
+Edit and Animate get the same session; only `start` differs. Joint motors are off, so every joint is a free hinge within its limits, and no holds or extra joints exist besides the mouse joint. The session never calls `rag.update()`, so animation motors never drive the joints ([`DESIGN.md` §7.2](../design/07-ragimporter.md#72-spawn-and-flipx)). It allocates nothing per step or drag ([`DESIGN.md` §7.4](../design/07-ragimporter.md#74-native-memory)).
 
 ## Tool contract additions
 
@@ -57,7 +58,7 @@ The session never calls `rag.update()`, so joint motors stay off and joints are 
 ## `poseTool()`
 
 - `cursor` `'default'`, `hover` `true`.
-- **pointerDown** (left, Edit mode, `ctx.physics` not `null`, `ctx.modes.can('edit.rest')`): the first `shape` uid of `ctx.hitTest(e.screen)` gives the body uid (its parent) and file id. None: nothing. Otherwise `ctx.physics.startPose(toJson(ctx.model), { root, bodyId, point: e.world })` (`toJson(ctx.model, ctx.editorVersion())` from #27); on a throw the press is refused (cursor `not-allowed` until the release, no session). In Animate mode a press does nothing until the keying issue.
+- **pointerDown** (left, Edit mode, `ctx.physics` not `null`, `ctx.modes.can('edit.rest')`): the first `shape` uid of `ctx.hitTest(e.screen)` gives the body uid (its parent) and file id. None: nothing. Otherwise `ctx.physics.startPose(toJson(ctx.model), { root, bodyId, point: e.world })` (`toJson(ctx.model, ctx.editorVersion())` from #27); on a throw the press is refused (cursor `not-allowed` until the release, no session). In Animate mode (`edit.animation` with an open clip) the press pauses playback, starts from the keyed pose at the playhead (`animatePose` of `js/model/animate-preview.js`) translated onto the displayed grabbed body (`start`), and a release after a drag keys through `setJointAngleKey` / `setRootBodyAngleKey` (`js/commands/keys.js`, unsnapped) and hands the released pose to `ctx.playback.hold` ([`DESIGN.md` §5.5](../design/05-5-tools.md#55-tools)).
 - **pointerMove** during a session: `session.drag(e.world)`, `invalidateOverlay()`. Idle: cursor `grab` over a shape hit, else `null`.
 - **tick(seconds)** during a session: `session.advance(seconds)`, then `ctx.setPose` with `session.pose()` mapped from body ids to uids through `model.uidOf`, then `invalidateOverlay()`.
 - **pointerUp**, **cancel()** and **deactivate()**: `session.destroy()`, `ctx.setPose(null)`, cursor back. `cancel()` returns `true` only when a session or a refused press was in progress. The registry's Esc, tool switch, mode change, reset, closed gesture and throwing handler paths all reach `cancel()`.

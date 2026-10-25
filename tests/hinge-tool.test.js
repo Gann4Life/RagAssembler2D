@@ -8,6 +8,8 @@ import { hingeLimits, hingePair, hingeTool } from '../js/tools/hinge.js';
 import { placement } from '../js/viewport/placement.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../js/viewport/style.js';
 import { defaultsOf } from '../lib/schema.js';
+import { motorTorqueSuggestions } from '../lib/motor.js';
+import { toJson } from '../js/model/io.js';
 
 const EPSILON = 1e-9;
 const NO_MODIFIERS = { shift: false, ctrl: false, alt: false };
@@ -216,12 +218,24 @@ test('a click on an overlap creates a pin at the snapped point and selects it', 
   assert.deepEqual(props.limits, defaultsOf('joint').limits);
   assert.equal(props.collideConnected, false);
   assert.equal(props.aimAxis, 0);
-  assert.deepEqual(props.motor, defaultsOf('joint').motor);
+  const suggested = motorTorqueSuggestions(toJson(model, 'dev')).get(props.id);
+  assert.ok(suggested > 0 && suggested !== defaultsOf('joint').motor.maxTorque);
+  assert.deepEqual(props.motor, { ...defaultsOf('joint').motor, maxTorque: suggested });
   assert.equal(props.name, 'joint_1');
   assert.deepEqual(selection.objects, [uid]);
   assert.equal(registry.active.id, 'hinge');
   assert.equal(history.state.undoLabel, 'Create joint');
   assert.equal(model.prop(ROOT_UID, 'rootBody'), 'b_1');
+});
+
+test('a new joint keeps the default torque without a suggestion, and one undo removes it', () => {
+  const { model, registry, view, history, shapes } = environment();
+  history.execute(setProps([shapes[1]], { density: 0 }));
+  view.hits = [shapes[1], shapes[0]];
+  gesture(registry, [[px(0.5), py(0)]]);
+  assert.equal(lastJoint(model).props.motor.maxTorque, defaultsOf('joint').motor.maxTorque);
+  history.undo();
+  assert.equal(jointsOf(model).length, 0);
 });
 
 test('a click without grid snap anchors at the raw point', () => {
@@ -408,7 +422,7 @@ test('Undo mid-drag aborts the drag and undoes nothing else', () => {
   assert.deepEqual(overlayOf(registry), []);
 });
 
-test('a mode change mid-drag creates nothing and the tool leaves', () => {
+test('a mode change mid-drag creates nothing and the tool stays active but unusable', () => {
   const { model, registry, view, history, modes, shapes } = environment();
   const clip = addClip(history);
   view.hits = [shapes[1], shapes[0]];
@@ -417,7 +431,8 @@ test('a mode change mid-drag creates nothing and the tool leaves', () => {
   modes.openClip(clip);
   send(registry, 'up', 300, 200);
   assert.deepEqual(jointsOf(model), []);
-  assert.notEqual(registry.active?.id, 'hinge');
+  assert.equal(registry.active?.id, 'hinge');
+  assert.equal(registry.usable, false);
   assert.equal(registry.canActivate('hinge'), false);
 });
 

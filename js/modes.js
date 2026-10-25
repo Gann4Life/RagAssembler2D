@@ -7,8 +7,8 @@ import { Emitter } from '../lib/emitter.js';
 /**
  * Capability checked against the mode policy (`DESIGN.md` §5.1).
  * @typedef {'select'|'tool.pose'|'tool.circle'|'tool.box'|'tool.polygon'|'tool.hinge'
- *   |'edit.rest'|'edit.animation'|'assets.import'|'assets.delete'|'clip.open'|'timeline.scrub'
- *   |'preview.stack'|'preview.procedural'|'file'|'history'|'play'|'simulate.control'
+ *   |'edit.rest'|'edit.animation'|'assets.import'|'assets.delete'|'clip.open'|'clip.rename'|'timeline.scrub'
+ *   |'preview.stack'|'preview.procedural'|'file'|'history'|'play'|'simulate.control'|'mode.switch'
  *   |'settings.editor'|'layout'|'camera'} Capability
  */
 
@@ -32,17 +32,21 @@ export const MODE_POLICY = Object.freeze({
   'assets.import': allowed(true, true, false),
   'assets.delete': allowed(true, false, false),
   'clip.open': allowed(true, true, false),
+  'clip.rename': allowed(true, true, false),
   'timeline.scrub': allowed(false, true, false),
   'preview.stack': allowed(false, true, true),
   'preview.procedural': allowed(false, false, true),
   file: allowed(true, true, false),
   history: allowed(true, true, false),
-  play: allowed(true, true, false),
-  'simulate.control': allowed(false, false, true),
+  play: allowed(true, true, true),
+  'simulate.control': allowed(false, true, true),
+  'mode.switch': allowed(true, true, true),
   'settings.editor': allowed(true, true, true),
   layout: allowed(true, true, true),
   camera: allowed(true, true, true),
 });
+
+const MODE_NAMES = Object.freeze({ edit: 'Edit', animate: 'Animate', simulate: 'Simulate' });
 
 function lengthOf(model, clip) {
   if (clip === null) return 0;
@@ -110,6 +114,21 @@ export class Modes {
     const row = Object.hasOwn(MODE_POLICY, capability) ? MODE_POLICY[capability] : null;
     if (!row) throw new Error(`Unknown capability "${capability}"`);
     return row[this.#mode];
+  }
+
+  /**
+   * Mode reason of a capability the current mode refuses, naming the modes that allow it, e.g.
+   * `only in Edit mode` or `only in Edit and Animate modes`.
+   * @param {Capability} capability Policy row.
+   * @returns {string|null} The reason, or `null` when the current mode allows it.
+   * @throws {Error} When the capability is unknown.
+   */
+  reason(capability) {
+    if (this.can(capability)) return null;
+    const names = Object.keys(MODE_NAMES).filter((mode) => MODE_POLICY[capability][mode]).map((mode) => MODE_NAMES[mode]);
+    if (names.length === 0) return 'not available in any mode';
+    const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    return `only in ${list} ${names.length === 1 ? 'mode' : 'modes'}`;
   }
 
   /**

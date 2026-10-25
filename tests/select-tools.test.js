@@ -887,6 +887,21 @@ test('Animate and Simulate: no gizmo, object drags draw a box and nothing moves'
   }
 });
 
+test('Animate: a drag where the ring was draws a box and writes no keys', () => {
+  const env = chain();
+  const { model, tools, selection, modes, history, shapes } = env;
+  const before = snapshot(env);
+  const clip = addClipTo(history);
+  modes.openClip(clip);
+  modes.setPlayhead(0.5);
+  selection.set([shapes[1]]);
+  const undoable = history.state.undoLabel;
+  path(tools, [[322, 200], [300, 150], [250, 128]]);
+  assert.equal(model.children(clip, 'tracks').length, 0);
+  assert.equal(snapshot(env), before);
+  assert.equal(history.state.undoLabel, undoable);
+});
+
 test('Select Box shows no gizmo and draws a box over the gizmo and objects', () => {
   const env = chain();
   const { tools, selection, shapes } = env;

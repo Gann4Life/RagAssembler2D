@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { RagImporter, RagFormatError } from '../lib/ragimporter.js';
 import { RagDef } from '../lib/def.js';
-import { transformPoint } from '../lib/geometry.js';
+import { bodyMassData, transformPoint } from '../lib/geometry.js';
 import { POSE, createPoseSession, poseTestJson } from '../js/physics/pose-session.js';
 import { ragFile } from './helpers/rag-file.js';
 
@@ -144,6 +144,29 @@ test('pose() equals the rest pose right after start with a rotated root, and gra
     near(anchor.x, point.x, 'anchor x');
     near(anchor.y, point.y, 'anchor y');
     assert.deepEqual(target, point);
+  } finally {
+    session.destroy();
+  }
+});
+
+test('options.start places the listed bodies at their root-local transforms before the grab', () => {
+  const json = ragFile();
+  const moved = json.bodies[1];
+  const placed = { x: moved.position[0] + 0.2, y: moved.position[1] - 0.1, angle: moved.angle + 0.7 };
+  const point = transformPoint(ROOT, { x: placed.x, y: placed.y });
+  const session = create(Box2D, json, { root: ROOT, bodyId: moved.id, point, start: new Map([[moved.id, placed]]) });
+  try {
+    const pose = session.pose();
+    near(pose.get(moved.id).x, placed.x, 'x');
+    near(pose.get(moved.id).y, placed.y, 'y');
+    near(pose.get(moved.id).angle, placed.angle, 'angle');
+    for (const body of json.bodies) {
+      if (body.id === moved.id) continue;
+      near(pose.get(body.id).angle, body.angle, `${body.id} angle`);
+    }
+    const { anchor } = session.grab();
+    near(anchor.x, point.x, 'anchor x');
+    near(anchor.y, point.y, 'anchor y');
   } finally {
     session.destroy();
   }
@@ -344,4 +367,35 @@ test('no heap growth over 500 start, drag, advance, destroy cycles', () => {
   const before = heapProbe();
   for (let i = 1; i <= 500; i++) cycle(i);
   assert.equal(heapProbe(), before);
+});
+
+test('rootBody moves freely: a dragged limb pulls it along and a grabbed rootBody follows the pointer', () => {
+  const json = ragFile();
+  const rootId = json.ragdoll.rootBody;
+  const rootCenter = (pose) => {
+    const body = json.bodies.find((item) => item.id === rootId);
+    return transformPoint(pose.get(rootId), bodyMassData(body.fixtures).center);
+  };
+  const press = restWorld(json, 'b_head');
+  const limb = create(Box2D, json, { root: ROOT, bodyId: 'b_head', point: press, start: new Map() });
+  try {
+    const before = rootCenter(limb.pose());
+    limb.drag({ x: press.x + 3, y: press.y - 2 });
+    run(limb, 2);
+    const after = rootCenter(limb.pose());
+    assert.ok(Math.hypot(after.x - before.x, after.y - before.y) > 0.2, 'rootBody pulled along');
+  } finally {
+    limb.destroy();
+  }
+  const grab = restWorld(json, rootId);
+  const moved = create(Box2D, json, { root: ROOT, bodyId: rootId, point: grab, start: new Map() });
+  try {
+    const before = rootCenter(moved.pose());
+    moved.drag({ x: grab.x + 0.5, y: grab.y + 0.5 });
+    run(moved, 2);
+    const after = rootCenter(moved.pose());
+    assert.ok(Math.hypot(after.x - before.x, after.y - before.y) > 0.3, 'rootBody translated');
+  } finally {
+    moved.destroy();
+  }
 });

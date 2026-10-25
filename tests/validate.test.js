@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PROBLEM_CODES, SUPPORTED_VERSIONS, validate } from '../lib/validate.js';
+import { balanceTorqueSuggestion, motorTorqueSuggestions } from '../lib/motor.js';
 import { RagImporter } from '../lib/ragimporter.js';
 import { shapeGeometryValid } from '../lib/geometry.js';
 import { defaultsOf } from '../lib/schema.js';
@@ -62,7 +63,7 @@ function validFile() {
   head.sprite.asset = 's_face_normal';
   return {
     format: 'ragassembler',
-    version: 1,
+    version: 2,
     meta: { name: 'humanoid', editorVersion: '0.1.0' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
@@ -73,6 +74,7 @@ function validFile() {
       angle: 0,
       rootBody: 'b_torso',
       channels: { strength: 1, gain: 1, damping: 1 },
+      balance: { enabled: true, maxTorque: 26, gain: 10, damping: 0.5, maxSpeed: 20 },
     },
     sprites: [
       { id: 's_torso', name: 'torso', src: 'humanoid/torso.png' },
@@ -136,7 +138,7 @@ function summary(problems) {
 
 const cases = [
   { code: 'E_FORMAT', mutate: () => 42, path: '' },
-  { code: 'E_VERSION_UNSUPPORTED', mutate: (j) => void (j.version = 2), path: '/version' },
+  { code: 'E_VERSION_UNSUPPORTED', mutate: (j) => void (j.version = 1), path: '/version' },
   { code: 'E_FIELD_MISSING', mutate: (j) => void delete j.bodies[0].linearDamping, path: '/bodies/0/linearDamping' },
   { code: 'E_FIELD_TYPE', mutate: (j) => void (j.bodies[0].fixtures[0].shape.width = 'x'), path: '/bodies/0/fixtures/0/shape/width' },
   { code: 'E_FIELD_RANGE', mutate: (j) => void (j.bodies[0].fixtures[0].shape.width = 0), path: '/bodies/0/fixtures/0/shape/width' },
@@ -200,6 +202,8 @@ const cases = [
   },
   { code: 'W_ANCHOR_OUTSIDE', mutate: (j) => void (j.joints[1].anchor = [5, 5]), path: '/joints/1/anchor' },
   { code: 'W_BODY_ZERO_MASS', mutate: (j) => void (j.bodies[1].fixtures[0].density = 0), path: '/bodies/1' },
+  { code: 'W_MOTOR_OVERPOWERED', mutate: (j) => void (j.joints[2].motor.maxTorque = 1e6), path: '/joints/2/motor/maxTorque' },
+  { code: 'W_MOTOR_UNDERPOWERED', mutate: (j) => void (j.joints[2].motor.maxTorque = 0.001), path: '/joints/2/motor/maxTorque' },
   {
     code: 'W_CLIP_EMPTY',
     mutate: (j) => {
@@ -226,7 +230,7 @@ test('a complete valid file has no problems', () => {
 
 test('PROBLEM_CODES lists exactly the contract codes, frozen, with severity from the prefix', () => {
   assert.ok(Object.isFrozen(PROBLEM_CODES));
-  assert.equal(Object.keys(PROBLEM_CODES).length, 42);
+  assert.equal(Object.keys(PROBLEM_CODES).length, 44);
   for (const [code, severity] of Object.entries(PROBLEM_CODES)) {
     assert.equal(severity, code.startsWith('E_') ? 'error' : 'warning', code);
   }
@@ -321,7 +325,7 @@ test('inputs that are not objects give only E_FORMAT at the document', () => {
 });
 
 test('validate never throws on odd documents', () => {
-  const header = { format: 'ragassembler', version: 1 };
+  const header = { format: 'ragassembler', version: 2 };
   const odd = [
     { ...header },
     { ...header, ragdoll: null, sprites: null, bodies: 5, joints: 'x', clips: {} },
@@ -568,6 +572,34 @@ test('W_BODY_ZERO_MASS is skipped when the body has errors in its shapes', () =>
   assert.deepEqual(summary(problemsOf(json)), [{ code: 'E_FIELD_RANGE', path: '/bodies/1/fixtures/0/friction' }]);
 });
 
+test('W_MOTOR_OVERPOWERED fires only above 1000 times the suggestion, without values in the message', () => {
+  const json = validFile();
+  const suggestion = motorTorqueSuggestions(json).get('j_neck');
+  json.joints[2].motor.maxTorque = 1000 * suggestion;
+  assert.deepEqual(validate(json).warnings, []);
+  json.joints[2].motor.maxTorque = 1000 * suggestion + 1;
+  const [warning] = validate(json).warnings;
+  assert.equal(warning.code, 'W_MOTOR_OVERPOWERED');
+  assert.deepEqual(warning.target, { type: 'joint', id: 'j_neck' });
+  assert.match(warning.message, /RagAssembler sets it automatically/);
+  assert.doesNotMatch(warning.message, /\d/);
+});
+
+test('W_MOTOR_OVERPOWERED is skipped on errors in bodies or in the joint, and without a suggestion', () => {
+  const bodyError = validFile();
+  bodyError.joints[2].motor.maxTorque = 1e6;
+  bodyError.bodies[1].fixtures[0].friction = -1;
+  assert.ok(!problemsOf(bodyError).some((problem) => problem.code === 'W_MOTOR_OVERPOWERED'));
+  const jointError = validFile();
+  jointError.joints[2].motor.maxTorque = 1e6;
+  jointError.joints[2].motor.gain = -1;
+  assert.ok(!problemsOf(jointError).some((problem) => problem.code === 'W_MOTOR_OVERPOWERED'));
+  const massless = validFile();
+  massless.joints[2].motor.maxTorque = 1e6;
+  massless.bodies[3].fixtures[0].density = 0;
+  assert.ok(!problemsOf(massless).some((problem) => problem.code === 'W_MOTOR_OVERPOWERED'));
+});
+
 test('hasImage is optional, receives the asset id and only flags false', () => {
   const json = validFile();
   assert.deepEqual(validate(json).warnings, []);
@@ -647,8 +679,54 @@ test('RagImporter.validate delegates to validate and supportedVersions is the fr
   assert.deepEqual(RagImporter.validate(null), validate(null));
   assert.equal(RagImporter.supportedVersions, SUPPORTED_VERSIONS);
   assert.ok(Object.isFrozen(SUPPORTED_VERSIONS));
-  assert.deepEqual([...SUPPORTED_VERSIONS], [1]);
+  assert.deepEqual([...SUPPORTED_VERSIONS], [2]);
   const calls = [];
   RagImporter.validate(validFile(), { hasImage: (asset) => calls.push(asset) });
   assert.deepEqual(calls, []);
+});
+
+test('W_MOTOR_UNDERPOWERED fires only below 0.1 times the suggestion, without values in the message', () => {
+  const json = validFile();
+  const suggestion = motorTorqueSuggestions(json).get('j_neck');
+  json.joints[2].motor.maxTorque = 0.1 * suggestion;
+  assert.deepEqual(validate(json).warnings, []);
+  json.joints[2].motor.maxTorque = 0.099 * suggestion;
+  const [warning] = validate(json).warnings;
+  assert.equal(warning.code, 'W_MOTOR_UNDERPOWERED');
+  assert.equal(warning.path, '/joints/2/motor/maxTorque');
+  assert.match(warning.message, /RagAssembler sets it automatically/);
+  assert.doesNotMatch(warning.message, /\d/);
+});
+
+test('the balance torque warns above 1000 and below 0.1 times its suggestion while enabled', () => {
+  const json = validFile();
+  const suggestion = balanceTorqueSuggestion(json);
+  assert.equal(typeof suggestion, 'number');
+  const balanceWarnings = (torque, enabled = true) => {
+    const copy = validFile();
+    copy.ragdoll.balance.maxTorque = torque;
+    copy.ragdoll.balance.enabled = enabled;
+    return summary(validate(copy).warnings).filter((problem) => problem.path === '/ragdoll/balance/maxTorque');
+  };
+  assert.deepEqual(balanceWarnings(suggestion), []);
+  assert.deepEqual(balanceWarnings(1001 * suggestion), [{ code: 'W_MOTOR_OVERPOWERED', path: '/ragdoll/balance/maxTorque' }]);
+  assert.deepEqual(balanceWarnings(0.09 * suggestion), [{ code: 'W_MOTOR_UNDERPOWERED', path: '/ragdoll/balance/maxTorque' }]);
+  assert.deepEqual(balanceWarnings(0.09 * suggestion, false), []);
+  const target = validate((() => {
+    const copy = validFile();
+    copy.ragdoll.balance.maxTorque = 0;
+    return copy;
+  })()).warnings.find((problem) => problem.path === '/ragdoll/balance/maxTorque').target;
+  assert.deepEqual(target, { type: 'root', id: 'root' });
+});
+
+test('the balance torque check is skipped on errors in bodies or in the ragdoll', () => {
+  const bodyError = validFile();
+  bodyError.ragdoll.balance.maxTorque = 0;
+  bodyError.bodies[1].fixtures[0].friction = -1;
+  assert.ok(!problemsOf(bodyError).some((problem) => problem.path === '/ragdoll/balance/maxTorque'));
+  const rootError = validFile();
+  rootError.ragdoll.balance.maxTorque = 0;
+  rootError.ragdoll.balance.gain = -1;
+  assert.ok(!problemsOf(rootError).some((problem) => problem.code.startsWith('W_MOTOR')));
 });

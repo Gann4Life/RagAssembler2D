@@ -5,7 +5,7 @@
 ```json
 {
   "format": "ragassembler",
-  "version": 1,
+  "version": 2,
   "meta": { "name": "humanoid", "editorVersion": "0.1.0" },
   "units": { "pixelsPerMeter": 32 },
   "preview": { "gravity": [0, -10] },
@@ -15,7 +15,8 @@
     "position": [0, 0],
     "angle": 0,
     "rootBody": "b_torso",
-    "channels": { "strength": 1, "gain": 1, "damping": 1 }
+    "channels": { "strength": 1, "gain": 1, "damping": 1 },
+    "balance": { "enabled": true, "maxTorque": 26, "gain": 10, "damping": 0.5, "maxSpeed": 20 }
   },
   "sprites": [
     { "id": "s_torso", "name": "torso", "src": "humanoid/torso.png" },
@@ -107,10 +108,11 @@
   - `ragdoll.position/angle` is the root's placement in the editor scene and is **ignored by runtime spawn**, which uses its own transform. The editor never changes it ([§2.1](02-object-model.md#21-root-the-ragdoll-itself)): new documents write `[0, 0]` and `0`, and loaded values are kept, drawn and saved back as they are.
 - **`ragdoll.name`**: the ragdoll's name, `"root"` in a new document. Save writes it as `meta.name` and uses it for the suggested file name ([§5.3](05-3-header.md#53-header)).
 - **`ragdoll.channels`**: base values of the global multipliers when no clip animates them.
+- **`ragdoll.balance`**: the balance controller that keeps `rootBody` at the root `bodyAngle` ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). `enabled` (boolean) turns it on; `maxTorque` (N·m, ≥ 0), `gain` (1/s, ≥ 0), `damping` (≥ 0) and `maxSpeed` (rad/s, ≥ 0) mean what they mean on a joint motor. Consumed by RagImporter.
 - **`sprites[].src`**: path relative to the `.rag.json` file. It is used as the texture key unless the host provides a resolver ([§7.3](07-ragimporter.md#73-sprites-and-rendering)).
 - **`fixtures[].sprite`**: optional; `null` or absent means no sprite.
 - **`tracks[].target`**: `"root"`, a joint id or a shape id.
-  - Valid channels for `root`: `strength | gain | damping`.
+  - Valid channels for `root`: `strength | gain | damping | bodyAngle`.
   - Valid channels for a joint: `angle | strength | gain | damping`.
   - Valid channel for a shape: `sprite` (key values are a sprite asset id or `null`).
 - **`meta`**: written by Save, not edited by the user: `meta.name` repeats `ragdoll.name` and `meta.editorVersion` names the editor version that saved the file ([§6.5](#65-round-trip-guarantee)). Their loaded values affect nothing.
@@ -122,6 +124,8 @@
 - `version` is an integer and increases on any breaking change.
 - The editor migrates older versions on load and always saves the latest one. Migration is an ordered chain of pure steps, one per version (N → N+1), each tested on its own; a breaking change adds its step. A file with errors after migration is rejected ([§5.3](05-3-header.md#53-header)).
 - RagImporter declares the versions it supports (`RagImporter.supportedVersions`) and **throws** on any other version, with a clear message; `validate` reports it as `E_VERSION_UNSUPPORTED` ([§6.4](#64-validation)).
+- **History.** The latest version is **2**; `supportedVersions` is `[2]`, so files saved as version 1 must be opened and saved again in the editor before a host loads them.
+  - **1 → 2** (root `bodyAngle` channel and `ragdoll.balance`, [§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)): adds `ragdoll.balance = { enabled: true, maxTorque, gain: 10, damping: 0.5, maxSpeed: 20 }`, with `maxTorque` = `balanceTorqueSuggestion` of the document, or `80` when it is `null`. Migrated ragdolls therefore get the balance controller (a change of runtime behavior from version 1); the user turns it off in the root inspector. Nothing else changes: version 1 files have no `bodyAngle` tracks. When `ragdoll` is not an object the step adds nothing and validation reports the file.
 - Unknown fields:
   - RagImporter ignores them;
   - the editor drops them with a warning (`W_UNKNOWN_FIELD`).
@@ -151,7 +155,7 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 | `E_VERSION_UNSUPPORTED` | `version` is missing or not one of `RagImporter.supportedVersions` ([§6.3](#63-versioning)). | `/version` |
 | `E_FIELD_MISSING` | A field of `docs/schema.md` is absent (only `fixtures[].sprite` is optional). | the field |
 | `E_FIELD_TYPE` | Wrong type: numbers must be finite, `integer` whole, `vec2` two finite numbers, `color` `#rrggbb`, references a string (or `null` where allowed), lists arrays of objects. | the field |
-| `E_FIELD_RANGE` | Outside the field's range in `docs/schema.md`, or not its constant (`ragdoll.id` is `"root"`). This covers non-positive sizes and radii, `length`/`speed ≤ 0`, negative fades, damping and motor values, `channels` outside 0–1, and `limits.lower > 0` or `limits.upper < 0` whether or not limits are enabled. | the field |
+| `E_FIELD_RANGE` | Outside the field's range in `docs/schema.md`, or not its constant (`ragdoll.id` is `"root"`). This covers non-positive sizes and radii, `length`/`speed ≤ 0`, negative fades, damping, motor and `balance` values, `channels` outside 0–1, and `limits.lower > 0` or `limits.upper < 0` whether or not limits are enabled. | the field |
 | `E_FIELD_ENUM` | Not one of the field's enum values. | the field |
 | `E_ID_EMPTY` | An empty `id` (sprite asset, body, shape or joint). | `…/id` |
 | `E_ID_DUPLICATE` | An `id` already used earlier, across sprite assets, bodies, shapes and joints. | `…/id` |
@@ -176,7 +180,7 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 | `E_KEYS_UNSORTED` | A key's `t` is smaller than the previous key's. | `…/keys/k/t` |
 | `E_KEY_TIME_DUPLICATE` | A key's `t` equals the previous key's. | `…/keys/k/t` |
 | `E_KEY_TIME_RANGE` | A key's `t` is outside `[0, length]`. | `…/keys/k/t` |
-| `E_KEY_VALUE` | `v` does not fit the channel: a multiplier not in 0–1, an angle not a finite number, a `sprite` value neither `null` nor an asset id. | `…/keys/k/v` |
+| `E_KEY_VALUE` | `v` does not fit the channel: a multiplier not in 0–1, an angle (`angle`, `bodyAngle`) not a finite number, a `sprite` value neither `null` nor an asset id. | `…/keys/k/v` |
 | `E_KEY_INTERP_SPRITE` | A `sprite` key whose `interp` is not `step`. | `…/keys/k/interp` |
 | `E_EVENT_NAME_EMPTY` | An event with an empty `name`. | `…/events/k/name` |
 | `E_EVENT_TIME_RANGE` | An event `t` outside `[0, length)` in a loop clip or `[0, length]` otherwise ([§4.7](04-animation-model.md#47-events)). | `…/events/k/t` |
@@ -190,6 +194,8 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 | `W_JOINT_LOOP` | A loop joint ([§2.4](02-object-model.md#24-joints)). | `/joints/i` |
 | `W_ANCHOR_OUTSIDE` | The anchor is farther than 0.001 m from every shape of both bodies, in rest pose. | `/joints/i/anchor` |
 | `W_BODY_ZERO_MASS` | A body with fixtures and no errors in them whose total mass is 0. | `/bodies/i` |
+| `W_MOTOR_OVERPOWERED` | `motor.maxTorque` is more than 1000 × the joint's suggested torque ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)), which makes light bodies gain energy on contact. Skipped when the suggestion is `null`, and when the document has any error in `bodies` or in that joint (no cascades). Also checked for `ragdoll.balance.maxTorque` against the suggested balance torque ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)) while `balance.enabled` is true, with the same skips (errors in `bodies` or `ragdoll`). The message says that opening the file in RagAssembler sets the torque automatically ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) and quotes no values. In the editor it does not occur once loaded, since Load applies the suggestions; it is for files a host validates. | `/joints/i/motor/maxTorque`, `/ragdoll/balance/maxTorque` |
+| `W_MOTOR_UNDERPOWERED` | `motor.maxTorque` is less than 0.1 × the joint's suggested torque, so the joint cannot hold the ragdoll's weight at its lever or follow its keys; or `ragdoll.balance.maxTorque` is less than 0.1 × the suggested balance torque while `balance.enabled` is true. Same skips, message and editor rule as `W_MOTOR_OVERPOWERED`. | `/joints/i/motor/maxTorque`, `/ragdoll/balance/maxTorque` |
 | `W_CLIP_EMPTY` | A clip with no tracks and no events. | `/clips/i` |
 | `W_SPRITE_UNUSED` | A sprite asset referenced by no `sprite.asset` and no `sprite` key value. | `/sprites/i` |
 | `W_SPRITE_IMAGE_MISSING` | Editor only: `hasImage(asset)` returned `false`. | `/sprites/i/src` |
@@ -210,7 +216,7 @@ Save always writes the **canonical form**:
   - The model export takes the editor version as a parameter and reads no global state, so tests pass it explicitly. Validation before Save and in the Problems panel runs on that export, so a document never saved has no missing `meta` field.
 - Sprite images are written back unchanged (same bytes, same paths).
 
-**Load → Save is byte-identical** for a canonical file: valid, at the latest format version, without unknown fields, written by the rules above, with `meta.name` equal to `ragdoll.name` and `meta.editorVersion` equal to the running editor's version. Every file Save writes is canonical for the editor that wrote it, so saving it again from that editor version gives the same bytes.
+**Load → Save is byte-identical** for a canonical file: valid, at the latest format version, without unknown fields, written by the rules above, with `meta.name` equal to `ragdoll.name`, `meta.editorVersion` equal to the running editor's version, and every `motor.maxTorque` and `balance.maxTorque` at its suggestion where it has one (the automatic motor torque, [§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels), which Load applies). Every file Save writes is canonical for the editor that wrote it, so saving it again from that editor version gives the same bytes.
 
 Any other valid file loads and saves without losing data; the output differs from the input only by:
 - `meta.editorVersion` (a file saved by another editor version, including `dev`) and `meta.name` (when it differed from `ragdoll.name`);

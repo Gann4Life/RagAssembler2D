@@ -7,6 +7,6 @@ test('ragimporter loads as an ES module and exposes RagImporter', () => {
   assert.ok(Object.isFrozen(RagImporter));
 });
 
-test('RagImporter declares format version 1 as supported', () => {
-  assert.deepEqual(RagImporter.supportedVersions, [1]);
+test('RagImporter declares format version 2 as supported', () => {
+  assert.deepEqual(RagImporter.supportedVersions, [2]);
 });

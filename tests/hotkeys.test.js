@@ -22,7 +22,8 @@ function designHotkeyKeys() {
   for (let index = start + 1; index < lines.length && !lines[index].startsWith('#'); index++) {
     if (!lines[index].startsWith('|') || /^\|\s*(Key|---)/.test(lines[index])) continue;
     const cells = lines[index].split('|').slice(1, -1).map((cell) => cell.trim());
-    rows.push(cells[0], cells[2]);
+    if (cells[0].includes('(while')) continue;
+    rows.push(cells[0]);
   }
   return rows
     .filter((cell) => cell !== '')
@@ -90,14 +91,15 @@ test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, tool rows first', (
       'ungroup',
       'split',
       'duplicate',
+      'rename',
+      'set-root-body',
       'toggle-play',
       'next-frame',
       'key-selected',
       'frame-selection',
       'frame-all',
-      'escape',
       'pivot-mode',
-      'rename',
+      'escape',
     ],
   );
   assert.ok(Object.isFrozen(HOTKEYS));
@@ -110,7 +112,7 @@ test('HOTKEYS lists the DESIGN.md §5.9 keys in table order, tool rows first', (
 test('tool rows are built from TOOL_SPECS', () => {
   assert.deepEqual(
     HOTKEYS.slice(0, TOOL_SPECS.length),
-    TOOL_SPECS.map((tool) => ({ keys: tool.hotkey, action: `tool:${tool.id}` })),
+    TOOL_SPECS.map((tool) => ({ keys: tool.hotkey, action: `tool:${tool.id}`, label: tool.label })),
   );
 });
 

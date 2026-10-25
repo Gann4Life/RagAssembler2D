@@ -87,7 +87,7 @@ test('rename is disabled in Animate and Simulate mode, during a gesture, while o
   assert.equal(actions.isEnabled('rename'), true);
   modes.openClip(model.clipByKey('walk'));
   assert.equal(actions.isEnabled('rename'), false);
-  assert.equal(actions.reason('rename'), 'not available in Animate mode');
+  assert.equal(actions.reason('rename'), 'only in Edit mode');
   modes.startSimulate();
   assert.equal(actions.isEnabled('rename'), false);
 });

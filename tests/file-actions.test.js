@@ -7,10 +7,16 @@ import { createShapeBody } from '../js/commands/create.js';
 import { setProps } from '../js/commands/props.js';
 import { serialize } from '../lib/serialize.js';
 import { ragFile } from './helpers/rag-file.js';
+import { applyTorqueToJson } from '../js/model/motor-torque.js';
+
+function automatic(json) {
+  applyTorqueToJson(json);
+  return json;
+}
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const bodyCount = (editor) => editor.model.children(ROOT_UID, 'bodies').length;
-const validText = () => serialize({ ...ragFile(), meta: { name: 'sample', editorVersion: 'dev' } });
+const validText = () => serialize({ ...automatic(ragFile()), meta: { name: 'sample', editorVersion: 'dev' } });
 
 function setup({ text = validText(), confirmAnswer = true, dirty = false, files = true, saveResult = true } = {}) {
   const log = { confirms: [], notices: [], saved: [], reads: 0 };
@@ -164,7 +170,7 @@ test('a problem line is path: message when the path is not empty', async () => {
 });
 
 test('warnings and migration notes go in one load-notes and never block the load', async () => {
-  const withExtra = { ...ragFile(), extra: 1 };
+  const withExtra = { ...automatic(ragFile()), extra: 1 };
   const { editor, log } = setup();
   assert.equal(await editor.loadFrom(() => Promise.resolve(JSON.stringify(withExtra))), true);
   assert.equal(log.notices.length, 1);
@@ -311,7 +317,7 @@ test('new, load and save are enabled in Animate, disabled in Simulate and during
   editor.modes.startSimulate();
   for (const id of ['new', 'load', 'save']) {
     assert.equal(editor.actions.isEnabled(id), false, `${id} in Simulate`);
-    assert.equal(editor.actions.reason(id), 'not available in Simulate mode');
+    assert.equal(editor.actions.reason(id), 'only in Edit and Animate modes');
   }
   editor.modes.stopSimulate();
   editor.modes.openClip(null);

@@ -241,7 +241,7 @@ test('duplicate action copies in place, selects the copies and never copies the 
   assert.deepEqual(editor.selection.objects, [copy]);
   editor.selection.set([ROOT_UID]);
   assert.equal(editor.actions.isEnabled('duplicate'), false);
-  assert.equal(editor.actions.reason('duplicate'), null);
+  assert.equal(editor.actions.reason('duplicate'), 'select a body, shape or non-loop joint');
   assert.equal(model.children(ROOT_UID, 'bodies').length, 6);
 });
 
@@ -250,9 +250,10 @@ test('duplicate action availability: needs a body, shape or non-loop joint in Ed
   const { actions, selection, history, modes } = editor;
   selection.set([]);
   assert.equal(actions.isEnabled('duplicate'), false);
-  assert.equal(actions.reason('duplicate'), null);
+  assert.equal(actions.reason('duplicate'), 'select a body, shape or non-loop joint');
   selection.set([uids.j_3]);
   assert.equal(actions.isEnabled('duplicate'), false);
+  assert.equal(actions.reason('duplicate'), 'select a body, shape or non-loop joint');
   selection.set([uids.j_1]);
   assert.equal(actions.isEnabled('duplicate'), true);
   selection.set([uids.f_1]);
@@ -265,5 +266,5 @@ test('duplicate action availability: needs a body, shape or non-loop joint in Ed
   modes.startSimulate();
   selection.set([uids.f_1]);
   assert.equal(actions.isEnabled('duplicate'), false);
-  assert.equal(actions.reason('duplicate'), 'not available in Simulate mode');
+  assert.equal(actions.reason('duplicate'), 'only in Edit mode');
 });

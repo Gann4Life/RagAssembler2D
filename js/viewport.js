@@ -1,4 +1,5 @@
 import { framingBounds } from './viewport/bounds.js';
+import { createGhosts } from './viewport/ghosts.js';
 import { createGizmos } from './viewport/gizmos.js';
 import { createGrid } from './viewport/grid.js';
 import { boxTest, hitTest } from './viewport/hit.js';
@@ -16,6 +17,10 @@ import { COLORS, LABEL_SIZE } from './viewport/style.js';
  *   top-left), topmost first, in the displayed pose.
  * @property {(uids: Iterable<number>|null) => void} frame Fits the given objects into the view, or everything for
  *   `null` or when they have nothing to frame.
+ * @property {(pose: import('./viewport/bounds.js').Pose|null) => void} setBasePose Sets the pose shown when no tool sets one,
+ *   e.g. the FK pose in Animate mode; `null` is the rest pose.
+ * @property {(ghosts: ReadonlyArray<{ side: 'ahead'|'behind', pose: import('./viewport/bounds.js').Pose }>) => void} setGhosts
+ *   Replaces the ghosts drawn between the grid and the scene.
  * @property {() => void} destroy Stops resizing and input, unbinds the tools, and destroys the application and its
  *   canvas.
  */
@@ -77,6 +82,7 @@ export async function createViewport(
   camera.setSize(hostWidth(host), hostHeight(host));
 
   const grid = createGrid(PIXI, { camera, settings });
+  const ghosts = createGhosts(PIXI, { model, camera });
   const scene = createScene(PIXI, { model, camera, settings });
   const gizmos = createGizmos(PIXI, { model, camera, selection, modes, settings, scene });
   const toolOverlay = new PIXI.Container();
@@ -94,7 +100,14 @@ export async function createViewport(
   readoutText.label = 'readout';
   readoutText.visible = false;
   toolOverlay.addChild(toolGraphics, readoutText);
-  app.stage.addChild(grid.view, scene.view, gizmos.view, toolOverlay);
+  app.stage.addChild(grid.view, ghosts.view, scene.view, gizmos.view, toolOverlay);
+
+  let basePose = null;
+  let toolPose = null;
+  const showPose = (pose) => {
+    scene.setPose(pose);
+    gizmos.invalidate();
+  };
 
   const hitTestAt = (screen) => hitTest(model, camera, screen, { pose: scene.pose() });
 
@@ -131,7 +144,7 @@ export async function createViewport(
     settings.on('settings', invalidateOverlay),
   ];
 
-  const hoverAllowed = () => tools.active === null || tools.active.hover;
+  const hoverAllowed = () => tools.active === null || (tools.usable && tools.active.hover);
   const onHover = (screen) => {
     const shown = screen && hoverAllowed() && tools.handleAt(screen) === null;
     gizmos.setHover(shown ? (hitTestAt(screen)[0] ?? null) : null);
@@ -141,6 +154,7 @@ export async function createViewport(
     if (!hoverAllowed()) gizmos.setHover(null);
   };
   const offTool = tools.on('tool', onTool);
+  const offModeHover = modes.on('mode', onTool);
 
   const unbindTools = tools.bindView({
     hitTest: hitTestAt,
@@ -148,9 +162,10 @@ export async function createViewport(
     setCursor: (css) => host.style.setProperty(TOOL_CURSOR_PROPERTY, css),
     invalidateOverlay,
     setPose: (pose) => {
-      scene.setPose(pose);
-      gizmos.invalidate();
+      toolPose = pose ?? null;
+      showPose(toolPose ?? basePose);
     },
+    displayedPose: () => scene.pose(),
   });
   const tickTools = (ticker) => tools.tick(ticker.deltaMS / 1000);
   PIXI.Ticker.shared.add(tickTools, undefined, PIXI.UPDATE_PRIORITY.HIGH);
@@ -184,11 +199,18 @@ export async function createViewport(
     gizmos,
     hitTest: hitTestAt,
     frame,
+    setBasePose(pose) {
+      basePose = pose ?? null;
+      showPose(toolPose ?? basePose);
+      invalidateOverlay();
+    },
+    setGhosts: (list) => ghosts.setGhosts(list),
     destroy() {
       detachInput();
       PIXI.Ticker.shared.remove(tickTools);
       unbindTools();
       offTool();
+      offModeHover();
       offCamera();
       for (const off of overlayTriggers) off();
       offReset();
@@ -199,6 +221,7 @@ export async function createViewport(
       host.style.removeProperty(TOOL_CURSOR_PROPERTY);
       gizmos.destroy();
       scene.destroy();
+      ghosts.destroy();
       grid.destroy();
       app.destroy({ removeView: true }, { children: true });
     },

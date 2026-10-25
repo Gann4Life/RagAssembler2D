@@ -5,14 +5,15 @@ Dated log of design and technical decisions, split by area. Within each file the
 | Area | File | Covers |
 |---|---|---|
 | Select and transform | [tools-select.md](decisions/tools-select.md) | Select, Select Box, click semantics and the transform gizmo. |
-| Hierarchy and deletion | [hierarchy.md](decisions/hierarchy.md) | Hierarchy panel, deletion rules and presentation. |
+| Hierarchy and deletion | [hierarchy.md](decisions/hierarchy.md) | Hierarchy panel, deletion rules, presentation and Set as root body. |
 | Creation tools | [tools-creation.md](decisions/tools-creation.md) | Circle, Box and Hinge tools. |
 | Toolbar | [toolbar.md](decisions/toolbar.md) | Tools overlay, tooltips and toolbar keyboard behavior. |
 | Tool framework | [tools-framework.md](decisions/tools-framework.md) | Tool contract, registry, input rules and hit testing. |
 | Viewport | [viewport.md](decisions/viewport.md) | Camera, grid, display modes, overlays and settings popover. |
 | Commands and history | [commands-history.md](decisions/commands-history.md) | Command transactions, undo steps and history behavior. |
 | Editor core | [editor-core.md](decisions/editor-core.md) | Actions, hotkeys, modes and editor composition. |
+| Visible controls | [visible-controls.md](decisions/visible-controls.md) | No hotkey-only actions, mode switch, Rig and View menus, user-decided tools and modes, disabled reasons, status line, Pose as the animation tool, the Animate loop (clip simulation, playback in Animate, ghosts, Pose on the simulated pose with posed hold and handover). |
 | Tooling and tests | [tooling.md](decisions/tooling.md) | Conformance checks and test infrastructure. |
 | Dock and layout | [dock-layout.md](decisions/dock-layout.md) | Panel layout, dock behavior, header and keyboard navigation. |
 | Model and schema | [model-schema.md](decisions/model-schema.md) | Document model, ids, uids, schema and defaults. |
-| Runtime and format | [runtime.md](decisions/runtime.md) | RagImporter, liquidfun.js, PIXI.js and the physics and animation model. |
+| Runtime and format | [runtime.md](decisions/runtime.md) | RagImporter, liquidfun.js, PIXI.js and the physics and animation model, automatic motor torque, seamless loops. |

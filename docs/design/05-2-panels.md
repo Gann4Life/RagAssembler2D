@@ -15,7 +15,7 @@ The workspace below the header is tiled by panels: Viewport, Hierarchy, Assets, 
 - **Window resize.** Only the fill area grows or shrinks. Once it reaches its minimum, the other areas of that split shrink in proportion to their size above their own minimums; only when every area is at its minimum does the workspace scroll. These shrunk sizes are not stored: the stored sizes return when the window grows again. The exception is a handle resize: it stores the on-screen sizes of every fixed area of its split, except a folded Timeline, so the resized area starts from what the user sees.
 - **Window menu.** Panels are closed with the × on their tab (or a middle click), and reopened or closed from the **Window** menu ([§5.3](05-3-header.md#53-header)). A reopened panel returns to its previous stack and position if that stack still exists; otherwise it joins a stack holding a panel of its default group; otherwise it docks to its default workspace edge with its default size.
 - **Persistence.** The layout is saved per browser after every change and restored on load. A stored layout that cannot be read is ignored with a console warning, and the default is used; this includes layouts from before the Tools left the dock, which still name a Tools panel. Panels missing from it are added by the reopen rule. If browser storage is unavailable, the layout lives only for the session.
-- **Reset layout** restores the default immediately (Timeline folded), with no confirmation, and forgets the stored layout. Layout changes, including Reset and folding, are not undoable.
+- **Reset layout** restores the default immediately (Timeline expanded, as on a first run), with no confirmation, and forgets the stored layout. Layout changes, including Reset and folding, are not undoable.
 
 Default layout. The positions given as "Default location" in [§5.6–5.8](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels) refer to it:
 
@@ -26,7 +26,7 @@ Default layout. The positions given as "Default location" in [§5.6–5.8](05-6-
 │ │T │        Viewport             ├───────────────────────┤
 │ └──┘                             │ Inspector             │
 ├──────────────────────────────────┴───────────────────────┤
-│ Timeline                                             [▸] │  folded
+│ Timeline                                             [▾] │  expanded
 └──────────────────────────────────────────────────────────┘
 T: Tools overlay (§5.5), not a panel.
 ```
@@ -36,6 +36,6 @@ T: Tools overlay (§5.5), not a panel.
 | Viewport | fixed, center | the remaining area | 240 × 168 px (fits the two-column Tools overlay, [§5.5](05-5-tools.md#55-tools)) |
 | Hierarchy, Assets, Problems | one stack, right top | 300 px wide; half the right column | 200 × 96 px |
 | Inspector | own stack, right bottom | 300 px wide; the rest of the right column | 200 × 96 px |
-| Timeline | own stack, bottom, full width | 220 px high when expanded; starts **folded** (28 px) | 320 × 120 px (28 px high while folded) |
+| Timeline | own stack, bottom, full width | 220 px high; starts **expanded** on a first run and after Reset layout (a restored layout keeps its folded state) | 320 × 120 px (28 px high while folded) |
 
-Minimum heights include the 28 px tab bar. "Half the right column" is measured with the Timeline folded. Panels that are not built yet show a centered "*Name* (not available yet)" placeholder.
+Minimum heights include the 28 px tab bar. "Half the right column" is measured with the Timeline folded (the sizes are computed folded, then the Timeline is expanded). Panels that are not built yet show a centered "*Name* (not available yet)" placeholder.

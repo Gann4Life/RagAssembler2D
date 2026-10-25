@@ -7,9 +7,9 @@ RagAssembler is a ragdoll editor for LiquidFun + PIXI.js; RagImporter is its run
 | Overview | [00-overview.md](docs/design/00-overview.md) | Purpose, export and import flow, animation through joint motors and procedural control. |
 | §1 | [01-conventions.md](docs/design/01-conventions.md) | Units, axes, naming and editor-wide conventions. |
 | §2 | [02-object-model.md](docs/design/02-object-model.md) | Root, bodies, shapes, sprites, joints and collision rules. |
-| §3 | [03-physics-drive-model.md](docs/design/03-physics-drive-model.md) | How animation drives the ragdoll through joint motors. |
+| §3 | [03-physics-drive-model.md](docs/design/03-physics-drive-model.md) | How animation drives the ragdoll through joint motors; suggested motor torque; the rootBody balance controller. |
 | §4 | [04-animation-model.md](docs/design/04-animation-model.md) | Clips, channels, keys, channel resolution, playback, events and procedural joint control. |
-| §5 | [05-editor.md](docs/design/05-editor.md) | Editor overview and index of its subsections. |
+| §5 | [05-editor.md](docs/design/05-editor.md) | Editor overview; editor-wide rules: visible controls (no hotkey-only actions), user-decided tools and modes, disabled reasons, status line. |
 | §5.1 | [05-1-modes.md](docs/design/05-1-modes.md) | Edit, Animate and Simulate modes and the mode policy table. |
 | §5.2 | [05-2-panels.md](docs/design/05-2-panels.md) | Dock panels, default layout and the Window menu. |
 | §5.3 | [05-3-header.md](docs/design/05-3-header.md) | Header actions, menus and settings. |

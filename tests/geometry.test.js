@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bodyMass,
+  bodyMassData,
   composeTransforms,
   invertTransform,
   pointInShape,
@@ -297,4 +298,37 @@ test('polygonCentroid never yields -0', () => {
   assert.ok(Object.is(c.x, 0) && Object.is(c.y, 0), `${c.x}, ${c.y}`);
   const flat = polygonCentroid([[-1, 0], [0, 0], [1, 0]]);
   assert.ok(Object.is(flat.x, 0) && Object.is(flat.y, 0));
+});
+
+test('bodyMassData adds the inertia about the center of mass, as Box2D computes it', () => {
+  const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} != ${expected}`);
+  const circle = bodyMassData([{ shape: { type: 'circle', center: [1, 2], radius: 1 }, density: 2 }]);
+  close(circle.mass, 2 * Math.PI);
+  assert.deepEqual(circle.center, { x: 1, y: 2 });
+  close(circle.inertia, Math.PI);
+  const box = bodyMassData([{ shape: { type: 'box', center: [1, 0], width: 2, height: 1, angle: 0.7 }, density: 1 }]);
+  close(box.mass, 2);
+  close(box.inertia, 5 / 6);
+  const square = [[0, -0.5], [2, -0.5], [2, 0.5], [0, 0.5]];
+  const polygon = bodyMassData([{ shape: { type: 'polygon', vertices: square }, density: 1 }]);
+  close(polygon.mass, 2);
+  close(polygon.center.x, 1);
+  close(polygon.inertia, 5 / 6);
+  const clockwise = bodyMassData([{ shape: { type: 'polygon', vertices: [...square].reverse() }, density: 1 }]);
+  close(clockwise.inertia, 5 / 6);
+  const pair = bodyMassData([
+    { shape: { type: 'circle', center: [-1, 0], radius: 1 }, density: 1 },
+    { shape: { type: 'circle', center: [1, 0], radius: 1 }, density: 1 },
+  ]);
+  close(pair.inertia, 3 * Math.PI);
+  assert.deepEqual(pair.center, { x: 0, y: 0 });
+});
+
+test('bodyMassData has no center and no inertia without mass, and never throws', () => {
+  const none = { mass: 0, center: null, inertia: 0 };
+  assert.deepEqual(bodyMassData([]), none);
+  assert.deepEqual(bodyMassData([{ shape: { type: 'circle', center: [0, 0], radius: 1 }, density: 0 }]), none);
+  assert.deepEqual(bodyMassData([null, { shape: { type: 'box' } }, { shape: { type: 'circle', center: [0, 0], radius: 1 }, density: -1 }]), none);
+  assert.deepEqual(bodyMassData(null), none);
+  assert.deepEqual(bodyMassData(42), none);
 });

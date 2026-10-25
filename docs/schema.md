@@ -26,7 +26,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | Path | Type | Default | Range | Unit | Flags |
 |---|---|---|---|---|---|
 | `format` | string | `"ragassembler"` | constant | — | R |
-| `version` | integer | `FORMAT_VERSION` (1) | supported versions | — | R |
+| `version` | integer | `FORMAT_VERSION` (2) | supported versions | — | R |
 | `meta.name` | string | `"root"` (Save writes `ragdoll.name`) | — | — | E, R |
 | `meta.editorVersion` | string | set by Save (running editor version) | — | — | E, R |
 | `units.pixelsPerMeter` | number | `32` | >0 | px/m | |
@@ -51,6 +51,13 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | `channels.strength` | number | `1` | 0–1 | mult | A |
 | `channels.gain` | number | `1` | 0–1 | mult | A |
 | `channels.damping` | number | `1` | 0–1 | mult | A |
+| `balance.enabled` | boolean | `true` | — | — | |
+| `balance.maxTorque` | number | `80` (the editor suggests the balance torque automatically on every rig change, `DESIGN.md` §3.2) | ≥0 | N·m | |
+| `balance.gain` | number | `10` | ≥0 | 1/s | |
+| `balance.damping` | number | `0.5` | ≥0 | — | |
+| `balance.maxSpeed` | number | `20` | ≥0 | rad/s | |
+
+New documents and the 1 → 2 migration both write `balance.enabled = true` ([`DESIGN.md` §6.3](design/06-file-format.md#63-versioning)). The root `bodyAngle` channel ◆ has no field here: the inspector shows its evaluated value at the playhead in Animate mode.
 
 The root inspector also shows `units.pixelsPerMeter` and `preview.gravity` from the document. `position` and `angle` are locked: no editor command writes them, and loaded values are kept ([`DESIGN.md` §2.1](design/02-object-model.md#21-root-the-ragdoll-itself)).
 
@@ -132,7 +139,7 @@ In default names (`body_<n>`, `<type>_<n>`, `joint_<n>`), `<n>` is the number of
 | `limits.enabled` | boolean | `false` | — | — | |
 | `limits.lower` | number | `0` | ≤0 | rad | |
 | `limits.upper` | number | `0` | ≥0 | rad | |
-| `motor.maxTorque` | number | `80` | ≥0 | N·m | |
+| `motor.maxTorque` | number | `80` (the Hinge tool writes the suggested torque, `DESIGN.md` §3.1) | ≥0 | N·m | |
 | `motor.gain` | number | `10` | ≥0 | 1/s | |
 | `motor.damping` | number | `0.5` | ≥0 | — | |
 | `motor.maxSpeed` | number | `20` | ≥0 | rad/s | |
@@ -194,6 +201,7 @@ The schema default `new_clip` is `autoClipKey("New Clip")` with no taken keys; t
 | Target | Channel | Kind | Key value | Unit | Default when not animated |
 |---|---|---|---|---|---|
 | root | `strength`, `gain`, `damping` | multiplier | number 0–1 | mult | `ragdoll.channels.<channel>` |
+| root | `bodyAngle` | angle | number | rad | `0` |
 | joint | `angle` | angle | number | rad | `0` |
 | joint | `strength`, `gain`, `damping` | multiplier | number 0–1 | mult | `1` |
 | shape | `sprite` | discrete | sprite asset id or `null` | — | the shape's `sprite.asset` |
@@ -225,7 +233,7 @@ Code form: `CHANNELS[target][channel] = { kind, unit, min?, max?, default, baseP
 
 | Export | Contract |
 |---|---|
-| `FORMAT`, `FORMAT_VERSION` | `"ragassembler"`, `1`. |
+| `FORMAT`, `FORMAT_VERSION` | `"ragassembler"`, `2`. |
 | `SCHEMA` | Frozen `Record<ObjectType, ReadonlyArray<FieldSpec>>` for `document`, `root`, `spriteAsset`, `body`, `shape`, `sprite`, `joint`, `clip`, `track`, `key`, `event`, in canonical order. |
 | `CHANNELS` | Frozen table above. |
 | `fieldsOf(type, variant?)` | Fields of a type, filtered by shape variant, in canonical order. |

@@ -11,10 +11,12 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | name | Ragdoll name, default `root`; Save writes it as `meta.name` and suggests `<name>.rag.json` ([§5.3](05-3-header.md#53-header)). |
 | id | `root`, read-only. |
 | position, angle | Read-only: the locked root transform ([§2.1](02-object-model.md#21-root-the-ragdoll-itself)). |
-| rootBody | Dropdown of bodies. |
+| rootBody | Dropdown of bodies. Choosing one runs Set as root body ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)), so clips keep their look. |
 | pixelsPerMeter | Editor and runtime render scale. |
 | preview gravity | Editor preview only. |
 | strength, gain, damping ◆ | Base global multipliers (0–100 %). Animatable as root channels. |
+| body angle ◆ | Animate mode only: the evaluated root `bodyAngle` at the playhead, in degrees ([§4.2](04-animation-model.md#42-channels)). No base field. |
+| balance | `enabled`, `maxTorque`, `gain`, `damping`, `maxSpeed` of the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)), shown like a joint's motor fields (`maxTorque` automatic and read-only, like a joint's). |
 
 **Body**
 
@@ -26,6 +28,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | fixedRotation, bullet | bool. |
 | mass | Read-only, computed from shapes. |
 | shapes | List; clicking one selects it. |
+| Set as root body | Button, runs Set as root body on this body ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)); shown as "Root body" and disabled when it already is `rootBody`. |
 
 **Shape (fixture)**
 
@@ -52,7 +55,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | anchor | Root-local. |
 | collideConnected | Default false. |
 | limits: enabled, lower, upper | Degrees in the UI, `lower ≤ 0 ≤ upper`. |
-| motor: maxTorque, gain, damping, maxSpeed | Base values ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)). |
+| motor: maxTorque, gain, damping, maxSpeed | Base values ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)). maxTorque is automatic ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels), Automatic motor torque): shown read-only with "auto" until user-set values are specified ([§12](12-open-items.md#12-open-items--to-verify)). |
 | aimAxis | Degrees in the UI ([§4.8](04-animation-model.md#48-procedural-joint-control)). |
 | angle ◆, strength ◆, gain ◆, damping ◆ | Animated channels at the playhead. |
 

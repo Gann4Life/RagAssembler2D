@@ -22,7 +22,7 @@ rag.play('alive');
 rag.play('walk');
 rag.lookAt('neck', target, { weight: 0.7 });
 
-app.ticker.add(() => { rag.update(dt); world.Step(dt, 8, 3); rag.sync(); });
+app.ticker.add(() => { stepWorld(world, [rag]); rag.sync(); });   // once per fixed STEP_SETTINGS.dt frame, like the editor
 ```
 
 ## Repository layout

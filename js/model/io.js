@@ -3,6 +3,7 @@ import { migrate } from '../../lib/migrate.js';
 import { validate } from '../../lib/validate.js';
 import { serialize } from '../../lib/serialize.js';
 import { ROOT_UID, emptyRootSnapshot } from './model.js';
+import { applyTorqueToJson, torqueLoadNote } from './motor-torque.js';
 
 const NESTED = Object.freeze({
   body: Object.freeze(['fixtures']),
@@ -35,6 +36,7 @@ const CHILD_TYPES = Object.freeze({
 });
 
 const FIXTURES_FIELD = 'fixtures';
+const MOTOR_WARNINGS = new Set(['W_MOTOR_OVERPOWERED', 'W_MOTOR_UNDERPOWERED']);
 const ROOT_COLLECTIONS = Object.freeze(['sprites', 'bodies', 'joints', 'clips']);
 
 /**
@@ -71,7 +73,9 @@ export function toJson(model, editorVersion) {
  * @property {boolean} ok Whether the document was loaded.
  * @property {ReadonlyArray<object>} errors Validation errors; the model is untouched when not empty.
  * @property {ReadonlyArray<object>} warnings Validation warnings, `W_UNKNOWN_FIELD` included.
- * @property {ReadonlyArray<string>} notes One line per applied migration step.
+ * @property {ReadonlyArray<string>} notes One line per applied migration step, then the automatic motor torque note.
+ * @property {Readonly<import('./motor-torque.js').TorqueChange>|null} torque What the automatic motor torque changed
+ *   (the loaded document then differs from the file), `null` when nothing.
  */
 
 function decodePointer(pointer) {
@@ -127,8 +131,9 @@ function problem(code, message) {
 }
 
 /**
- * Loads a `.rag.json` text into the model: parses, migrates, validates, drops unknown fields and resets the
- * model with cause `load`. A file with errors is rejected and the model is untouched.
+ * Loads a `.rag.json` text into the model: parses, migrates, validates, drops unknown fields, sets every motor and
+ * balance torque to its suggestion (automatic motor torque; its motor torque warnings no longer apply and are left out)
+ * and resets the model with cause `load`. A file with errors is rejected and the model is untouched.
  * @param {import('./model.js').Model} model Document model.
  * @param {string} text File text.
  * @returns {Readonly<LoadResult>} The outcome; non-JSON text gives one `E_FORMAT` error.
@@ -145,21 +150,30 @@ export function loadJson(model, text) {
       errors: Object.freeze([problem('E_FORMAT', 'File is not valid JSON')]),
       warnings: Object.freeze([]),
       notes: Object.freeze([]),
+      torque: null,
     });
   }
   const { json, notes } = migrate(parsed);
   const { errors, warnings } = validate(json);
   const frozenNotes = Object.freeze([...notes]);
   if (errors.length > 0) {
-    return Object.freeze({ ok: false, errors: Object.freeze([...errors]), warnings: Object.freeze([...warnings]), notes: frozenNotes });
+    return Object.freeze({ ok: false, errors: Object.freeze([...errors]), warnings: Object.freeze([...warnings]), notes: frozenNotes, torque: null });
   }
   const copy = structuredClone(json);
   for (const warning of warnings) {
     if (warning.code === 'W_UNKNOWN_FIELD') dropKey(copy, warning.path);
   }
   fillAbsentSprites(copy);
+  const torque = applyTorqueToJson(copy);
   model.reset(rootSnapshot(copy), 'load');
-  return Object.freeze({ ok: true, errors: Object.freeze([]), warnings: Object.freeze([...warnings]), notes: frozenNotes });
+  const note = torqueLoadNote(torque);
+  return Object.freeze({
+    ok: true,
+    errors: Object.freeze([]),
+    warnings: Object.freeze(warnings.filter((warning) => !MOTOR_WARNINGS.has(warning.code))),
+    notes: note === null ? frozenNotes : Object.freeze([...notes, note]),
+    torque,
+  });
 }
 
 /**

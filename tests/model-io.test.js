@@ -9,6 +9,12 @@ import { serialize } from '../lib/serialize.js';
 import { ragFile } from './helpers/rag-file.js';
 import { FORMAT, FORMAT_VERSION, defaultsOf } from '../lib/schema.js';
 import { validate } from '../lib/validate.js';
+import { applyTorqueToJson } from '../js/model/motor-torque.js';
+
+function automatic(json) {
+  applyTorqueToJson(json);
+  return json;
+}
 
 function hasKey(value, key) {
   if (value === null || typeof value !== 'object') return false;
@@ -100,7 +106,7 @@ function resets(model) {
 }
 
 test('loadJson then toJson then serialize is byte-identical for a canonical file', () => {
-  const text = serialize(ragFile());
+  const text = serialize(automatic(ragFile()));
   const model = new Model();
   const result = loadJson(model, text);
   assert.equal(result.ok, true);
@@ -172,7 +178,7 @@ test('loadJson drops unknown fields with their warnings and fills an absent spri
   assert.equal(Object.hasOwn(model.get(model.children(ROOT_UID, 'bodies')[0]).props, 'mystery'), false);
   assert.equal(Object.hasOwn(model.get(model.uidOf('f_torso')).props.shape, 'other'), false);
   assert.equal(model.get(model.uidOf('f_arm2')).props.sprite, null);
-  assert.equal(serialize(toJson(model, '0.1.0')), serialize(ragFile()));
+  assert.equal(serialize(toJson(model, '0.1.0')), serialize(automatic(ragFile())));
 });
 
 test('newDocument resets to the empty document with cause new', () => {
@@ -259,7 +265,7 @@ test('a loaded non-zero root transform is kept and saved byte-identical', () => 
   const file = ragFile();
   file.ragdoll.position = [-3.25, 12.5];
   file.ragdoll.angle = 0.75;
-  const text = serialize(file);
+  const text = serialize(automatic(file));
   const model = new Model();
   assert.equal(loadJson(model, text).ok, true);
   assert.deepEqual(model.get(ROOT_UID).props.position, [-3.25, 12.5]);
@@ -305,4 +311,20 @@ test('ragFileName cuts to 100 code points without splitting a surrogate pair', (
   const emoji = '\u{1F600}'.repeat(150);
   assert.equal(ragFileName(emoji), `${'\u{1F600}'.repeat(100)}.rag.json`);
   assert.equal(ragFileName(`${'a'.repeat(98)}. b`), `${'a'.repeat(98)}.rag.json`);
+});
+test('loadJson sets every motor and balance torque to its suggestion, with a note and without motor warnings', () => {
+  const file = ragFile();
+  file.joints[0].motor.maxTorque = 1e9;
+  const expected = automatic(ragFile());
+  const model = new Model();
+  const result = loadJson(model, serialize(file));
+  assert.equal(result.ok, true);
+  assert.equal(result.torque.joints, 3);
+  assert.equal(result.torque.balance, expected.ragdoll.balance.maxTorque);
+  assert.match(result.notes.at(-1), /^Motor torque set to the suggestion: 3 joints, balance [\d.]+ N·m$/);
+  assert.equal(result.warnings.some((warning) => warning.code.startsWith('W_MOTOR')), false);
+  assert.equal(serialize(toJson(model, '0.1.0')), serialize(expected));
+  const again = loadJson(model, serialize(expected));
+  assert.equal(again.torque, null);
+  assert.equal(again.notes.length, 0);
 });

@@ -1,0 +1,582 @@
+{
+  "format": "ragassembler",
+  "version": 2,
+  "meta": {
+    "name": "sample",
+    "editorVersion": "0.1.0"
+  },
+  "units": {
+    "pixelsPerMeter": 40
+  },
+  "preview": {
+    "gravity": [
+      0,
+      -10
+    ]
+  },
+  "ragdoll": {
+    "id": "root",
+    "name": "sample",
+    "position": [
+      0,
+      0
+    ],
+    "angle": 0,
+    "rootBody": "b_torso",
+    "channels": {
+      "strength": 1,
+      "gain": 1,
+      "damping": 1
+    },
+    "balance": {
+      "enabled": true,
+      "maxTorque": 96,
+      "gain": 10,
+      "damping": 0.5,
+      "maxSpeed": 20
+    }
+  },
+  "sprites": [],
+  "bodies": [
+    {
+      "id": "b_torso",
+      "name": "torso",
+      "position": [
+        0,
+        1.2
+      ],
+      "angle": 0,
+      "linearDamping": 0.1,
+      "angularDamping": 0.2,
+      "fixedRotation": false,
+      "bullet": false,
+      "fixtures": [
+        {
+          "id": "f_torso",
+          "name": "torso",
+          "shape": {
+            "type": "box",
+            "center": [
+              0,
+              0
+            ],
+            "width": 0.4,
+            "height": 0.7,
+            "angle": 0
+          },
+          "density": 5,
+          "friction": 0.6,
+          "restitution": 0,
+          "isSensor": false,
+          "selfCollide": false,
+          "filter": {
+            "categoryBits": 2,
+            "maskBits": 65527
+          },
+          "sprite": null,
+          "editor": {
+            "color": "#c8a07a"
+          }
+        }
+      ]
+    },
+    {
+      "id": "b_head",
+      "name": "head",
+      "position": [
+        0,
+        1.75
+      ],
+      "angle": 0,
+      "linearDamping": 0.1,
+      "angularDamping": 0.2,
+      "fixedRotation": false,
+      "bullet": false,
+      "fixtures": [
+        {
+          "id": "f_head",
+          "name": "head",
+          "shape": {
+            "type": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "radius": 0.2
+          },
+          "density": 5,
+          "friction": 0.6,
+          "restitution": 0,
+          "isSensor": false,
+          "selfCollide": false,
+          "filter": {
+            "categoryBits": 2,
+            "maskBits": 65527
+          },
+          "sprite": null,
+          "editor": {
+            "color": "#e0b890"
+          }
+        }
+      ]
+    },
+    {
+      "id": "b_armL",
+      "name": "armL",
+      "position": [
+        -0.32,
+        1.25
+      ],
+      "angle": 0,
+      "linearDamping": 0.1,
+      "angularDamping": 0.2,
+      "fixedRotation": false,
+      "bullet": false,
+      "fixtures": [
+        {
+          "id": "f_armL",
+          "name": "armL",
+          "shape": {
+            "type": "box",
+            "center": [
+              0,
+              0
+            ],
+            "width": 0.12,
+            "height": 0.5,
+            "angle": 0
+          },
+          "density": 5,
+          "friction": 0.6,
+          "restitution": 0,
+          "isSensor": false,
+          "selfCollide": false,
+          "filter": {
+            "categoryBits": 2,
+            "maskBits": 65527
+          },
+          "sprite": null,
+          "editor": {
+            "color": "#a07850"
+          }
+        }
+      ]
+    },
+    {
+      "id": "b_armR",
+      "name": "armR",
+      "position": [
+        0.32,
+        1.25
+      ],
+      "angle": 0,
+      "linearDamping": 0.1,
+      "angularDamping": 0.2,
+      "fixedRotation": false,
+      "bullet": false,
+      "fixtures": [
+        {
+          "id": "f_armR",
+          "name": "armR",
+          "shape": {
+            "type": "box",
+            "center": [
+              0,
+              0
+            ],
+            "width": 0.12,
+            "height": 0.5,
+            "angle": 0
+          },
+          "density": 5,
+          "friction": 0.6,
+          "restitution": 0,
+          "isSensor": false,
+          "selfCollide": false,
+          "filter": {
+            "categoryBits": 2,
+            "maskBits": 65527
+          },
+          "sprite": null,
+          "editor": {
+            "color": "#a07850"
+          }
+        }
+      ]
+    },
+    {
+      "id": "b_legL",
+      "name": "legL",
+      "position": [
+        -0.1,
+        0.5
+      ],
+      "angle": 0,
+      "linearDamping": 0.1,
+      "angularDamping": 0.2,
+      "fixedRotation": false,
+      "bullet": false,
+      "fixtures": [
+        {
+          "id": "f_legL",
+          "name": "legL",
+          "shape": {
+            "type": "box",
+            "center": [
+              0,
+              0
+            ],
+            "width": 0.16,
+            "height": 0.7,
+            "angle": 0
+          },
+          "density": 5,
+          "friction": 0.6,
+          "restitution": 0,
+          "isSensor": false,
+          "selfCollide": false,
+          "filter": {
+            "categoryBits": 2,
+            "maskBits": 65527
+          },
+          "sprite": null,
+          "editor": {
+            "color": "#7a6a50"
+          }
+        }
+      ]
+    },
+    {
+      "id": "b_legR",
+      "name": "legR",
+      "position": [
+        0.1,
+        0.5
+      ],
+      "angle": 0,
+      "linearDamping": 0.1,
+      "angularDamping": 0.2,
+      "fixedRotation": false,
+      "bullet": false,
+      "fixtures": [
+        {
+          "id": "f_legR",
+          "name": "legR",
+          "shape": {
+            "type": "box",
+            "center": [
+              0,
+              0
+            ],
+            "width": 0.16,
+            "height": 0.7,
+            "angle": 0
+          },
+          "density": 5,
+          "friction": 0.6,
+          "restitution": 0,
+          "isSensor": false,
+          "selfCollide": false,
+          "filter": {
+            "categoryBits": 2,
+            "maskBits": 65527
+          },
+          "sprite": null,
+          "editor": {
+            "color": "#7a6a50"
+          }
+        }
+      ]
+    }
+  ],
+  "joints": [
+    {
+      "id": "j_neck",
+      "name": "neck",
+      "type": "revolute",
+      "bodyA": "b_torso",
+      "bodyB": "b_head",
+      "anchor": [
+        0,
+        1.6
+      ],
+      "collideConnected": false,
+      "limits": {
+        "enabled": true,
+        "lower": -0.5,
+        "upper": 0.5
+      },
+      "motor": {
+        "maxTorque": 40,
+        "gain": 12,
+        "damping": 0.6,
+        "maxSpeed": 12
+      },
+      "aimAxis": 0
+    },
+    {
+      "id": "j_shoulderL",
+      "name": "shoulderL",
+      "type": "revolute",
+      "bodyA": "b_torso",
+      "bodyB": "b_armL",
+      "anchor": [
+        -0.32,
+        1.5
+      ],
+      "collideConnected": false,
+      "limits": {
+        "enabled": true,
+        "lower": -2.8,
+        "upper": 2.8
+      },
+      "motor": {
+        "maxTorque": 40,
+        "gain": 12,
+        "damping": 0.6,
+        "maxSpeed": 12
+      },
+      "aimAxis": 0
+    },
+    {
+      "id": "j_shoulderR",
+      "name": "shoulderR",
+      "type": "revolute",
+      "bodyA": "b_torso",
+      "bodyB": "b_armR",
+      "anchor": [
+        0.32,
+        1.5
+      ],
+      "collideConnected": false,
+      "limits": {
+        "enabled": true,
+        "lower": -2.8,
+        "upper": 2.8
+      },
+      "motor": {
+        "maxTorque": 40,
+        "gain": 12,
+        "damping": 0.6,
+        "maxSpeed": 12
+      },
+      "aimAxis": 0
+    },
+    {
+      "id": "j_hipL",
+      "name": "hipL",
+      "type": "revolute",
+      "bodyA": "b_torso",
+      "bodyB": "b_legL",
+      "anchor": [
+        -0.1,
+        0.85
+      ],
+      "collideConnected": false,
+      "limits": {
+        "enabled": true,
+        "lower": -1,
+        "upper": 1
+      },
+      "motor": {
+        "maxTorque": 40,
+        "gain": 12,
+        "damping": 0.6,
+        "maxSpeed": 12
+      },
+      "aimAxis": 0
+    },
+    {
+      "id": "j_hipR",
+      "name": "hipR",
+      "type": "revolute",
+      "bodyA": "b_torso",
+      "bodyB": "b_legR",
+      "anchor": [
+        0.1,
+        0.85
+      ],
+      "collideConnected": false,
+      "limits": {
+        "enabled": true,
+        "lower": -1,
+        "upper": 1
+      },
+      "motor": {
+        "maxTorque": 40,
+        "gain": 12,
+        "damping": 0.6,
+        "maxSpeed": 12
+      },
+      "aimAxis": 0
+    }
+  ],
+  "clips": [
+    {
+      "key": "wave",
+      "name": "Wave",
+      "loop": true,
+      "hold": true,
+      "layer": 0,
+      "blend": "override",
+      "length": 1.6,
+      "fadeIn": 0,
+      "fadeOut": 0,
+      "speed": 1,
+      "tracks": [
+        {
+          "target": "j_shoulderR",
+          "channel": "angle",
+          "keys": [
+            {
+              "t": 0,
+              "v": 0,
+              "interp": "ease"
+            },
+            {
+              "t": 0.4,
+              "v": 2.4,
+              "interp": "ease"
+            },
+            {
+              "t": 0.8,
+              "v": 1.6,
+              "interp": "ease"
+            },
+            {
+              "t": 1.2000000000000002,
+              "v": 2.4,
+              "interp": "ease"
+            },
+            {
+              "t": 1.6,
+              "v": 0,
+              "interp": "ease"
+            }
+          ]
+        },
+        {
+          "target": "j_shoulderL",
+          "channel": "angle",
+          "keys": [
+            {
+              "t": 0,
+              "v": 0,
+              "interp": "ease"
+            },
+            {
+              "t": 0.8,
+              "v": 0,
+              "interp": "ease"
+            },
+            {
+              "t": 1.6,
+              "v": 0,
+              "interp": "ease"
+            }
+          ]
+        }
+      ],
+      "events": []
+    },
+    {
+      "key": "march",
+      "name": "March",
+      "loop": true,
+      "hold": true,
+      "layer": 0,
+      "blend": "override",
+      "length": 1.2,
+      "fadeIn": 0,
+      "fadeOut": 0,
+      "speed": 1,
+      "tracks": [
+        {
+          "target": "j_hipL",
+          "channel": "angle",
+          "keys": [
+            {
+              "t": 0,
+              "v": 0.5,
+              "interp": "ease"
+            },
+            {
+              "t": 0.6,
+              "v": -0.5,
+              "interp": "ease"
+            },
+            {
+              "t": 1.2,
+              "v": 0.5,
+              "interp": "ease"
+            }
+          ]
+        },
+        {
+          "target": "j_hipR",
+          "channel": "angle",
+          "keys": [
+            {
+              "t": 0,
+              "v": -0.5,
+              "interp": "ease"
+            },
+            {
+              "t": 0.6,
+              "v": 0.5,
+              "interp": "ease"
+            },
+            {
+              "t": 1.2,
+              "v": -0.5,
+              "interp": "ease"
+            }
+          ]
+        },
+        {
+          "target": "j_shoulderL",
+          "channel": "angle",
+          "keys": [
+            {
+              "t": 0,
+              "v": -0.6,
+              "interp": "ease"
+            },
+            {
+              "t": 0.6,
+              "v": 0.6,
+              "interp": "ease"
+            },
+            {
+              "t": 1.2,
+              "v": -0.6,
+              "interp": "ease"
+            }
+          ]
+        },
+        {
+          "target": "j_shoulderR",
+          "channel": "angle",
+          "keys": [
+            {
+              "t": 0,
+              "v": 0.6,
+              "interp": "ease"
+            },
+            {
+              "t": 0.6,
+              "v": -0.6,
+              "interp": "ease"
+            },
+            {
+              "t": 1.2,
+              "v": 0.6,
+              "interp": "ease"
+            }
+          ]
+        }
+      ],
+      "events": []
+    }
+  ]
+}

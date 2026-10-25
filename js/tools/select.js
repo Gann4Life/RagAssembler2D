@@ -99,7 +99,8 @@ function pickCursor(pick) {
  * In Edit mode a drag on an object moves the selection (selecting the object first when it is not part of it),
  * the transform gizmo on the selection moves it along X, along Y or freely, or rotates it, and resize handles on
  * the selected circles and boxes resize one shape each; with one joint selected, limit handles and the ring edit its
- * limits. Each move, rotation, resize or limit drag is one undo step.
+ * limits. In Animate and Simulate mode it only selects: no gizmo, no handles, and every drag draws a selection box.
+ * Each move, rotation, resize or limit drag is one undo step.
  * Default cursor, hover feedback shown.
  * @returns {Readonly<import('./tool.js').Tool>} The tool.
  */
@@ -138,7 +139,7 @@ export function selectTool() {
   }
 
   function pointHandles(found) {
-    if (found === null) return [];
+    if (found === null || !editing()) return [];
     const editor = limitEditor();
     const limits = editor
       ? editor.layout.handles.map(({ id, screen }) => ({ id, key: id, screen, resize: null, limit: true }))
@@ -318,7 +319,7 @@ export function selectTool() {
       const indexOf = (pick) => (pick?.resize ? resizes.findIndex((entry) => entry.key === pick.key) : -1);
       const gizmoId = (pick) => (pick && !pick.resize && !pick.limit ? pick.id : null);
       const state = { hover: indexOf(hover), active: indexOf(active) };
-      const editor = limitEditor();
+      const editor = editing() ? limitEditor() : null;
       drawGizmo(g, found, {
         hover: gizmoId(hover),
         active: gizmoId(active),

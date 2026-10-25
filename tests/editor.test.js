@@ -13,6 +13,9 @@ import { ToolRegistry } from '../js/tools/registry.js';
 import { TOOL_SPECS } from '../js/tools/tool.js';
 import { defaultsOf } from '../lib/schema.js';
 import { dispatchKey } from '../js/hotkeys.js';
+import { createJoint, createShapeBody } from '../js/commands/create.js';
+import { toJson } from '../js/model/io.js';
+import { balanceTorqueSuggestion, motorTorqueSuggestions } from '../lib/motor.js';
 
 function addClip(editor) {
   const { tracks, events, ...props } = defaultsOf('clip');
@@ -76,10 +79,11 @@ test('the editor registers no viewport or settings actions', () => {
   }
 });
 
-test('undo and redo actions follow the history state with no reason', () => {
+test('undo and redo actions follow the history state with their state reasons', () => {
   const { history, actions } = createEditor();
   assert.equal(actions.isEnabled('undo'), false);
-  assert.equal(actions.reason('undo'), null);
+  assert.equal(actions.reason('undo'), 'nothing to undo');
+  assert.equal(actions.reason('redo'), 'nothing to redo');
   history.execute(setProps([ROOT_UID], { 'meta.name': 'hero' }));
   assert.equal(actions.isEnabled('undo'), true);
   assert.equal(actions.run('undo'), true);
@@ -100,8 +104,8 @@ test('undo and redo are disabled in Simulate with the mode reason', () => {
   modes.startSimulate();
   assert.equal(actions.isEnabled('undo'), false);
   assert.equal(actions.isEnabled('redo'), false);
-  assert.equal(actions.reason('undo'), 'not available in Simulate mode');
-  assert.equal(actions.reason('redo'), 'not available in Simulate mode');
+  assert.equal(actions.reason('undo'), 'only in Edit and Animate modes');
+  assert.equal(actions.reason('redo'), 'only in Edit and Animate modes');
   assert.equal(actions.run('undo'), false);
   assert.equal(editor.model.prop(ROOT_UID, 'meta.name'), 'a');
   modes.stopSimulate();
@@ -177,16 +181,29 @@ test('tool actions of registered tools activate them in Edit mode and follow the
   for (const id of [...MANIPULATION_TOOLS, ...CREATION_TOOLS]) {
     const action = `tool:${id}`;
     assert.equal(actions.isEnabled(action), false, action);
-    assert.equal(actions.reason(action), 'not available in Simulate mode', action);
+    const expected = MANIPULATION_TOOLS.includes(id) ? 'only in Edit and Animate modes' : 'only in Edit mode';
+    assert.equal(actions.reason(action), expected, action);
   }
 });
 
-test('entering Animate with Circle active activates Select', () => {
-  const editor = createEditor();
-  const { actions, tools, modes } = editor;
+test('entering Animate keeps Circle active but unusable; a press only reports the reason', () => {
+  const messages = [];
+  const editor = createEditor({ status: (text) => messages.push(text) });
+  const { actions, tools, modes, history, model } = editor;
   actions.run('tool:circle');
   modes.openClip(addClip(editor));
-  assert.equal(tools.active?.id, 'select');
+  assert.equal(tools.active?.id, 'circle');
+  assert.equal(tools.usable, false);
+  const before = history.state;
+  tools.pointer({ type: 'down', button: 0, buttons: 1, screen: { x: 10, y: 10 }, shift: false, ctrl: false, alt: false, clicks: 1 });
+  tools.pointer({ type: 'up', button: 0, buttons: 0, screen: { x: 40, y: 40 }, shift: false, ctrl: false, alt: false, clicks: 1 });
+  assert.deepEqual(messages, ['Circle: only in Edit mode']);
+  assert.deepEqual(history.state, before);
+  assert.equal(model.children(ROOT_UID, 'bodies').length, 0);
+  actions.run('tool:circle', { label: 'Circle' });
+  assert.deepEqual(messages, ['Circle: only in Edit mode', 'Circle: only in Edit mode']);
+  modes.openClip(null);
+  assert.equal(tools.usable, true);
 });
 
 test('tool actions of unregistered tools report not available yet', () => {
@@ -226,8 +243,9 @@ test('tool:hinge is enabled in Edit mode and refused in Animate mode', () => {
   assert.equal(tools.active?.id, 'hinge');
   modes.openClip(addClip(editor));
   assert.equal(actions.isEnabled('tool:hinge'), false);
-  assert.equal(actions.reason('tool:hinge'), 'not available in Animate mode');
-  assert.notEqual(tools.active?.id, 'hinge');
+  assert.equal(actions.reason('tool:hinge'), 'only in Edit mode');
+  assert.equal(tools.active?.id, 'hinge');
+  assert.equal(tools.usable, false);
 });
 
 test('manipulate is not registered and M is no tool hotkey', () => {
@@ -262,6 +280,18 @@ test('pivot-mode toggles gizmo.pivot in every mode and is disabled during a gest
   const event = { key: 'z', target: { tagName: 'BODY' }, preventDefault() {} };
   assert.equal(dispatchKey(event, { actions, tools: editor.tools, viewportFocused: true }), true);
   assert.equal(settings.get('gizmo.pivot'), 'center');
+});
+
+test('onion-skins toggles display.ghosts in every mode', () => {
+  const editor = createEditor();
+  const { actions, settings, modes } = editor;
+  assert.equal(settings.get('display.ghosts'), true);
+  assert.equal(actions.isEnabled('onion-skins'), true);
+  assert.equal(actions.run('onion-skins'), true);
+  assert.equal(settings.get('display.ghosts'), false);
+  modes.openClip(addClip(editor));
+  assert.equal(actions.run('onion-skins'), true);
+  assert.equal(settings.get('display.ghosts'), true);
 });
 
 test('undo through the action during a gesture only cancels it', () => {
@@ -328,7 +358,7 @@ test('add-joint creates a selected unassigned joint at the origin as one Add joi
 test('delete removes the selection as one Delete step and is disabled when nothing can be deleted', () => {
   const { model, history, selection, actions } = createEditor();
   assert.equal(actions.isEnabled('delete'), false);
-  assert.equal(actions.reason('delete'), null);
+  assert.equal(actions.reason('delete'), 'select a body, shape or joint');
   selection.set([ROOT_UID]);
   assert.equal(actions.isEnabled('delete'), false);
   assert.equal(actions.reason('delete'), 'the ragdoll root cannot be deleted');
@@ -355,11 +385,11 @@ test('with only the root selected, the mode reason wins over the root reason, an
   assert.equal(actions.reason('delete'), 'the ragdoll root cannot be deleted');
   modes.openClip(addClip(editor));
   selection.set([ROOT_UID]);
-  assert.equal(actions.reason('delete'), 'not available in Animate mode');
+  assert.equal(actions.reason('delete'), 'only in Edit mode');
   modes.openClip(null);
   modes.startSimulate();
   selection.set([ROOT_UID]);
-  assert.equal(actions.reason('delete'), 'not available in Simulate mode');
+  assert.equal(actions.reason('delete'), 'only in Edit mode');
 });
 
 test('delete is disabled with no reason while the timeline holds the selection focus', () => {
@@ -392,13 +422,13 @@ test('delete, add-shape and add-joint are refused with the mode reason in Animat
   selection.set([shape]);
   for (const id of EDIT_ACTIONS) {
     assert.equal(actions.isEnabled(id), false, id);
-    assert.equal(actions.reason(id), 'not available in Animate mode', id);
+    assert.equal(actions.reason(id), 'only in Edit mode', id);
     assert.equal(actions.run(id), false, id);
   }
   modes.openClip(null);
   modes.startSimulate();
   selection.set([shape]);
-  for (const id of EDIT_ACTIONS) assert.equal(actions.reason(id), 'not available in Simulate mode', id);
+  for (const id of EDIT_ACTIONS) assert.equal(actions.reason(id), 'only in Edit mode', id);
   assert.equal(editor.model.get(shape).type, 'shape');
 });
 
@@ -528,13 +558,13 @@ test('group, ungroup and split are enabled in Edit mode and refused with the mod
   selection.set([uids.f_2, uids.f_3]);
   for (const id of SHAPE_ACTIONS) {
     assert.equal(actions.isEnabled(id), false, id);
-    assert.equal(actions.reason(id), 'not available in Animate mode', id);
+    assert.equal(actions.reason(id), 'only in Edit mode', id);
     assert.equal(actions.run(id), false, id);
   }
   modes.openClip(null);
   modes.startSimulate();
   selection.set([uids.f_2, uids.f_3]);
-  for (const id of SHAPE_ACTIONS) assert.equal(actions.reason(id), 'not available in Simulate mode', id);
+  for (const id of SHAPE_ACTIONS) assert.equal(actions.reason(id), 'only in Edit mode', id);
   assert.equal(editor.model.children(ROOT_UID, 'bodies').length, 2);
 });
 
@@ -564,12 +594,17 @@ test('group, ungroup and split state reasons', () => {
     ],
     joints: [['j_1', 'b_1', 'b_2']],
   });
+  const empty = {
+    group: 'select shapes of two or more bodies',
+    ungroup: 'each selected body has a single shape',
+    split: 'select some, not all, shapes of a body',
+  };
   selection.set([]);
-  for (const id of SHAPE_ACTIONS) assert.equal(actions.reason(id), null, id);
+  for (const id of SHAPE_ACTIONS) assert.equal(actions.reason(id), empty[id], id);
   selection.set([uids.j_1]);
   for (const id of SHAPE_ACTIONS) {
     assert.equal(actions.isEnabled(id), false, id);
-    assert.equal(actions.reason(id), null, id);
+    assert.equal(actions.reason(id), empty[id], id);
   }
   selection.set([uids.f_1, uids.f_2]);
   assert.equal(actions.reason('group'), 'select shapes of two or more bodies');
@@ -751,4 +786,146 @@ test('Ctrl+G, Ctrl+Shift+G and Alt+G reach group, ungroup and split', () => {
   assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
   assert.equal(press('G', { ctrlKey: true, shiftKey: true }), true);
   assert.equal(model.children(ROOT_UID, 'bodies').length, 3);
+});
+
+function fitScene(editor) {
+  const { history, model } = editor;
+  const shapeA = history.execute(createShapeBody({ position: { x: 0, y: 0 }, angle: 0, shape: { type: 'box', width: 1, height: 1 } }));
+  const shapeB = history.execute(createShapeBody({ position: { x: 1, y: 0 }, angle: 0, shape: { type: 'box', width: 1, height: 0.2 } }));
+  const shapeC = history.execute(createShapeBody({ position: { x: 2, y: 0 }, angle: 0, shape: { type: 'circle', radius: 0.1 } }));
+  const [a, b, c] = [shapeA, shapeB, shapeC].map((uid) => model.get(uid).parent);
+  const first = history.execute(createJoint({ bodyA: a, bodyB: b, anchor: { x: 0.5, y: 0 } }));
+  const second = history.execute(createJoint({ bodyA: b, bodyB: c, anchor: { x: 1.5, y: 0 } }));
+  const free = history.execute(createJoint({ bodyA: null, bodyB: null, anchor: { x: 0, y: 0 } }));
+  history.execute(setProps([first, second], { 'motor.maxTorque': 80 }));
+  return { shapeA, first, second, free };
+}
+
+function atSuggestion(model) {
+  const json = toJson(model, 'dev');
+  const suggestions = motorTorqueSuggestions(json);
+  const joints = model.children(ROOT_UID, 'joints').every((uid) => {
+    const value = suggestions.get(model.prop(uid, 'id'));
+    return typeof value !== 'number' || model.prop(uid, 'motor.maxTorque') === value;
+  });
+  const balance = balanceTorqueSuggestion(json);
+  return joints && (typeof balance !== 'number' || model.prop(ROOT_UID, 'balance.maxTorque') === balance);
+}
+
+test('every rig command sets the motor and balance torque to the suggestion in its own undo step', () => {
+  const messages = [];
+  const editor = createEditor({ status: (text) => messages.push(text) });
+  const { model, history } = editor;
+  const { first, second, free } = fitScene(editor);
+  assert.equal(atSuggestion(model), true);
+  assert.notEqual(model.prop(first, 'motor.maxTorque'), 80);
+  assert.equal(model.prop(free, 'motor.maxTorque'), defaultsOf('joint').motor.maxTorque);
+  assert.match(messages.at(-1) ?? '', /^Motor torque: /);
+  const before = model.prop(first, 'motor.maxTorque');
+  const body = model.uidOf(model.prop(second, 'bodyB'));
+  history.execute(setProps([body], { position: [4, 1] }));
+  assert.equal(history.state.undoLabel, 'Edit properties');
+  assert.notEqual(model.prop(first, 'motor.maxTorque'), before);
+  assert.equal(atSuggestion(model), true);
+  history.undo();
+  assert.equal(model.prop(first, 'motor.maxTorque'), before);
+  assert.equal(atSuggestion(model), true);
+});
+
+test('the automatic torque is computed once at the end of a gesture, never during it, on undo or redo', () => {
+  const editor = createEditor();
+  const { model, history } = editor;
+  const { first, second } = fitScene(editor);
+  const body = model.uidOf(model.prop(second, 'bodyB'));
+  const settled = model.prop(first, 'motor.maxTorque');
+  history.beginGesture();
+  history.execute(setProps([body], { position: [6, 0] }));
+  assert.equal(model.prop(first, 'motor.maxTorque'), settled);
+  history.execute(setProps([body], { position: [8, 0] }));
+  history.endGesture();
+  const moved = model.prop(first, 'motor.maxTorque');
+  assert.notEqual(moved, settled);
+  assert.equal(atSuggestion(model), true);
+  history.undo();
+  assert.equal(model.prop(first, 'motor.maxTorque'), settled);
+  history.redo();
+  assert.equal(model.prop(first, 'motor.maxTorque'), moved);
+  history.beginGesture();
+  history.execute(setProps([body], { position: [1, 0] }));
+  history.cancelGesture();
+  assert.equal(model.prop(first, 'motor.maxTorque'), moved);
+});
+
+test('commands that leave the rig alone do not touch the torque or report it', () => {
+  const messages = [];
+  const editor = createEditor({ status: (text) => messages.push(text) });
+  const { model, history } = editor;
+  const { first } = fitScene(editor);
+  messages.length = 0;
+  history.execute(setProps([ROOT_UID], { name: 'hero' }));
+  addClip(editor);
+  assert.deepEqual(messages, []);
+  assert.equal(atSuggestion(model), true);
+  assert.equal(typeof model.prop(first, 'motor.maxTorque'), 'number');
+});
+
+test('Fit motor torque is gone: no action and no Shift+M hotkey', () => {
+  const { actions } = createEditor();
+  assert.equal(actions.has('fit-motor-torque'), false);
+  let prevented = false;
+  const event = { key: 'M', shiftKey: true, target: { tagName: 'BODY' }, preventDefault() { prevented = true; } };
+  assert.equal(dispatchKey(event, { actions }), false);
+  assert.equal(prevented, false);
+});
+
+test('a refused labelled run reports Label: reason through status, never during a gesture', () => {
+  const messages = [];
+  const { actions, history } = createEditor({ status: (text) => messages.push(text) });
+  assert.equal(actions.run('set-root-body', { label: 'Set as root body' }), false);
+  assert.deepEqual(messages, ['Set as root body: select one body']);
+  actions.run('set-root-body');
+  assert.equal(messages.length, 1);
+  history.beginGesture();
+  actions.run('undo', { label: 'Undo' });
+  history.cancelGesture();
+  assert.equal(messages.length, 1);
+  const event = { key: 'z', ctrlKey: true, target: { tagName: 'BODY' }, preventDefault() {} };
+  dispatchKey(event, { actions });
+  assert.deepEqual(messages, ['Set as root body: select one body', 'Undo: nothing to undo']);
+});
+
+test('mode:animate opens the last opened clip, else the first, else creates one; mode:edit returns', () => {
+  const messages = [];
+  const editor = createEditor({ status: (text) => messages.push(text) });
+  const { actions, modes, model, history } = editor;
+  assert.equal(editor.modeTitle('animate'), 'Animate mode: creates a new clip');
+  actions.run('mode:animate');
+  assert.equal(modes.mode, 'animate');
+  const created = modes.clip;
+  assert.equal(history.state.undoLabel, 'New clip');
+  assert.match(messages.at(-1), /^Created clip /);
+  assert.equal(editor.modeTitle('animate'), `Animate mode: ${model.prop(created, 'name')}`);
+  actions.run('mode:edit');
+  assert.equal(modes.mode, 'edit');
+  const second = addClip(editor);
+  modes.openClip(second);
+  modes.openClip(null);
+  assert.equal(editor.modeTitle('animate'), `Animate mode: opens ${model.prop(second, 'name')}`);
+  actions.run('mode:animate');
+  assert.equal(modes.clip, second);
+  assert.equal(model.children(ROOT_UID, 'clips').length, 2);
+  assert.equal(editor.modeTitle('edit'), 'Edit mode: rest pose and rig');
+  assert.equal(editor.modeTitle('simulate'), 'Simulate mode: live physics test');
+});
+
+test('removing the open clip returns to Edit with a status message', () => {
+  const messages = [];
+  const editor = createEditor({ status: (text) => messages.push(text) });
+  const { modes, model, history } = editor;
+  const clip = addClip(editor);
+  const name = model.prop(clip, 'name');
+  modes.openClip(clip);
+  history.undo();
+  assert.equal(modes.mode, 'edit');
+  assert.equal(messages.at(-1), `Clip ${name} removed: Edit mode`);
 });

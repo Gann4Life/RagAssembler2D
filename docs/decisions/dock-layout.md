@@ -2,6 +2,9 @@
 
 Newest first. See the [index](../decisions.md).
 
+## 2026-10-25 (spec reconciled with the code of the animation demo branch)
+- **The Timeline starts expanded on a first run and after Reset layout; a restored layout keeps its folded state.** The dock builds the default layout (sizes measured with the Timeline folded) and then unfolds it. Reason: Animate is the main loop and the Timeline holds its Play button, clip selector and cycle control; a folded Timeline hid them on first use. Supersedes the "starts folded" default of §5.2. Layout format unchanged (`timelineFolded` already stored). (DESIGN §5.2)
+
 ## 2026-10-14
 - **When the window shrinks, the fill area gives way first, then the other areas shrink in proportion to their slack above their minimums, and only then does the workspace scroll.** The shrink is display-only; stored sizes come back when the window grows. Exception: resizing a handle stores the on-screen sizes of every fixed area of its split, except a folded Timeline. Reason: DESIGN said only the fill area changes, which leaves a dead end once the Viewport reaches its minimum; scrolling a workspace while side panels still have spare room is worse, and storing shrunk sizes would lose the user's layout on every small window. A resize, though, is the user choosing sizes; starting it from stale stored sizes made growing a shrunk pane shrink it. Matches the #8 implementation. (DESIGN §5.2; docs/architecture.md, Dock layout)
 - **A resize handle resizes the area on its side away from its split's fill area; arrows move the handle spatially, Home/End give that area its minimum/maximum.** `aria-valuenow` is that area's size. Reason: "Home/End go to the minimum/maximum" did not say of what; this follows the WAI-ARIA window splitter pattern, where the value is the primary pane's size. (DESIGN §5.2; docs/architecture.md, Dock layout)

@@ -21,11 +21,17 @@ const ESCAPE_KEYS = new Set(['Escape', 'Esc']);
  * @property {import('../viewport/camera.js').Camera} camera Viewport camera.
  * @property {import('./tool.js').PhysicsService|null} [physics] Physics service; `null` when omitted.
  * @property {() => string} [editorVersion] Version of the running editor; dev when omitted.
+ * @property {import('./tool.js').PlaybackService} [playback] Animate playback; never playing when omitted.
+ * @property {(text: string) => void} [status] Shows a status line message; ignored when omitted.
  */
+
+const IDLE_PLAYBACK = Object.freeze({ playing: false, pause() {}, hold() {} });
 
 /**
  * Viewport tool registry: activation under the mode policy, pointer and key routing, one history gesture
  * per left press, and cancellation on Esc, tool switch, mode change, gestures closed elsewhere and reset.
+ * Only the user changes the active tool: a mode change that refuses it keeps it active but unusable (no input,
+ * overlay, handles or cursor of its own; a left press only reports "*Tool*: *reason*" through `status`).
  * Emits `tool` with `{ id, previous }` (ids, or `null` for no tool) when the active tool changes. Subscribe
  * it to `modes` before any other `mode` listener.
  */
@@ -72,6 +78,14 @@ export class ToolRegistry {
    */
   get active() {
     return this.#active;
+  }
+
+  /**
+   * Whether the active tool is allowed by the current mode, so it receives input; `false` without one.
+   * @returns {boolean}
+   */
+  get usable() {
+    return this.#active !== null && this.#core.modes.can(this.#active.capability);
   }
 
   /**
@@ -130,13 +144,18 @@ export class ToolRegistry {
    * Routes viewport pointer input to the active tool, adding world and root-local coordinates. A left press
    * opens one history gesture until its release; right presses and releases pass without a gesture, unless a
    * left press is open. After a cancel, the rest of the press is swallowed. A handler that throws during a
-   * press cancels it and the error is rethrown.
+   * press cancels it and the error is rethrown. While the active tool is not usable, input never reaches it and a
+   * left press shows "*Tool*: *reason*" in the status line.
    * @param {import('./tool.js').ToolPointerInput} input Pointer input.
    * @returns {void}
    */
   pointer(input) {
     const tool = this.#active;
     if (!tool) return;
+    if (!this.usable) {
+      if (input.type === 'down' && input.button === PRIMARY) this.#refuse(tool);
+      return;
+    }
     const event = this.#complete(input);
     switch (input.type) {
       case 'down':
@@ -157,7 +176,7 @@ export class ToolRegistry {
    */
   key(event) {
     const tool = this.#active;
-    if (!tool || ESCAPE_KEYS.has(event.key)) return false;
+    if (!tool || !this.usable || ESCAPE_KEYS.has(event.key)) return false;
     const keyEvent = Object.freeze({
       key: event.key,
       code: event.code ?? '',
@@ -204,37 +223,37 @@ export class ToolRegistry {
    */
   tick(seconds) {
     const tool = this.#active;
-    if (!tool) return;
+    if (!tool || !this.usable) return;
     this.#run(() => tool.tick(seconds));
   }
 
   /**
-   * Clears the graphics and lets the active tool draw on it, in screen space.
+   * Clears the graphics and lets the active tool draw on it, in screen space; nothing while it is not usable.
    * @param {{ clear(): unknown }} g `PIXI.Graphics` of the tool overlay.
    * @returns {void}
    */
   drawOverlay(g) {
     g.clear();
-    this.#active?.drawOverlay(g);
+    if (this.usable) this.#active.drawOverlay(g);
   }
 
   /**
    * The active tool's handle under a screen point; the viewport hides object hover over it.
    * @param {{ x: number, y: number }} screen Screen point, CSS px from the host's top-left.
-   * @returns {string|null} Handle id, or `null` with no active tool, no bound view or no handle there.
+   * @returns {string|null} Handle id, or `null` with no usable active tool, no bound view or no handle there.
    */
   handleAt(screen) {
-    if (!this.#active || !this.#view) return null;
+    if (!this.usable || !this.#view) return null;
     return this.#active.handleAt(screen) ?? null;
   }
 
   /**
    * The active tool's drag readout, drawn by the viewport as text in the tool overlay.
    * @returns {{ text: string, screen: { x: number, y: number } }|null} Text and its top-left corner, CSS px, or
-   *   `null` with no active tool, no bound view or no drag readout.
+   *   `null` with no usable active tool, no bound view or no drag readout.
    */
   readout() {
-    if (!this.#active || !this.#view) return null;
+    if (!this.usable || !this.#view) return null;
     return this.#active.readout() ?? null;
   }
 
@@ -280,8 +299,11 @@ export class ToolRegistry {
       },
       invalidateOverlay: () => this.#invalidate(),
       setPose: (pose) => this.#view?.setPose?.(pose ?? null),
+      displayedPose: () => this.#view?.displayedPose?.() ?? null,
       physics: this.#core.physics ?? null,
       editorVersion: this.#core.editorVersion ?? (() => DEV_VERSION),
+      playback: this.#core.playback ?? IDLE_PLAYBACK,
+      status: this.#core.status ?? (() => {}),
     });
   }
 
@@ -348,11 +370,14 @@ export class ToolRegistry {
 
   #onMode() {
     this.cancel();
-    const tool = this.#active;
-    if (!tool || this.#core.modes.can(tool.capability)) return;
-    if (this.activate('select')) return;
-    tool.deactivate();
-    this.#switchTo(null, tool);
+    this.#cursor = null;
+    this.#applyCursor();
+  }
+
+  #refuse(tool) {
+    const reason = this.#core.modes.reason(tool.capability);
+    const label = TOOL_SPECS.find((row) => row.id === tool.id)?.label ?? tool.id;
+    if (reason !== null) this.#core.status?.(`${label}: ${reason}`);
   }
 
   #onHistory(state) {
@@ -372,7 +397,7 @@ export class ToolRegistry {
   }
 
   #applyCursor() {
-    this.#view?.setCursor(this.#cursor ?? this.#active?.cursor ?? 'default');
+    this.#view?.setCursor(this.usable ? (this.#cursor ?? this.#active.cursor ?? 'default') : 'default');
   }
 
   #invalidate() {

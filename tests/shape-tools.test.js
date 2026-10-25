@@ -463,7 +463,7 @@ test('Undo mid-drag aborts the drag and undoes nothing else', () => {
   assert.deepEqual(overlayOf(registry), []);
 });
 
-test('a mode change mid-drag aborts it and creation tools are replaced by Select', () => {
+test('a mode change mid-drag aborts it and the creation tool stays active but unusable', () => {
   const { model, registry, modes, history } = environment();
   const clip = addClip(history);
   registry.activate('box');
@@ -472,7 +472,9 @@ test('a mode change mid-drag aborts it and creation tools are replaced by Select
   modes.openClip(clip);
   send(registry, 'up', px(2), py(1));
   assert.deepEqual(bodiesOf(model), []);
-  assert.equal(registry.active.id, 'select');
+  assert.equal(registry.active.id, 'box');
+  assert.equal(registry.usable, false);
+  assert.deepEqual(overlayOf(registry), []);
   assert.equal(registry.canActivate('box'), false);
   assert.equal(registry.canActivate('circle'), false);
 });
