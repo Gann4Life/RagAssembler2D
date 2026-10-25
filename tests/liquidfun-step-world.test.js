@@ -137,6 +137,18 @@ test('stepWorld updates every instance in order before each of the substeps', ()
   assert.deepEqual(calls, expected);
 });
 
+test('stepWorld updates the instances of a one-shot iterator in every substep', () => {
+  const calls = [];
+  const ragA = fakeRag('a', calls);
+  const ragB = fakeRag('b', calls);
+  stepWorld(fakeWorld(calls), (function* () {
+    yield ragA;
+    yield ragB;
+  })(), 0.08);
+  assert.equal(calls.filter(([name]) => name === 'a').length, 8);
+  assert.equal(calls.filter(([name]) => name === 'b').length, 8);
+});
+
 test('stepWorld defaults to one STEP_SETTINGS.dt frame and no instances', () => {
   const calls = [];
   stepWorld(fakeWorld(calls));
