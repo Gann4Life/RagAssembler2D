@@ -1,7 +1,7 @@
 import { ROOT_UID } from '../model/model.js';
 import { setProps } from '../commands/props.js';
 import { createClip } from '../commands/create.js';
-import { deleteKeys, moveKeys } from '../commands/keys.js';
+import { deleteKeys, moveKeys, setClipLength } from '../commands/keys.js';
 import { deleteClip } from '../commands/delete.js';
 import { jointAngleRows } from '../timeline-rows.js';
 import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '../timeline-time.js';
@@ -43,7 +43,7 @@ function formatSeconds(value) {
  * New and Delete buttons, the length field, the loop toggle, the cycle control and the Onion skins toggle (the
  * `onion-skins` action, pressed while `display.ghosts` is on), then a ruler with the playhead. Clip edits run
  * as commands through `editor.history`; opening a clip and moving the playhead go through `editor.modes`.
- * @param {HTMLElement} element Panel element given by the dock.
+ * @param {HTMLElement} element_ Panel element given by the dock.
  * @param {import('../editor.js').Editor} editor Editor core.
  * @param {import('../timeline-player.js').TimelinePlayer} player Playback driver behind the Play/Pause button.
  * @returns {Timeline}
@@ -362,7 +362,11 @@ export function createTimeline(element_, editor, player) {
       lengthInput.value = formatSeconds(model.prop(modes.clip, 'length'));
       return;
     }
-    if (value !== model.prop(modes.clip, 'length')) history.execute(setProps([modes.clip], { length: value }, 'Set clip length'));
+    if (value !== model.prop(modes.clip, 'length')) {
+      const removed = history.execute(setClipLength(modes.clip, value));
+      const count = removed.keys + removed.events;
+      if (count > 0) editor.status(`Set clip length: removed ${removed.keys} key(s) and ${removed.events} event(s) beyond the new length`);
+    }
     lengthInput.value = formatSeconds(model.prop(modes.clip, 'length'));
   }
 

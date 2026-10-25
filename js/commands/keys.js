@@ -92,6 +92,39 @@ export function deleteKeys(keys, label = 'Delete keys') {
 }
 
 /**
+ * Builds a command that sets a clip's length and removes the keys and events left outside it (key time above the
+ * new length; event time above it, or equal to it when the clip loops), all in one undo step.
+ * `run` returns the number of removed keys and events.
+ * @param {number} clip Uid of the clip.
+ * @param {number} length New length in seconds, finite and above 0.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command; `run` returns `{ keys: number, events: number }`.
+ * @throws {Error} When `run` finds `clip` of the wrong type; nothing is mutated then.
+ * @throws {TypeError} When `run` finds `length` not a finite number above 0; nothing is mutated then.
+ */
+export function setClipLength(clip, length, label = 'Set clip length') {
+  return Object.freeze({
+    label,
+    run(tx) {
+      const { model } = tx;
+      requireType(model, clip, 'clip');
+      if (!Number.isFinite(length) || length <= 0) throw new TypeError('Clip length must be a finite number above 0');
+      const loop = model.prop(clip, 'loop');
+      const outsideKeys = [];
+      for (const track of model.children(clip, 'tracks')) {
+        for (const key of model.children(track, 'keys')) if (model.prop(key, 't') > length) outsideKeys.push(key);
+      }
+      const outsideEvents = model
+        .children(clip, 'events')
+        .filter((event) => (loop ? model.prop(event, 't') >= length : model.prop(event, 't') > length));
+      tx.set(clip, 'length', length);
+      for (const uid of [...outsideKeys, ...outsideEvents]) tx.remove(uid);
+      return { keys: outsideKeys.length, events: outsideEvents.length };
+    },
+  });
+}
+
+/**
  * Builds a command that sets the `angle` key of a joint in a clip: the time is snapped to 1/30 s and clamped to the
  * clip, the joint's `angle` track is created when missing, and a key already at that time is updated, else a
  * `linear` key is inserted in time order. `run` returns the key uid.

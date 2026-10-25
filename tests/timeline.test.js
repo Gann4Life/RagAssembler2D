@@ -6,6 +6,9 @@ import { loadJson, saveJson, toJson } from '../js/model/io.js';
 import { createClip, createShapeBody } from '../js/commands/create.js';
 import { deleteClip } from '../js/commands/delete.js';
 import { setProps } from '../js/commands/props.js';
+import { setClipLength } from '../js/commands/keys.js';
+import { defaultsOf } from '../lib/schema.js';
+import { validate } from '../lib/validate.js';
 import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '../js/timeline-time.js';
 
 const clipsOf = (editor) => editor.model.children(ROOT_UID, 'clips');
@@ -97,6 +100,63 @@ test('length and loop edits are undoable and re-clamp the playhead', () => {
   assert.equal(model.prop(uid, 'loop'), true);
   history.undo();
   assert.equal(model.prop(uid, 'length'), 1);
+});
+
+function clipWithContent(editor, loop) {
+  const { tracks: _tracks, events: _events, ...props } = defaultsOf('clip');
+  return editor.history.execute({
+    label: 'Add clip',
+    run: (tx) =>
+      tx.add(ROOT_UID, 'clips', undefined, {
+        type: 'clip',
+        props: { ...props, length: 2, loop },
+        children: {
+          tracks: [
+            {
+              type: 'track',
+              props: { target: 'root', channel: 'bodyAngle' },
+              children: { keys: [0, 1, 1.5, 2].map((t) => ({ type: 'key', props: { t, v: 0, interp: 'linear' } })) },
+            },
+          ],
+          events: [0.5, 1, 2].map((t) => ({ type: 'event', props: { t, name: 'step' } })),
+        },
+      }),
+  });
+}
+
+test('setClipLength removes keys and events outside the new length in one undo step that restores them', () => {
+  const { model, history } = createEditor();
+  const clip = clipWithContent({ model, history }, false);
+  const before = JSON.stringify(toJson(model, 'dev'));
+  const removed = history.execute(setClipLength(clip, 1));
+  assert.deepEqual(removed, { keys: 2, events: 1 });
+  assert.equal(model.prop(clip, 'length'), 1);
+  const track = model.children(clip, 'tracks')[0];
+  assert.deepEqual(model.children(track, 'keys').map((uid) => model.prop(uid, 't')), [0, 1]);
+  assert.deepEqual(model.children(clip, 'events').map((uid) => model.prop(uid, 't')), [0.5, 1]);
+  const codes = validate(toJson(model, 'dev')).errors.map((error) => error.code);
+  assert.equal(codes.includes('E_KEY_TIME_RANGE') || codes.includes('E_EVENT_TIME_RANGE'), false);
+  assert.equal(history.state.undoLabel, 'Set clip length');
+  history.undo();
+  assert.equal(JSON.stringify(toJson(model, 'dev')), before);
+  history.redo();
+  assert.equal(model.prop(clip, 'length'), 1);
+});
+
+test('setClipLength on a looping clip also removes the event at the new length, and growing removes nothing', () => {
+  const { model, history } = createEditor();
+  const clip = clipWithContent({ model, history }, true);
+  assert.deepEqual(history.execute(setClipLength(clip, 1)), { keys: 2, events: 2 });
+  assert.deepEqual(history.execute(setClipLength(clip, 3)), { keys: 0, events: 0 });
+  assert.equal(model.prop(clip, 'length'), 3);
+});
+
+test('setClipLength refuses a node that is not a clip and an invalid length without mutating', () => {
+  const { model, history } = createEditor();
+  const clip = clipWithContent({ model, history }, false);
+  assert.throws(() => history.execute(setClipLength(ROOT_UID, 1)), /not a clip/);
+  assert.throws(() => history.execute(setClipLength(clip, 0)), TypeError);
+  assert.equal(model.prop(clip, 'length'), 2);
 });
 
 test('clips round-trip through save and load', () => {
