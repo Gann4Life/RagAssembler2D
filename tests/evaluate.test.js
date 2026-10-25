@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sampleTrack, channelDefault, evaluateClip, resolveChannels, fkPose, jointAngleForBody } from '../lib/evaluate.js';
+import { LIMIT_TOLERANCE, clampToLimits, sampleTrack, channelDefault, evaluateClip, resolveChannels, fkPose, jointAngleForBody } from '../lib/evaluate.js';
 
 const k = (t, v, interp) => ({ t, v, interp });
 
@@ -370,4 +370,15 @@ test('looping: the motor look-ahead target is continuous across the wrap', () =>
   const before = resolveChannels(def, [{ clip, time: 1 - eps }]).joints.get('knee').angle;
   const after = resolveChannels(def, [{ clip, time: 1 + eps }]).joints.get('knee').angle;
   assert.ok(Math.abs(before - after) < 1e-4, `${before} vs ${after}`);
+});
+
+test('clampToLimits clamps only with enabled, finite limits', () => {
+  const limits = { enabled: true, lower: -1, upper: 0.5 };
+  assert.equal(clampToLimits(2, limits), 0.5);
+  assert.equal(clampToLimits(-3, limits), -1);
+  assert.equal(clampToLimits(0.25, limits), 0.25);
+  assert.equal(clampToLimits(2, { ...limits, enabled: false }), 2);
+  assert.equal(clampToLimits(2, { enabled: true, lower: -1, upper: Infinity }), 2);
+  assert.equal(clampToLimits(2, undefined), 2);
+  assert.equal(LIMIT_TOLERANCE, 1e-5);
 });
