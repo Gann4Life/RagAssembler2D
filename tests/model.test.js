@@ -517,3 +517,29 @@ test('props naming a child collection are rejected on add, reset and set', () =>
   assert.equal(model.children(ROOT_UID, 'bodies').length, 1);
   assert.equal(events.length, 0);
 });
+
+test('revision grows on do, undo, redo, batch and reset and ignores no-op operations', () => {
+  const model = new Model();
+  const seen = [];
+  model.on('change', () => seen.push(model.revision));
+  model.on('reset', () => seen.push(model.revision));
+  const start = model.revision;
+  const [op] = model.applyOps([{ op: 'set', uid: ROOT_UID, path: 'name', value: 'revised' }]);
+  assert.equal(model.revision, start + 1);
+  model.applyOps([{ op: 'set', uid: ROOT_UID, path: 'name', value: 'revised' }]);
+  assert.equal(model.revision, start + 1);
+  model.applyOps([{ op: 'set', uid: ROOT_UID, path: 'name', value: op.previous }], 'undo');
+  assert.equal(model.revision, start + 2);
+  model.applyOps([{ op: 'set', uid: ROOT_UID, path: 'name', value: 'revised' }], 'redo');
+  assert.equal(model.revision, start + 3);
+  model.batch(() => {
+    model.applyOps([{ op: 'set', uid: ROOT_UID, path: 'name', value: 'again' }]);
+    model.applyOps([{ op: 'set', uid: ROOT_UID, path: 'name', value: 'twice' }]);
+  });
+  assert.equal(model.revision, start + 4);
+  model.batch(() => {});
+  assert.equal(model.revision, start + 4);
+  model.reset({ type: 'root', props: {} }, 'load');
+  assert.equal(model.revision, start + 5);
+  assert.deepEqual(seen, [start + 1, start + 2, start + 3, start + 4, start + 5]);
+});

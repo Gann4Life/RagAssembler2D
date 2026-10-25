@@ -143,6 +143,97 @@ function validateParts(model, parts) {
 }
 
 /**
+ * Pivot of one body: its parent joint's anchor when that joint exists and its anchor is placed, else the body
+ * origin; the origin always when `center`. Pure.
+ * @param {import('../model/model.js').Model} model Document model.
+ * @param {number} bodyUid Body uid.
+ * @param {boolean} center Whether to force the body origin.
+ * @returns {import('../../lib/geometry.js').Vec2} Pivot, root-local meters.
+ */
+export function rotationPivot(model, bodyUid, center) {
+  const position = model.prop(bodyUid, 'position');
+  const origin = isFinitePair(position) ? { x: position[0], y: position[1] } : { x: 0, y: 0 };
+  if (center) return origin;
+  const joint = parentJoints(model).get(bodyUid);
+  if (joint === undefined) return origin;
+  const anchor = model.prop(joint, 'anchor');
+  return isFinitePair(anchor) ? { x: anchor[0], y: anchor[1] } : origin;
+}
+
+const PLACEMENT_FIELDS = Object.freeze(['x', 'y', 'angle']);
+
+function placement(model, uid, values) {
+  const parts = manipulationParts(model, { bodies: [uid], joints: [] }, { subtree: true });
+  const start = bodyEntry(model, uid);
+  let moved = parts;
+  let position = start.position;
+  if (values.angle !== undefined) {
+    const turn = rotationAbout(rotationPivot(model, uid, false), values.angle - start.angle);
+    moved = transformParts(moved, turn);
+    position = transformPoint(turn, position);
+  }
+  const dx = values.x === undefined ? 0 : values.x - position.x;
+  const dy = values.y === undefined ? 0 : values.y - position.y;
+  if (dx !== 0 || dy !== 0) moved = transformParts(moved, { x: dx, y: dy, angle: 0 });
+  const exact = (entry) => {
+    if (entry.uid !== uid) return entry;
+    return {
+      uid,
+      position: vec(values.x ?? entry.position.x, values.y ?? entry.position.y),
+      angle: values.angle === undefined ? entry.angle : values.angle + 0,
+    };
+  };
+  return freezeParts(moved.bodies.map(exact), [...moved.anchors]);
+}
+
+/**
+ * Builds a command that places bodies at absolute values, each carrying its subtree and the anchors it carries, as
+ * a Select move or rotation without ALT: `x`/`y` translate the subtree so the body's origin lands on the value;
+ * `angle` turns it around `rotationPivot(model, uid, false)` so the body's angle becomes the value (rotation first
+ * when both are given). Bodies are placed one after the other in `uids` order, each read where the earlier ones left
+ * it, so each ends at the values; a selected ancestor goes before the bodies of its subtree.
+ * @param {number[]} uids Body uids, in order.
+ * @param {{ x?: number, y?: number, angle?: number }} values Root-local meters and radians.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command.
+ * @throws {Error} When `run` finds a uid that is not a body; nothing is mutated then.
+ * @throws {RangeError} When `run` finds a given value that is not a finite number; nothing is mutated then.
+ */
+export function placeBodies(uids, values, label = 'Move') {
+  return Object.freeze({
+    label,
+    run(tx) {
+      const { model } = tx;
+      for (const uid of uids) if (typeOf(model, uid) !== 'body') throw new Error(`Node ${uid} is not a body`);
+      const given = {};
+      for (const field of PLACEMENT_FIELDS) {
+        const value = values?.[field];
+        if (value === undefined) continue;
+        if (!isFiniteNumber(value)) throw new RangeError(`Placement ${field} must be a finite number`);
+        given[field] = value;
+      }
+      for (const uid of ancestorsFirst(model, uids)) placeParts(placement(model, uid, given), label).run(tx);
+    },
+  });
+}
+
+function ancestorsFirst(model, uids) {
+  const parents = parentJoints(model);
+  const subtrees = new Map(uids.map((uid) => [uid, bodySubtree(model, uid, parents)]));
+  const order = [];
+  const visit = (uid, path) => {
+    if (order.includes(uid) || path.has(uid)) return;
+    path.add(uid);
+    for (const other of uids) {
+      if (other !== uid && subtrees.get(other).has(uid) && !subtrees.get(uid).has(other)) visit(other, path);
+    }
+    order.push(uid);
+  };
+  for (const uid of uids) visit(uid, new Set());
+  return order;
+}
+
+/**
  * Builds a command that sets each listed body's `position` and `angle` and each listed joint's `anchor`, in list
  * order, skipping values equal to the current ones.
  * @param {Readonly<Parts>} parts Absolute values, root-local meters and radians.

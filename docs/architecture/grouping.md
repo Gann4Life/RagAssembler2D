@@ -74,7 +74,7 @@ DuplicatePlan {
 
 ## `lib/geometry.js`: `polygonCentroid(vertices) → Vec2`
 
-Area centroid of the polygon as given (shoelace formula, either winding); the average of the vertices when the signed area is 0. Pure; results never hold `-0`. Created by #18; #20 adds `shapeFrame` and reuses it, and the Polygon tool (#15) uses it to place a new body ([Module map](module-map.md)).
+Area centroid of the polygon as given (shoelace formula, either winding); the average of the vertices when the signed area is 0. Pure; results never hold `-0`. Created by #18; #22 adds `shapeFrame` and reuses it, and the Polygon tool (#15) uses it to place a new body ([Module map](module-map.md)).
 
 ## Actions (`js/editor.js`)
 

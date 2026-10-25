@@ -1,10 +1,12 @@
 import { transformPoint } from '../../lib/geometry.js';
 import { defaultsOf } from '../../lib/schema.js';
-import { manipulationParts, placeParts, rotationAbout, transformParts } from '../commands/transform.js';
+import { manipulationParts, placeParts, rotationAbout, rotationPivot, transformParts } from '../commands/transform.js';
 import { ROOT_UID } from '../model/model.js';
-import { jointChildBody, parentJoints } from '../model/queries.js';
+import { jointChildBody } from '../model/queries.js';
 import { placement } from '../viewport/placement.js';
 import { formatMove, formatRotation } from './transform-gizmo.js';
+
+export { rotationPivot } from '../commands/transform.js';
 
 /**
  * What the Select tool moves and rotates, derived from the selection.
@@ -31,16 +33,8 @@ function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
-function isFinitePair(value) {
-  return Array.isArray(value) && value.length === 2 && isFiniteNumber(value[0]) && isFiniteNumber(value[1]);
-}
-
 function isFinitePoint(p) {
   return p !== null && p !== undefined && isFiniteNumber(p.x) && isFiniteNumber(p.y);
-}
-
-function readVec(value) {
-  return isFinitePair(value) ? { x: value[0], y: value[1] } : { x: 0, y: 0 };
 }
 
 function readAngle(value) {
@@ -100,23 +94,6 @@ export function manipulationTarget(model, objects) {
     if (body !== null && !bodies.includes(body)) bodies.push(body);
   }
   return Object.freeze({ bodies: Object.freeze(bodies), joints: Object.freeze(joints) });
-}
-
-/**
- * Pivot of one body: its parent joint's anchor when that joint exists and its anchor is placed, else the body
- * origin; the origin always when `center`. Pure.
- * @param {import('../model/model.js').Model} model Document model.
- * @param {number} bodyUid Body uid.
- * @param {boolean} center Whether to force the body origin.
- * @returns {import('../../lib/geometry.js').Vec2} Pivot, root-local meters.
- */
-export function rotationPivot(model, bodyUid, center) {
-  const origin = readVec(model.prop(bodyUid, 'position'));
-  if (center) return origin;
-  const joint = parentJoints(model).get(bodyUid);
-  if (joint === undefined) return origin;
-  const anchor = model.prop(joint, 'anchor');
-  return isFinitePair(anchor) ? { x: anchor[0], y: anchor[1] } : origin;
 }
 
 /**
