@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { RagImporter } from '../lib/ragimporter.js';
+import { RagImporter, STEP_SETTINGS } from '../lib/ragimporter.js';
 import { fkPose } from '../lib/evaluate.js';
 import { bodyMassData, composeTransforms, shapeBounds } from '../lib/geometry.js';
 import { addHoldClip, bipedRig, creatureRig, fitTorque, holdRun, humanoidRig, poleRig, snakeRig } from './helpers/rigs.js';
@@ -53,7 +53,7 @@ function scene(json, turn = 0) {
     step() {
       for (let i = 0; i < SUBSTEPS; i++) {
         rag.update(STEP / SUBSTEPS);
-        world.Step(STEP / SUBSTEPS, 8, 3);
+        world.Step(STEP / SUBSTEPS, STEP_SETTINGS.velocityIterations, STEP_SETTINGS.positionIterations);
       }
     },
     destroy() {

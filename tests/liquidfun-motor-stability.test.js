@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { RagImporter } from '../lib/ragimporter.js';
+import { RagImporter, STEP_SETTINGS } from '../lib/ragimporter.js';
 import { balanceTorqueSuggestion, motorTorqueSuggestions } from '../lib/motor.js';
 
 const require = createRequire(import.meta.url);
@@ -116,14 +116,14 @@ function groundWorld() {
   return world;
 }
 
-function frame(rag, world, substeps) {
+function frame(rag, world, substeps, iterations = STEP_SETTINGS.velocityIterations) {
   for (let i = 0; i < substeps; i++) {
     rag.update(STEP / substeps);
-    world.Step(STEP / substeps, 8, 3);
+    world.Step(STEP / substeps, iterations, STEP_SETTINGS.positionIterations);
   }
 }
 
-function peakKineticEnergy(motor, seconds, fit = false, substeps = SUBSTEPS) {
+function peakKineticEnergy(motor, seconds, fit = false, substeps = SUBSTEPS, iterations = STEP_SETTINGS.velocityIterations) {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const world = groundWorld();
   const json = lightCreature(motor);
@@ -132,7 +132,7 @@ function peakKineticEnergy(motor, seconds, fit = false, substeps = SUBSTEPS) {
   let peak = 0;
   try {
     for (let i = 0; i < seconds / STEP; i++) {
-      frame(rag, world, substeps);
+      frame(rag, world, substeps, iterations);
       if (i * STEP < seconds / 2) continue;
       let energy = 0;
       for (const body of rag.bodies.values()) {
@@ -171,8 +171,8 @@ test('a light creature resting on the ground settles with every joint at its sug
   assert.ok(peak < 0.05, `peak kinetic energy ${peak} J`);
 });
 
-test('without substeps the suggested torques make the light creature gain energy (why the editor steps 8 substeps)', () => {
-  const peak = peakKineticEnergy({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }, 8, true, 1);
+test('without substeps, at 8 velocity iterations, the suggested torques make the light creature gain energy (why the editor steps 8 substeps)', () => {
+  const peak = peakKineticEnergy({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }, 8, true, 1, 8);
   assert.ok(peak > 0.5, `peak kinetic energy ${peak} J`);
 });
 

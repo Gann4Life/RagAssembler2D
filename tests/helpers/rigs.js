@@ -1,5 +1,6 @@
 import { balanceTorqueSuggestion, motorTorqueSuggestions } from '../../lib/motor.js';
 import { shapeBounds } from '../../lib/geometry.js';
+import { STEP_SETTINGS } from '../../lib/ragimporter.js';
 
 const MOTOR = Object.freeze({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 });
 const BALANCE = Object.freeze({ enabled: true, maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 });
@@ -277,17 +278,17 @@ function lowestPoint(json) {
 
 /**
  * Runs a ragdoll on a flat ground (top at the rest pose's lowest point, friction 0.8, gravity 10 m/s², each step split
- * into 8 substeps of 8 velocity and 3 position iterations, as Simulate mode does) and measures how firmly it holds its
+ * into the substeps and iterations of STEP_SETTINGS, as Simulate mode does) and measures how firmly it holds its
  * target pose.
  * @param {*} Box2D The liquidfun.js namespace.
  * @param {*} RagImporter RagImporter, configured with `Box2D` and a PIXI stub.
  * @param {object} json Document; not changed.
  * @param {{ pose?: Map<string, number>, seconds?: number, step?: number, ramp?: number, velocityIterations?: number,
  *   substeps?: number }} [options] Keyed pose (none: the rest pose), duration (default 10 s), step (default 1/60 s),
- *   pose ramp (default 1 s), velocity iterations (default 8) and substeps per step (default 8).
+ *   pose ramp (default 1 s), velocity iterations and substeps per step (default STEP_SETTINGS).
  * @returns {HoldResult} Measurements.
  */
-export function holdRun(Box2D, RagImporter, json, { pose = new Map(), seconds = 10, step = 1 / 60, ramp = 1, velocityIterations = 8, substeps = 8 } = {}) {
+export function holdRun(Box2D, RagImporter, json, { pose = new Map(), seconds = 10, step = 1 / 60, ramp = 1, velocityIterations = STEP_SETTINGS.velocityIterations, substeps = STEP_SETTINGS.substeps } = {}) {
   const doc = structuredClone(json);
   const clip = pose.size > 0 ? addHoldClip(doc, pose, ramp) : null;
   const gravity = new Box2D.b2Vec2(0, -10);
@@ -318,7 +319,7 @@ export function holdRun(Box2D, RagImporter, json, { pose = new Map(), seconds = 
     for (let i = 0; i < steps; i++) {
       for (let k = 0; k < substeps; k++) {
         rag.update(step / substeps);
-        world.Step(step / substeps, velocityIterations, 3);
+        world.Step(step / substeps, velocityIterations, STEP_SETTINGS.positionIterations);
       }
       const late = i >= steps / 2;
       const tilt = Math.abs(root.GetAngle() - restAngle) * 180 / Math.PI;
