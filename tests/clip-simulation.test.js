@@ -84,21 +84,21 @@ test('CLIP_SIMULATION holds the 60 Hz step, budget, debounce and cycle limit', (
   assert.equal(Object.isFrozen(CLIP_SIMULATION), true);
 });
 
-test('a non-looping clip spawns in the rest pose at once and runs to length, stored per step', () => {
+test('a non-looping clip spawns in its own pose at once and runs to length, stored per step', () => {
   const { sim, sessions, clock } = simulation();
   sim.open(spec());
   assert.equal(sessions.length, 1);
-  assert.deepEqual(sessions[0].options, { clip: 'walk', pose: null });
+  assert.deepEqual(sessions[0].options, { clip: 'walk', pose: 'walk' });
   assert.equal(sim.available, true);
   assert.deepEqual(sim.pose(1, 0.5).exact, false);
-  assert.deepEqual(sim.pose(1, 0.5).pose.get('b_a'), { x: 0, y: 0, angle: 1 });
+  assert.deepEqual(sim.pose(1, 0).pose.get('b_a'), { x: 100, y: 0, angle: 1 });
   clock.settle();
   assert.equal(sessions[0].steps, 60);
   assert.equal(sessions[0].destroyed, true);
   const read = sim.pose(1, 0.5);
   assert.equal(read.exact, true);
   assert.equal(read.step, 30);
-  assert.deepEqual(read.pose.get('b_b'), { x: 1, y: -30, angle: 1 });
+  assert.deepEqual(read.pose.get('b_b'), { x: 101, y: -30, angle: 1 });
   assert.deepEqual(sim.pose(5, 2).pose.get('b_a').y, -60);
   assert.equal(sim.upToDate(1, 1), true);
   assert.deepEqual(sim.progress(), { current: 1, previous: null, pending: false });

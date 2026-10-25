@@ -106,9 +106,9 @@ function cycleSteps(spec) {
 
 /**
  * Deterministic background physics run of the open clip (`DESIGN.md` §5.1, Clip simulation), stepped at the fixed
- * 60 Hz step within a per-frame time budget and stored per step. A non-looping clip is spawned in the rest pose and
- * run to `length`; a looping clip is spawned in its pose at time 0 (`pose` option of the simulator) and run
- * continuously through its cycles up to the horizon: the later of cycle 2 and the cycle after the playhead's, never
+ * 60 Hz step within a per-frame time budget and stored per step. Every clip is spawned in its own pose at time 0
+ * (`pose` option of the simulator; a clip without keys starts at rest). A non-looping clip is run to `length`; a
+ * looping clip is run continuously through its cycles up to the horizon: the later of cycle 2 and the cycle after the playhead's, never
  * past the cycle limit. Ghosts read the same run as the main figure, in the playhead cycle, so a ghost and the main
  * figure at the same time are the same simulation state. After a committed change the run restarts
  * `debounce` ms later; the previous run is kept until the new one reaches its horizon. Never changes the document.
@@ -298,7 +298,7 @@ export class ClipSimulation {
   #start() {
     const spec = this.#spec;
     try {
-      this.#current = new Run(this.#nextId++, spec, this.#simulator(spec.json, { clip: spec.clip, pose: spec.loop ? spec.clip : null }), this.#mainTarget(spec));
+      this.#current = new Run(this.#nextId++, spec, this.#simulator(spec.json, { clip: spec.clip, pose: spec.clip }), this.#mainTarget(spec));
       this.#failed = false;
     } catch {
       this.#failed = true;

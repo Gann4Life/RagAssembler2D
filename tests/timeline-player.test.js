@@ -367,7 +367,7 @@ test('validation errors make Animate show FK with a status message on entering a
   assert.ok(editor.modes.playhead > 0);
 });
 
-test('simulate() from Animate runs the open clip live from 0, a looping clip spawned in its pose, and Stop returns', () => {
+test('simulate() from Animate runs the open clip live from 0, spawned in its pose, and Stop returns', () => {
   const { editor, clip, clock, live, player, clipFake } = setup({ loop: true });
   editor.modes.openClip(clip);
   editor.modes.setPlayhead(0.5);

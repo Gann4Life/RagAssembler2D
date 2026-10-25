@@ -134,6 +134,34 @@ test('a posed spawn stands on the rest pose ground: its lowest point is moved to
   }
 });
 
+test('a non-looping clip shows its keyed pose at step 0 and a clip without keys starts at rest', () => {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const { json } = humanoidRig();
+  addHoldClip(json, new Map([['j_shinR', 1.2]]), 1);
+  json.clips[0].tracks[0].keys = [{ t: 0, v: 1.2, interp: 'linear' }];
+  assert.equal(json.clips[0].loop, false);
+  const keyed = createSimulateSession(Box2D, json, { clip: 'hold', pose: 'hold' });
+  try {
+    const spawned = keyed.pose();
+    assert.ok(Math.abs(spawned.get('b_shinR').angle - spawned.get('b_thighR').angle - 1.2) < TOLERANCE);
+  } finally {
+    keyed.destroy();
+  }
+  json.clips[0].tracks = [];
+  const empty = createSimulateSession(Box2D, json, { clip: 'hold', pose: 'hold' });
+  const rest = createSimulateSession(Box2D, json, { clip: 'hold' });
+  try {
+    for (const [id, transform] of rest.pose()) {
+      const spawned = empty.pose().get(id);
+      assert.ok(Math.abs(spawned.x - transform.x) < TOLERANCE && Math.abs(spawned.y - transform.y) < TOLERANCE, id);
+      assert.ok(Math.abs(spawned.angle - transform.angle) < TOLERANCE, id);
+    }
+  } finally {
+    empty.destroy();
+    rest.destroy();
+  }
+});
+
 test('a humanoid holding a pose on one foot stands still instead of hopping', () => {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const { json, pose } = humanoidRig();

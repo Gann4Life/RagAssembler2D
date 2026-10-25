@@ -366,7 +366,7 @@ export class TimelinePlayer {
 
   /**
    * Starts the live Simulate run: the rest pose from Edit mode, or the open clip from 0 from Animate mode, spawned as
-   * the clip simulation spawns (the clip's pose at 0 for a looping clip), and plays it.
+   * the clip simulation spawns (the clip's pose at 0), and plays it.
    * @returns {boolean} `false` when Simulate cannot start (no simulator, already simulating, or a mode without Play).
    * @throws {Error} When the simulator fails; the mode is unchanged.
    */
@@ -374,8 +374,7 @@ export class TimelinePlayer {
     if (this.#session !== null || this.#simulator === null || !this.#modes.can('play')) return false;
     const clip = this.#modes.mode === 'animate' ? this.#modes.clip : null;
     const key = clip === null ? null : this.#model.prop(clip, 'key');
-    const loop = clip !== null && this.#model.prop(clip, 'loop') === true;
-    const session = this.#simulator(toJson(this.#model, PREVIEW_VERSION), { clip: key, pose: loop ? key : null });
+    const session = this.#simulator(toJson(this.#model, PREVIEW_VERSION), { clip: key, pose: key });
     this.#liveClip = clip;
     this.#liveSteps = 0;
     this.#accumulated = 0;

@@ -63,7 +63,8 @@ test('the clip simulation stores exactly the poses continuous stepping reaches, 
   const json = ragFile();
   json.clips[0].loop = false;
   const sim = settled(json, false);
-  const expected = continuousPoses(json, { clip: 'walk', pose: null }, [40, 120]);
+  const expected = continuousPoses(json, { clip: 'walk', pose: 'walk' }, [0, 40, 120]);
+  assert.deepEqual(sim.pose(1, 0).pose, expected.get(0));
   assert.deepEqual(sim.pose(1, 2).pose, expected.get(120));
   assert.deepEqual(sim.pose(1, 40 * SIMULATE_STEP).pose, expected.get(40));
   assert.deepEqual(sim.pose(1, 2).pose, expected.get(120));
