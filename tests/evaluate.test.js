@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LIMIT_TOLERANCE, clampToLimits, sampleTrack, channelDefault, evaluateClip, resolveChannels, fkPose, jointAngleForBody } from '../lib/evaluate.js';
+import { LIMIT_TOLERANCE, clampToLimits, sampleTrack, sampleTrackRate, channelDefault, evaluateClip, resolveChannels, fkPose, jointAngleForBody } from '../lib/evaluate.js';
 
 const k = (t, v, interp) => ({ t, v, interp });
 
@@ -120,8 +120,8 @@ const def = {
 
 test('resolveChannels with no layers returns defaults', () => {
   const pose = resolveChannels(def, []);
-  assert.deepEqual(pose.root, { strength: 0.5, gain: 1, damping: 1, bodyAngle: 0 });
-  assert.deepEqual(pose.joints.get('j1'), { angle: 0, strength: 1, gain: 1, damping: 1, S: 0.5, G: 10, D: 0.5 });
+  assert.deepEqual(pose.root, { strength: 0.5, gain: 1, damping: 1, bodyAngle: 0, bodyAngleRate: 0 });
+  assert.deepEqual(pose.joints.get('j1'), { angle: 0, angleRate: 0, strength: 1, gain: 1, damping: 1, S: 0.5, G: 10, D: 0.5 });
   assert.equal(pose.sprites.get('s1'), 'img');
   assert.equal(pose.sprites.get('s2'), null);
 });
@@ -363,13 +363,72 @@ test('looping: evaluateClip interpolates across the wrap only when loop is true'
   assert.equal(held.get('knee').get('angle'), 1);
 });
 
-test('looping: the motor look-ahead target is continuous across the wrap', () => {
+test('looping: the resolved target is continuous across the wrap', () => {
   const def = { ragdoll: {}, joints: [{ id: 'knee' }], bodies: [] };
   const clip = { length: 1, loop: true, tracks: [{ target: 'knee', channel: 'angle', keys: kneeKeys() }] };
   const eps = 1e-6;
   const before = resolveChannels(def, [{ clip, time: 1 - eps }]).joints.get('knee').angle;
   const after = resolveChannels(def, [{ clip, time: 1 + eps }]).joints.get('knee').angle;
   assert.ok(Math.abs(before - after) < 1e-4, `${before} vs ${after}`);
+});
+
+test('sampleTrackRate is the exact slope per interp on the segment t_a <= t < t_b', () => {
+  const keys = [k(0, 0, 'linear'), k(0.5, 1, 'ease'), k(1, 3, 'step'), k(2, 0, 'linear')];
+  closeTo(sampleTrackRate(keys, 0), 2);
+  closeTo(sampleTrackRate(keys, 0.25), 2);
+  closeTo(sampleTrackRate(keys, 0.5), 0);
+  closeTo(sampleTrackRate(keys, 0.75), 6 * 0.5 * 0.5 * 4);
+  closeTo(sampleTrackRate(keys, 0.625), 6 * 0.25 * 0.75 * 4);
+  assert.equal(sampleTrackRate(keys, 1.5), 0);
+});
+
+test('sampleTrackRate matches the derivative of sampleTrack', () => {
+  const keys = [k(0.1, 0.2, 'ease'), k(0.4, 1.4, 'linear'), k(0.7, -0.5, 'ease')];
+  const h = 1e-6;
+  for (const loop of [null, 1]) {
+    for (const t of [0.15, 0.3, 0.45, 0.6, 0.8, 0.95, 0.05]) {
+      if (loop === null && (t < 0.1 || t > 0.7)) continue;
+      const numeric = (sampleTrack(keys, t + h, false, loop) - sampleTrack(keys, t - h, false, loop)) / (2 * h);
+      assert.ok(Math.abs(sampleTrackRate(keys, t, false, loop) - numeric) < 1e-5, `t=${t} loop=${loop}`);
+    }
+  }
+});
+
+test('sampleTrackRate is 0 for held values, single keys, empty tracks and discrete channels', () => {
+  const keys = [k(0.2, 0, 'linear'), k(0.6, 1, 'linear')];
+  assert.equal(sampleTrackRate(keys, 0.1), 0);
+  assert.equal(sampleTrackRate(keys, 0.6), 0);
+  assert.equal(sampleTrackRate(keys, 5), 0);
+  assert.equal(sampleTrackRate([k(0.3, 4, 'linear')], 0.3, false, 1), 0);
+  assert.equal(sampleTrackRate([], 0.3), 0);
+  assert.equal(sampleTrackRate([k(0, 'a'), k(1, 'b')], 0.5, true), 0);
+});
+
+test('sampleTrackRate follows the wrap segment of a looping clip', () => {
+  const keys = kneeKeys();
+  closeTo(sampleTrackRate(keys, 0.4, false, 1), 2.5);
+  closeTo(sampleTrackRate(keys, 0.9, false, 1), -6 * 0.5 * 0.5 / 0.6);
+  closeTo(sampleTrackRate(keys, 1.9, false, 1), sampleTrackRate(keys, 0.9, false, 1));
+  closeTo(sampleTrackRate(keys, 0.1, false, 1), -6 * (0.5 / 0.6) * (0.1 / 0.6) / 0.6);
+  const stepped = [k(0.2, 0, 'linear'), k(0.6, 1, 'step')];
+  assert.equal(sampleTrackRate(stepped, 0.9, false, 1), 0);
+  const ends = [k(0, 0, 'linear'), k(1, 5, 'linear')];
+  closeTo(sampleTrackRate(ends, 0.5, false, 1), 5);
+  assert.equal(sampleTrackRate(ends, 1, false, 1), 0);
+});
+
+test('resolveChannels gives angle and bodyAngle rates scaled by speed and weight', () => {
+  const tracks = [tr('j1', 'angle', [0, 0], [2, 1]), tr('root', 'bodyAngle', [0, 0], [1, -2]), tr('j1', 'gain', [0, 1], [2, 0])];
+  const pose = resolveChannels(def, [{ clip: clipOf(tracks, { loop: false, speed: 2 }), time: 0.5 }]);
+  closeTo(pose.joints.get('j1').angleRate, 1);
+  closeTo(pose.root.bodyAngleRate, -4);
+  assert.equal(pose.joints.get('j2').angleRate, 0);
+  const played = resolveChannels(def, [{ clip: clipOf(tracks), time: 0.5, speed: 3, weight: 0.5 }]);
+  closeTo(played.joints.get('j1').angleRate, 0.75);
+  const additive = resolveChannels(def, [{ clip: clipOf(tracks, { blend: 'additive' }), time: 0.5, weight: 0.25 }]);
+  closeTo(additive.root.bodyAngleRate, -0.5);
+  const held = resolveChannels(def, [{ clip: clipOf(tracks, { loop: false }), time: 5 }]);
+  assert.equal(held.joints.get('j1').angleRate, 0);
 });
 
 test('clampToLimits clamps only with enabled, finite limits', () => {
