@@ -6,6 +6,7 @@ Dated log of design and technical decisions, split by area. Within each file the
 |---|---|---|
 | Select and transform | [tools-select.md](decisions/tools-select.md) | Select, Select Box, click semantics and the transform gizmo. |
 | Hierarchy and deletion | [hierarchy.md](decisions/hierarchy.md) | Hierarchy panel, deletion rules, presentation and Set as root body. |
+| Inspector | [inspector.md](decisions/inspector.md) | Inspector pages, mode rules, edit routing and body placement edits. |
 | Creation tools | [tools-creation.md](decisions/tools-creation.md) | Circle, Box and Hinge tools. |
 | Toolbar | [toolbar.md](decisions/toolbar.md) | Tools overlay, tooltips and toolbar keyboard behavior. |
 | Tool framework | [tools-framework.md](decisions/tools-framework.md) | Tool contract, registry, input rules and hit testing. |
