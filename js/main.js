@@ -8,6 +8,7 @@ import { TOOL_SPECS } from './tools/tool.js';
 import { createDock } from './panels/dock.js';
 import { PANELS } from './panels/layout.js';
 import { createHierarchy } from './panels/hierarchy.js';
+import { createInspector } from './panels/inspector.js';
 import { createTimeline } from './panels/timeline.js';
 import { TimelinePlayer } from './timeline-player.js';
 import { bindAnimateView } from './model/animate-preview.js';
@@ -76,6 +77,7 @@ const dock = createDock(document.getElementById('workspace'), {
   viewportElement: document.getElementById('panel-viewport'),
 });
 const hierarchy = createHierarchy(dock.panelElement('hierarchy'), editor);
+createInspector(dock.panelElement('inspector'), editor);
 const frameClock = Object.freeze({
   request: (callback) => requestAnimationFrame(callback),
   cancel: (handle) => cancelAnimationFrame(handle),

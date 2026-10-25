@@ -448,7 +448,8 @@ body.dock-resizing-column * {
   gap: 6px;
 }
 
-.settings-row input {
+.settings-row input,
+.field-input {
   width: 100%;
   padding: 2px 4px;
   border: 1px solid var(--border);
@@ -462,7 +463,8 @@ body.dock-resizing-column * {
   color: var(--text-muted);
 }
 
-.settings-row input[aria-invalid="true"] {
+.settings-row input[aria-invalid="true"],
+.field-input[aria-invalid="true"] {
   border-color: var(--error);
   outline-color: var(--error);
 }
@@ -1240,4 +1242,218 @@ body.dock-resizing-column * {
   margin-left: auto;
   padding-left: 24px;
   color: var(--text-muted);
+}
+
+.dock-panel.inspector-panel {
+  display: block;
+  container-type: inline-size;
+  overflow: auto;
+}
+
+.inspector-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-summary {
+  margin: 0;
+  padding: 8px;
+  color: var(--text-muted);
+}
+
+.inspector-summary[hidden] {
+  display: none;
+}
+
+.inspector-section {
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px 8px;
+}
+
+.inspector-section + .inspector-section {
+  border-top: 1px solid var(--border);
+}
+
+.inspector-section-title {
+  margin: 0 0 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inspector-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 40%) minmax(0, 1fr) 36px 16px;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.inspector-row.is-button {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.inspector-row.is-list {
+  align-items: start;
+}
+
+.inspector-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-field {
+  min-width: 0;
+}
+
+.inspector-unit {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.inspector-vec2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.inspector-component {
+  position: relative;
+  min-width: 0;
+}
+
+.inspector-prefix {
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  color: var(--text-muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.inspector-component .field-input {
+  padding-left: 16px;
+}
+
+.field-input:focus-visible,
+.inspector-checkbox:focus-visible,
+.inspector-readout:focus-visible,
+.inspector-list-item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.field-input.is-readonly {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.inspector-select[aria-disabled="true"],
+.inspector-checkbox[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.inspector-checkbox {
+  margin: 0;
+}
+
+.inspector-readout {
+  display: block;
+  padding: 2px 4px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inspector-list-mixed {
+  padding: 2px 4px;
+  color: var(--text-muted);
+}
+
+.inspector-list-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 22px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inspector-list-item:hover {
+  background: var(--surface-hover);
+}
+
+.inspector-list-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-list-label.is-muted {
+  color: var(--text-muted);
+}
+
+.inspector-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+}
+
+.inspector-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.inspector-action {
+  justify-content: center;
+  width: 100%;
+  padding: 0 8px;
+}
+
+@container (max-width: 239px) {
+  .inspector-row:not(.is-button) {
+    grid-template-columns: minmax(0, 1fr) 36px 16px;
+  }
+
+  .inspector-row:not(.is-button) .inspector-label {
+    grid-column: 1 / -1;
+  }
 }
