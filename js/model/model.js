@@ -147,6 +147,15 @@ export class Model {
   #nextUid = ROOT_UID + 1;
   #emitter = new Emitter();
   #openBatch = null;
+  #revision = 0;
+
+  /**
+   * Counter that grows before every `change` and `reset` event; unchanged by operations without effective changes.
+   * @returns {number}
+   */
+  get revision() {
+    return this.#revision;
+  }
 
   /**
    * Creates a model holding a new, empty document with schema defaults.
@@ -268,6 +277,7 @@ export class Model {
       this.#openBatch.ops.push(...applied);
       this.#openBatch.changes.push(...changes);
     } else if (changes.length > 0) {
+      this.#revision += 1;
       this.#emitter.emit('change', Object.freeze({ changes: Object.freeze(changes), cause }));
     }
     return Object.freeze(applied);
@@ -297,7 +307,10 @@ export class Model {
     }
     this.#openBatch = null;
     const result = Object.freeze({ ops: Object.freeze(open.ops), changes: Object.freeze(open.changes) });
-    if (result.changes.length > 0) this.#emitter.emit('change', Object.freeze({ changes: result.changes, cause: 'do' }));
+    if (result.changes.length > 0) {
+      this.#revision += 1;
+      this.#emitter.emit('change', Object.freeze({ changes: result.changes, cause: 'do' }));
+    }
     return result;
   }
 
@@ -321,7 +334,8 @@ export class Model {
     this.#nodes.clear();
     this.#ids.clear();
     this.#install(records);
-    this.#emitter.emit('reset', Object.freeze({ cause }));
+    this.#revision += 1;
+    this.#emitter.emit('reset',Object.freeze({ cause }));
   }
 
   #require(uid) {

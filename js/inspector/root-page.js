@@ -23,12 +23,7 @@ const playheadCaches = new WeakMap();
 function cacheOf(model) {
   let cache = playheadCaches.get(model);
   if (!cache) {
-    cache = { clip: null, time: null, result: null };
-    const invalidate = () => {
-      cache.result = null;
-    };
-    model.on('change', invalidate);
-    model.on('reset', invalidate);
+    cache = { revision: null, clip: null, time: null, channels: null };
     playheadCaches.set(model, cache);
   }
   return cache;
@@ -46,12 +41,13 @@ function evaluateChannels(model, { clip, time }) {
 
 function playheadChannels(model, animate) {
   const cache = cacheOf(model);
-  if (cache.result === null || cache.clip !== animate.clip || cache.time !== animate.time) {
+  if (cache.revision !== model.revision || cache.clip !== animate.clip || cache.time !== animate.time) {
+    cache.revision = model.revision;
     cache.clip = animate.clip;
     cache.time = animate.time;
-    cache.result = { channels: evaluateChannels(model, animate) };
+    cache.channels = evaluateChannels(model, animate);
   }
-  return cache.result.channels;
+  return cache.channels;
 }
 
 /**

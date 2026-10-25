@@ -1,6 +1,7 @@
 import { inspectorPage } from '../inspector/page.js';
 import { MIXED, editCommand } from '../inspector/rows.js';
 import { actionTitle } from '../header.js';
+import { HOTKEYS } from '../hotkeys.js';
 import { attachTooltip } from '../tooltip.js';
 
 /**
@@ -350,9 +351,13 @@ export function createInspector(element, editor) {
     button.dataset.row = row.id;
     const state = { row };
     const enabled = () => actions.isEnabled(state.row.edit.action);
+    const shortcutOf = () => HOTKEYS.find((hotkey) => hotkey.action === state.row.edit.action)?.keys;
     const update = (current) => {
       state.row = current;
       button.textContent = current.label;
+      const shortcut = shortcutOf();
+      if (shortcut === undefined) button.removeAttribute('aria-keyshortcuts');
+      else button.setAttribute('aria-keyshortcuts', shortcut.replace(/Ctrl/g, 'Control').replace(/^Del$/, 'Delete'));
       button.setAttribute('aria-disabled', String(!enabled()));
       handle.update();
     };
@@ -363,7 +368,7 @@ export function createInspector(element, editor) {
     });
     const handle = attachTooltip(button, () => {
       const on = enabled();
-      return actionTitle({ id: state.row.edit.action, label: state.row.label }, on, on ? null : actions.reason(state.row.edit.action));
+      return actionTitle({ id: state.row.edit.action, label: state.row.label, shortcut: shortcutOf() }, on, on ? null : actions.reason(state.row.edit.action));
     }, { placement: 'below' });
     tooltips.push(handle);
     update(row);
