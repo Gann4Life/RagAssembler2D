@@ -44,6 +44,9 @@ import { hingeTool } from './tools/hinge.js';
  * @property {(text: string) => void} status Shows a status line message through the `status` option.
  * @property {(mode: 'edit'|'animate'|'simulate') => string} modeTitle Tooltip of a mode switch segment, e.g.
  *   `Animate mode: opens walk` or `Animate mode: creates a new clip`.
+ * @property {(bodyUid: number) => boolean} setRootBody Runs Set as root body on a body, as one undo step with the
+ *   action's status message; returns `false` and changes nothing when the action would refuse it (not Edit mode, a
+ *   gesture, a pending confirmation, not a body, already `rootBody`).
  */
 
 /**
@@ -576,26 +579,26 @@ export function createEditor({
     const rootBody = model.prop(ROOT_UID, 'rootBody');
     return typeof rootBody === 'string' && model.uidOf(rootBody) === body;
   };
-  const newRootBody = () => {
-    if (confirming || !canEditRest()) return null;
-    const body = selectedBody();
-    return body === null || isRootBody(body) ? null : body;
+  const canSetRootBody = (body) =>
+    !confirming && canEditRest() && body !== null && model.get(body)?.type === 'body' && !isRootBody(body);
+  const setRootBodyOn = (body) => {
+    if (!canSetRootBody(body)) return false;
+    const plan = rootBodyPlan(model, body);
+    torqueNote = null;
+    holdTorqueMessage = true;
+    try {
+      history.execute(setRootBody(body));
+    } finally {
+      holdTorqueMessage = false;
+    }
+    say(rootBodyMessage(model, body, plan, torqueNote));
+    return true;
   };
   actions.register('set-root-body', {
     run: () => {
-      const body = newRootBody();
-      if (body === null) return;
-      const plan = rootBodyPlan(model, body);
-      torqueNote = null;
-      holdTorqueMessage = true;
-      try {
-        history.execute(setRootBody(body));
-      } finally {
-        holdTorqueMessage = false;
-      }
-      say(rootBodyMessage(model, body, plan, torqueNote));
+      setRootBodyOn(selectedBody());
     },
-    isEnabled: () => newRootBody() !== null,
+    isEnabled: () => canSetRootBody(selectedBody()),
     reason: () => {
       const byMode = modeReason('edit.rest');
       if (byMode !== null || confirming || history.inGesture) return byMode;
@@ -707,5 +710,6 @@ export function createEditor({
     loadFrom,
     status: say,
     modeTitle,
+    setRootBody: setRootBodyOn,
   });
 }

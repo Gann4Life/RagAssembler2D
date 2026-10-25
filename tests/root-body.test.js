@@ -46,7 +46,7 @@ function clipDef(name, tracks, blend = 'override') {
   };
 }
 
-function humanoid(rootBody, clips) {
+function humanoid(rootBody, clips, options = {}) {
   const doc = ragFile();
   const [bodyTemplate] = doc.bodies;
   const [jointTemplate] = doc.joints;
@@ -67,7 +67,7 @@ function humanoid(rootBody, clips) {
   ];
   doc.ragdoll.rootBody = rootBody;
   doc.clips = clips;
-  const editor = createEditor();
+  const editor = createEditor(options);
   const result = loadJson(editor.model, JSON.stringify(doc));
   assert.equal(result.ok, true, JSON.stringify(result.errors));
   return { editor, model: editor.model, uid: (id) => editor.model.uidOf(id) };
@@ -282,6 +282,35 @@ test('set-root-body needs Edit mode, no gesture and exactly one non-root body in
   assert.equal(dispatchKey(event, { actions }), true);
   assert.equal(model.prop(ROOT_UID, 'rootBody'), 'thigh');
   assert.deepEqual(selection.objects, [uid('thigh'), shapeOf('thigh'), uid('hip'), ROOT_UID]);
+});
+
+test('Editor.setRootBody sets any body as the action does and refuses what the action refuses', () => {
+  const messages = [];
+  const { editor, model, uid } = humanoid('torso', LEG_CLIPS(), { status: (text) => messages.push(text) });
+  const { history, modes, selection } = editor;
+  selection.set([uid('head')]);
+  const before = toJson(model, 'dev');
+  assert.equal(editor.setRootBody(uid('torso')), false);
+  assert.equal(editor.setRootBody(uid('hip')), false);
+  assert.equal(editor.setRootBody(ROOT_UID), false);
+  assert.equal(editor.setRootBody(9999), false);
+  assert.equal(editor.setRootBody(null), false);
+  history.beginGesture();
+  assert.equal(editor.setRootBody(uid('thigh')), false);
+  history.cancelGesture();
+  modes.openClip(clipUid(model, 'walk'));
+  assert.equal(editor.setRootBody(uid('thigh')), false);
+  modes.openClip(null);
+  assert.deepEqual(toJson(model, 'dev'), before);
+  assert.deepEqual(messages, []);
+  assert.equal(editor.setRootBody(uid('thigh')), true);
+  assert.equal(model.prop(ROOT_UID, 'rootBody'), 'thigh');
+  assert.equal(history.state.undoLabel, 'Set as root body');
+  assert.deepEqual(selection.objects, [uid('head')]);
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /^Root body: thigh, bodyAngle keys converted in 2 clips/);
+  history.undo();
+  assert.deepEqual(toJson(model, 'dev'), before);
 });
 
 test('a looping clip converts with the wrap rule, matching the summed terms on the wrap segment', () => {
