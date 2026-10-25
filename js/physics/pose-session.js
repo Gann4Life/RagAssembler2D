@@ -3,11 +3,9 @@ import { composeTransforms, invertTransform } from '../../lib/geometry.js';
 
 /**
  * Pose test constants: `step` and `maxSteps` in s and steps, damping in s⁻¹, `forcePerKg` in N/kg,
- * `frequencyHz` in Hz, `dampingRatio` without unit. Falloff (`DESIGN.md` §5.5): a joint whose nearer body is `d` hops
- * from the grabbed body gets friction up to `falloffMax × (1 − falloffRatio^d)` times the pull's current force times
- * the distance from the grabbed point to the joint anchor, so it yields less the farther it is and never holds.
+ * `frequencyHz` in Hz, `dampingRatio` without unit.
  * @type {Readonly<{ step: number, maxSteps: number, linearDamping: number, angularDamping: number,
- *   forcePerKg: number, frequencyHz: number, dampingRatio: number, falloffMax: number, falloffRatio: number }>}
+ *   forcePerKg: number, frequencyHz: number, dampingRatio: number }>}
  */
 export const POSE = Object.freeze({
   step: 1 / 60,
@@ -17,39 +15,11 @@ export const POSE = Object.freeze({
   forcePerKg: 1000,
   frequencyHz: 5,
   dampingRatio: 0.7,
-  falloffMax: 0.8,
-  falloffRatio: 0.5,
 });
 
 const VELOCITY_ITERATIONS = 8;
 const POSITION_ITERATIONS = 3;
 const STEP_EPSILON = 1e-9;
-
-function hopDistances(json, bodyId) {
-  const neighbors = new Map();
-  for (const joint of Array.isArray(json?.joints) ? json.joints : []) {
-    for (const [from, to] of [[joint?.bodyA, joint?.bodyB], [joint?.bodyB, joint?.bodyA]]) {
-      if (typeof from !== 'string' || typeof to !== 'string') continue;
-      if (!neighbors.has(from)) neighbors.set(from, []);
-      neighbors.get(from).push(to);
-    }
-  }
-  const hops = new Map([[bodyId, 0]]);
-  const queue = [bodyId];
-  for (let index = 0; index < queue.length; index++) {
-    const current = queue[index];
-    for (const next of neighbors.get(current) ?? []) {
-      if (hops.has(next)) continue;
-      hops.set(next, hops.get(current) + 1);
-      queue.push(next);
-    }
-  }
-  return hops;
-}
-
-function frictionShare(hops) {
-  return Number.isFinite(hops) ? POSE.falloffMax * (1 - POSE.falloffRatio ** hops) : POSE.falloffMax;
-}
 
 /**
  * The document reduced to what the pose test simulates: no sprites, no clips, no shape sprites, and shapes that
@@ -72,40 +42,12 @@ export function poseTestJson(json) {
   return copy;
 }
 
-function jointFrictions(rag, json, bodyId) {
-  const hops = hopDistances(json, bodyId);
-  const hopsOf = (id) => hops.get(id) ?? Infinity;
-  const frictions = [];
-  for (const joint of Array.isArray(json.joints) ? json.joints : []) {
-    const native = rag.joints.get(joint.id);
-    if (native === undefined) continue;
-    native.SetMaxMotorTorque(0);
-    native.SetMotorSpeed(0);
-    native.EnableMotor(true);
-    frictions.push({ joint: native, share: frictionShare(Math.min(hopsOf(joint.bodyA), hopsOf(joint.bodyB))) });
-  }
-  return frictions;
-}
-
-function applyFrictions(frictions, mouse) {
-  const reaction = mouse.GetReactionForce(1 / POSE.step);
-  const force = Math.hypot(reaction.get_x(), reaction.get_y());
-  const grab = mouse.GetAnchorB();
-  const gx = grab.get_x();
-  const gy = grab.get_y();
-  for (const { joint, share } of frictions) {
-    const anchor = joint.GetAnchorA();
-    joint.SetMaxMotorTorque(share * force * Math.hypot(gx - anchor.get_x(), gy - anchor.get_y()));
-  }
-}
 
 /**
- * Starts a pose test: a zero-gravity LiquidFun world with the ragdoll at `options.root` in rest pose, or with the
- * bodies of `options.start` placed at those root-local transforms, every body damped, and a mouse joint pulling
- * `options.bodyId` from `options.point`. Every body, `rootBody` included, moves freely; nothing is anchored. Every
- * joint motor runs at zero speed as friction capped below the most torque the pull's current force can exert about
- * it, by joint distance from the grabbed body (see {@link POSE}), so distant joints bend less but always yield. Owns every native object it
- * creates until `destroy`.
+ * Starts a pose test: a zero-gravity LiquidFun world holding the ragdoll at `options.root` in rest pose, or with the
+ * bodies of `options.start` placed at those root-local transforms, every body damped, motors off, and a mouse joint
+ * pulling `options.bodyId` from `options.point`. Every body, `rootBody` included, moves freely. Owns every native
+ * object it creates until `destroy`.
  * @param {*} Box2D The liquidfun.js namespace.
  * @param {object} json A `.rag.json` document.
  * @param {import('../tools/tool.js').PoseSessionOptions} options Root transform, grabbed body id and press point.
@@ -115,8 +57,7 @@ function applyFrictions(frictions, mouse) {
  * @throws {Error} When the body id is unknown or a native call fails; everything built is released first.
  */
 export function createPoseSession(Box2D, json, { root, bodyId, point, start = null }) {
-  const testJson = poseTestJson(json);
-  const def = RagImporter.parse(testJson);
+  const def = RagImporter.parse(poseTestJson(json));
   const gravity = new Box2D.b2Vec2(0, 0);
   const world = new Box2D.b2World(gravity);
   Box2D.destroy(gravity);
@@ -124,7 +65,6 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
   let rag = null;
   let ground = null;
   let mouse = null;
-  let frictions = [];
 
   const release = () => {
     if (mouse !== null) world.DestroyJoint(mouse);
@@ -172,12 +112,13 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
     } finally {
       Box2D.destroy(jointDef);
     }
-    frictions = jointFrictions(rag, testJson, bodyId);
+
     grabbed.SetAwake(true);
   } catch (error) {
     release();
     throw error;
   }
+
 
   const toRoot = invertTransform(root);
   const target = { x: point.x, y: point.y };
@@ -204,7 +145,6 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
       accumulated = Math.max(0, accumulated - whole * POSE.step);
       const steps = Math.min(whole, POSE.maxSteps);
       for (let i = 0; i < steps; i++) {
-        applyFrictions(frictions, mouse);
         world.Step(POSE.step, VELOCITY_ITERATIONS, POSITION_ITERATIONS);
       }
     },

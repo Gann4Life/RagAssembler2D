@@ -6,7 +6,6 @@ import { RagDef } from '../lib/def.js';
 import { bodyMassData, transformPoint } from '../lib/geometry.js';
 import { POSE, createPoseSession, poseTestJson } from '../js/physics/pose-session.js';
 import { ragFile } from './helpers/rag-file.js';
-import { bipedRig, humanoidRig } from './helpers/rigs.js';
 
 const require = createRequire(import.meta.url);
 const Box2D = require('../vendor/liquidfun.js');
@@ -104,17 +103,7 @@ function start(json, bodyId, point = restWorld(json, bodyId)) {
 test('POSE holds the spec constants and is frozen', () => {
   assert.deepEqual(
     { ...POSE },
-    {
-      step: 1 / 60,
-      maxSteps: 4,
-      linearDamping: 10,
-      angularDamping: 10,
-      forcePerKg: 1000,
-      frequencyHz: 5,
-      dampingRatio: 0.7,
-      falloffMax: 0.8,
-      falloffRatio: 0.5,
-    },
+    { step: 1 / 60, maxSteps: 4, linearDamping: 10, angularDamping: 10, forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7 },
   );
   assert.equal(Object.isFrozen(POSE), true);
 });
@@ -183,7 +172,7 @@ test('options.start places the listed bodies at their root-local transforms befo
   }
 });
 
-test('every body is damped, every motor is a zero-speed friction and the grabbed body is pulled by a mouse joint', () => {
+test('every body is damped, every motor is off and the grabbed body is pulled by a mouse joint', () => {
   const json = ragFile();
   capturingSpawn((spawned) => {
     const session = start(json, 'b_head');
@@ -193,11 +182,7 @@ test('every body is damped, every motor is a zero-speed friction and the grabbed
         near(body.GetLinearDamping(), POSE.linearDamping, 'linear damping');
         near(body.GetAngularDamping(), POSE.angularDamping, 'angular damping');
       }
-      for (const joint of rag.joints.values()) {
-        assert.equal(joint.IsMotorEnabled(), 1);
-        assert.equal(joint.GetMotorSpeed(), 0);
-        assert.equal(joint.GetMaxMotorTorque(), 0);
-      }
+      for (const joint of rag.joints.values()) assert.equal(joint.IsMotorEnabled(), 0);
       const world = rag.bodies.get('b_head').GetWorld();
       assert.equal(world.GetJointCount(), json.joints.length + 1);
       assert.equal(world.GetBodyCount(), json.bodies.length + 1);
@@ -262,7 +247,7 @@ test('joint angles stay within their limits, up to the solver slop, during circl
             assert.ok(angle < joint.limits.upper + LIMIT_TOLERANCE, `${bodyId} ${joint.id} ${angle} below upper`);
           }
         }
-        for (const joint of rag.joints.values()) assert.equal(joint.GetMotorSpeed(), 0);
+        for (const joint of rag.joints.values()) assert.equal(joint.IsMotorEnabled(), 0);
       } finally {
         session.destroy();
       }
@@ -382,136 +367,6 @@ test('no heap growth over 500 start, drag, advance, destroy cycles', () => {
   const before = heapProbe();
   for (let i = 1; i <= 500; i++) cycle(i);
   assert.equal(heapProbe(), before);
-});
-
-const FLAT = Object.freeze({ x: 0, y: 0, angle: 0 });
-
-function massCenter(json, bodyId, pose) {
-  const body = json.bodies.find((item) => item.id === bodyId);
-  return transformPoint(pose.get(bodyId), bodyMassData(body.fixtures).center);
-}
-
-function hopDistances(json, bodyId) {
-  const hops = new Map([[bodyId, 0]]);
-  for (let grown = true; grown; ) {
-    grown = false;
-    for (const joint of json.joints) {
-      for (const [from, to] of [[joint.bodyA, joint.bodyB], [joint.bodyB, joint.bodyA]]) {
-        if (hops.has(from) && !hops.has(to)) {
-          hops.set(to, hops.get(from) + 1);
-          grown = true;
-        }
-      }
-    }
-  }
-  return hops;
-}
-
-function jointChanges(json, before, after, bodyId) {
-  const hops = hopDistances(json, bodyId);
-  return json.joints.map((joint) => ({
-    id: joint.id,
-    d: Math.min(hops.get(joint.bodyA) ?? Infinity, hops.get(joint.bodyB) ?? Infinity),
-    change: Math.abs(
-      after.get(joint.bodyB).angle - after.get(joint.bodyA).angle - (before.get(joint.bodyB).angle - before.get(joint.bodyA).angle),
-    ),
-  }));
-}
-
-function rigDrag(json, bodyId, offset) {
-  RagImporter.configure({ Box2D, PIXI });
-  const restPose = new Map(json.bodies.map((body) => [body.id, { x: body.position[0], y: body.position[1], angle: body.angle }]));
-  const press = massCenter(json, bodyId, restPose);
-  const target = { x: press.x + offset.x, y: press.y + offset.y };
-  const session = createPoseSession(Box2D, json, { root: FLAT, bodyId, point: press, start: new Map() });
-  try {
-    const before = session.pose();
-    for (let i = 1; i <= 60; i++) {
-      session.drag({ x: press.x + (offset.x * i) / 60, y: press.y + (offset.y * i) / 60 });
-      session.advance(POSE.step);
-    }
-    run(session, 1);
-    const { anchor } = session.grab();
-    const after = session.pose();
-    const rootId = json.ragdoll.rootBody;
-    return {
-      changes: jointChanges(json, before, after, bodyId),
-      miss: Math.hypot(anchor.x - target.x, anchor.y - target.y),
-      root: Math.hypot(after.get(rootId).x - before.get(rootId).x, after.get(rootId).y - before.get(rootId).y),
-    };
-  } finally {
-    session.destroy();
-  }
-}
-
-for (const [name, rig, bodyId, offset] of [
-  ['humanoid shin', humanoidRig, 'b_shinR', { x: 0.3, y: 0.2 }],
-  ['humanoid forearm', humanoidRig, 'b_foreL', { x: 0.25, y: 0.15 }],
-  ['biped shin', bipedRig, 'b_shinR', { x: 0.1, y: 0.08 }],
-]) {
-  test(`falloff: dragging the ${name} reaches the pointer, bends near joints most and distant ones less but not frozen`, () => {
-    const { json } = rig();
-    const { changes, miss } = rigDrag(json, bodyId, offset);
-    const most = (filter) => Math.max(...changes.filter(filter).map((joint) => joint.change));
-    assert.ok(miss < 0.05, `grabbed point ${miss} m from the pointer`);
-    assert.ok(most((joint) => joint.d === 0) > 0.05, 'a joint of the grabbed body bends');
-    assert.ok(most((joint) => joint.d >= 2) < most((joint) => joint.d === 0), 'distant joints bend less than near ones');
-    assert.ok(most((joint) => joint.d >= 2) > 1e-4, 'distant joints are not frozen');
-  });
-}
-
-for (const [name, rig, bodyId] of [
-  ['humanoid shin', humanoidRig, 'b_shinR'],
-  ['humanoid forearm', humanoidRig, 'b_foreL'],
-  ['biped root', bipedRig, null],
-]) {
-  test(`dragging the ${name} 2 m moves the whole ragdoll, root included, to the pointer`, () => {
-    const { json } = rig();
-    const grabbed = bodyId ?? json.ragdoll.rootBody;
-    const { miss, root } = rigDrag(json, grabbed, { x: 1.2, y: -1.6 });
-    assert.ok(miss < 0.05, `grabbed point ${miss} m from the pointer`);
-    assert.ok(root > 1.5, `rootBody moved ${root} m`);
-  });
-}
-
-test('falloff: joint friction is a share of the pull torque about the joint, none on the grabbed body, by joint distance', () => {
-  const { json } = humanoidRig();
-  const hops = hopDistances(json, 'b_shinR');
-  capturingSpawn((spawned) => {
-    RagImporter.configure({ Box2D, PIXI });
-    const press = restWorld(json, 'b_shinR');
-    const session = createPoseSession(Box2D, json, { root: FLAT, bodyId: 'b_shinR', point: press });
-    try {
-      const [rag] = spawned;
-      const world = rag.bodies.get('b_shinR').GetWorld();
-      assert.equal(world.GetJointCount(), json.joints.length + 1, 'no holds, only the joints and the pull');
-      session.drag({ x: press.x + 0.5, y: press.y + 0.3 });
-      session.advance(POSE.step * 2);
-      const { anchor } = session.grab();
-      const forces = [];
-      for (const joint of json.joints) {
-        const native = rag.joints.get(joint.id);
-        const pivot = native.GetAnchorA();
-        const lever = Math.hypot(anchor.x - pivot.get_x(), anchor.y - pivot.get_y());
-        const d = Math.min(hops.get(joint.bodyA), hops.get(joint.bodyB));
-        assert.equal(native.GetMotorSpeed(), 0);
-        const cap = native.GetMaxMotorTorque();
-        if (d === 0) {
-          assert.equal(cap, 0, `${joint.id} of the grabbed body is free`);
-          continue;
-        }
-        assert.ok(cap > 0, `${joint.id} has friction`);
-        forces.push(cap / (lever * POSE.falloffMax * (1 - POSE.falloffRatio ** d)));
-      }
-      const maxForce = POSE.forcePerKg * rag.bodies.get('b_shinR').GetMass();
-      for (const force of forces) {
-        assert.ok(Math.abs(force / forces[0] - 1) < 0.1, `one pull force behind every cap: ${forces}`);
-        assert.ok(force <= maxForce * 1.1, 'never above the pull');
-      }
-    } finally {
-      session.destroy();
-    }
-  });
 });
 
 test('rootBody moves freely: a dragged limb pulls it along and a grabbed rootBody follows the pointer', () => {

@@ -47,7 +47,7 @@ POSE (frozen) { step: 1/60 s, maxSteps: 4, linearDamping: 10, angularDamping: 10
                 falloffMax: 0.8, falloffRatio: 0.5 }   s, s⁻¹, N/kg, Hz, unitless
 ```
 
-Edit and Animate get the same session; only `start` differs. Every joint motor is enabled at speed 0 as friction; before each step its cap is set to `falloffMax × (1 − falloffRatio^d) × |mouse GetReactionForce(1/step)| × distance(grabbed point, joint anchor)`, `d` the hops of the joint's nearer body from the grabbed body. No other joints or holds exist. The session never calls `rag.update()`, so animation motors never drive the joints, which bend within their limits ([`DESIGN.md` §7.2](../design/07-ragimporter.md#72-spawn-and-flipx)). It allocates nothing per step or drag ([`DESIGN.md` §7.4](../design/07-ragimporter.md#74-native-memory)).
+Edit and Animate get the same session; only `start` differs. Joint motors are off, so every joint is a free hinge within its limits, and no holds or extra joints exist besides the mouse joint. The session never calls `rag.update()`, so animation motors never drive the joints ([`DESIGN.md` §7.2](../design/07-ragimporter.md#72-spawn-and-flipx)). It allocates nothing per step or drag ([`DESIGN.md` §7.4](../design/07-ragimporter.md#74-native-memory)).
 
 ## Tool contract additions
 
