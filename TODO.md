@@ -2,6 +2,7 @@
 
 > Generated from [GitHub issues](https://github.com/Gann4Life/RagAssembler2D/issues) by `doc-writer`. Do not edit by hand; file new work as issues through `planner`.
 
+
 ## Phase 0 – Foundations
 - [x] #2 Pin PIXI.js v8 and liquidfun.js builds in vendor/
 - [x] #3 Add node --test harness with a first smoke test
@@ -80,20 +81,39 @@
 - [ ] #165 Copy and paste selection with Ctrl+C / Ctrl+V, including across documents
 - [x] #168 Move a joint with its hierarchy by default and only the joint with Alt
 - [ ] #169 Snap while holding Ctrl instead of the Snap to grid setting
+- [ ] #185 Render a body's shapes as one merged silhouette
+- [x] #187 Choose the root body (Set as root body)
+- [ ] #188 Body-level mass override
+- [ ] #189 Specify the Inspector swap of joint bodies
+- [ ] #190 Warn when the root body is too light
+- [ ] #191 Make Set as root body discoverable in the Hierarchy
 
 ## Phase 2 – Editor: animation
-- [ ] #30 Evaluator: track sampling, interpolation and channel defaults
-- [ ] #31 Evaluator: layers, additive blending and crossfades
-- [ ] #32 Timeline core: clip selector, ruler, scrub and zoom
-- [ ] #33 Root, joint and sprite tracks in the timeline
+- [x] #30 Evaluator: track sampling, interpolation and channel defaults
+- [x] #31 Evaluator: resolve a single clip and combine S/G/D multipliers
+- [x] #32 Timeline core: clip selector, New/Delete, length, loop and ruler scrub
+- [x] #33 Joint angle tracks in the timeline
 - [ ] #34 Events track and event inspector
-- [ ] #35 Timeline key editing: select, move, copy/paste, delete and snap
-- [ ] #36 FK preview in Animate mode with strength fill on joint gizmos
+- [x] #35 Timeline key editing: select, move with snap and delete
+- [x] #36 FK preview of the evaluated pose in Animate mode
 - [ ] #37 Preview stack for evaluating several clips together
-- [ ] #38 Pose tool in Animate mode (result becomes the FK pose at the playhead)
+- [x] #38 Pose tool in Animate mode (result becomes the FK pose at the playhead)
 - [ ] #39 Autokey, Key selected (K) and inspector key buttons
 - [ ] #93 Show the mode and clip summary in the folded Timeline bar
-- [ ] #125 Select: rotation in Animate mode sets the parent joint angle at the playhead
+- [x] #125 Select: rotation in Animate mode keys the parent joint angle at the playhead
+- [ ] #171 Evaluator: layers, additive blending, crossfades and procedural hook
+- [ ] #172 Timeline zoom, Duplicate clip and Clip inspector page
+- [ ] #173 Root and sprite tracks, + Track, track deletion and asset drop
+- [ ] #174 Timeline key multi-select, copy/paste and key inspector
+- [ ] #175 Strength fill on joint gizmos and live sprite swaps in FK preview
+- [x] #184 Background simulation with onion-skin ghosts at keyframes while animating
+- [x] #192 Pose recording is inaccurate: released parts drift from where they were left
+- [ ] #193 Moving ghost that previews the next frames from the current state
+- [x] #194 Pose drag moves and keys joints the user did not touch
+- [ ] #195 Warn about and clamp joint keys outside their limits
+- [x] #198 Looping clips interpolate across the wrap back to the first key
+- [ ] #199 Pinned preview in Animate: no gravity, root position fixed
+- [ ] #200 Extract the delete keys enabled rule into a tested helper
 
 ## Phase 3 – Round-trip verification
 - [ ] #40 Valid round-trip fixture set
@@ -103,13 +123,13 @@
 
 ## Phase 4 – RagImporter runtime
 - [x] #44 RagImporter parse, spawn with rest pose and flipX, and destroy
-- [ ] #45 Motor controller and runtime multipliers
-- [ ] #46 Playback: play, queue, stop, fades, hold, weight and speed
+- [x] #45 Motor controller and runtime multipliers
+- [x] #46 Playback: play, stop, loop and isPlaying
 - [ ] #47 Clip events without misses or duplicates
 - [ ] #48 Procedural overrides: lookAt, setJointAngle, clear and fades
-- [ ] #49 Self-collision setup with contact filter or fallback
+- [x] #49 Self-collision setup with the groupIndex fallback
 - [ ] #50 PIXI sprite creation, sync(), z order and texture resolver
-- [ ] #51 Sprite channel texture swaps and debug draw
+- [x] #51 Runtime debug draw
 - [ ] #52 Spike: verify motor stability and tune default motor values
 - [ ] #53 Spike: measure performance with 20 humanoids at 60 Hz
 - [ ] #54 Editor Simulate mode running on RagImporter
@@ -118,13 +138,25 @@
 - [ ] #100 Native-memory regression test for ragdoll spawn, update and destroy
 - [ ] #120 Fixed ground setting for physics preview
 - [x] #145 Pose tool in Edit mode (physics test, discarded on release)
+- [ ] #176 Playback: queue, fades, hold, weight and speed
+- [ ] #177 Contact filter with setContactFilter and releaseWorld
+- [ ] #178 Sprite channel texture swaps at runtime
+- [ ] #179 Spike: verify motor stability under procedural overrides
+- [x] #186 Suggested motor torque too weak to hold a humanoid up
+- [ ] #197 Robot slides backwards after landing a jump
+- [ ] #201 Spike: verify balance under loose joints and low strength
 
 ## Phase 5 – Demo
-- [ ] #57 Author the demo humanoid with sprites and clips in the editor
-- [ ] #58 Demo scene with ground, walls and two instances
-- [ ] #59 Demo controls: walk, hit, kill, revive, strength, debug and respawn
+- [ ] #57 Author the demo humanoid with idle and walk clips in the editor
+- [x] #58 Demo scene with ground and one ragdoll instance
+- [x] #59 Demo controls: walk, idle and strength
 - [ ] #60 Demo controls: look at cursor, aim arm, impulse and drag
 - [ ] #61 Demo event log
+- [ ] #180 Demo humanoid: sprites, faces, events, aimAxis and alive/pain/dead clips
+- [ ] #181 Demo scene: walls, second flipX instance and world reuse
+- [ ] #182 Demo controls: hit, kill, revive, debug toggle and respawn
+- [ ] #183 Load a .rag.json in the demo with a file picker or drag-and-drop
+- [x] #196 Demo breaks with the robot rig: step like the editor
 
 ## No milestone
 - [x] #80 Assign models to project agents by role
