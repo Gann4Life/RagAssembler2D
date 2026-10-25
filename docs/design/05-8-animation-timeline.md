@@ -29,7 +29,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
 - **Keys:**
   - Shown as diamonds, styled by interpolation.
   - Click selects, SHIFT / box select multi-selects, and dragging moves them (snapped).
-  - Copy, Paste (at the playhead) and Delete keys buttons in the Timeline header act on the selected keys; Ctrl+C, Ctrl+V and Del are their hotkeys while the keys hold the selection focus. Built so far: Delete keys through Del or Backspace while the key lanes have focus, as one undo step; the three buttons and Copy / Paste are not built yet ([§12](12-open-items.md#12-open-items--to-verify)).
+  - Copy, Paste (at the playhead) and Delete keys buttons in the Timeline header act on the selected keys; Ctrl+C, Ctrl+V and Del are their hotkeys while the keys hold the selection focus. Built so far: Delete keys, as the Timeline button (tooltip "Delete keys (Del)", disabled with the reason when no keys are selected, no clip is open, or the mode is not Animate) and through Del or Backspace while the key lanes have focus, always as one undo step; the Copy and Paste buttons and the clipboard are not built yet ([§12](12-open-items.md#12-open-items--to-verify)).
   - Double-clicking an empty spot in a track inserts a key with the evaluated value.
   - Dropping an asset from the Assets panel onto a sprite track inserts a key with that image.
 - **Events track:**

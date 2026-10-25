@@ -9,6 +9,7 @@ import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '.
 const REST_POSE = '';
 const RULER_LABEL = 'Playhead';
 const ONION_TITLE = 'Onion skins: ghosts of the nearest key times in Animate';
+const DELETE_KEYS_TITLE = 'Delete keys (Del)';
 const GHOSTS_SETTING = 'display.ghosts';
 
 /**
@@ -85,7 +86,11 @@ export function createTimeline(element_, editor, player) {
   const onionButton = button(doc, 'Onion skins');
   onionButton.setAttribute('aria-pressed', 'false');
   onionButton.title = ONION_TITLE;
-  header.append(playButton, select, renameButton, newButton, deleteButton, lengthLabel, loopLabel, cycleGroup, onionButton);
+  const deleteKeysButton = button(doc, 'Delete keys');
+  deleteKeysButton.setAttribute('aria-label', 'Delete keys');
+  header.append(
+    playButton, select, renameButton, newButton, deleteButton, deleteKeysButton, lengthLabel, loopLabel, cycleGroup, onionButton,
+  );
 
   const body = element(doc, 'div', 'timeline-body');
   const labels = element(doc, 'div', 'timeline-labels');
@@ -215,6 +220,9 @@ export function createTimeline(element_, editor, player) {
     for (const [node, enabled] of [[newButton, canOpen()], [deleteButton, canOpen() && open]]) {
       node.setAttribute('aria-disabled', String(!enabled));
     }
+    const keysReason = deleteKeysReason();
+    deleteKeysButton.setAttribute('aria-disabled', String(keysReason !== null));
+    deleteKeysButton.title = keysReason === null ? DELETE_KEYS_TITLE : `${DELETE_KEYS_TITLE}: ${keysReason}`;
     const editable = canEditClip();
     lengthInput.disabled = !open;
     lengthInput.readOnly = !editable;
@@ -280,6 +288,19 @@ export function createTimeline(element_, editor, player) {
     if (newButton.getAttribute('aria-disabled') === 'true') return;
     const uid = history.execute(createClip());
     modes.openClip(uid);
+  }
+
+  function deleteKeysReason() {
+    if (!modes.can('edit.animation')) return 'not available in this mode';
+    if (history.inGesture || keyDrag !== null) return 'finish the current gesture first';
+    if (modes.clip === null) return 'open a clip';
+    if (selection.timeline.length === 0) return 'select a key';
+    return null;
+  }
+
+  function removeKeys() {
+    if (deleteKeysButton.getAttribute('aria-disabled') === 'true' || deleteKeysReason() !== null) return;
+    history.execute(deleteKeys([...selection.timeline]));
   }
 
   function renameReason() {
@@ -469,8 +490,8 @@ export function createTimeline(element_, editor, player) {
   };
   const onLanesKeyDown = (event) => {
     if (event.key !== 'Delete' && event.key !== 'Backspace') return;
-    if (keyDrag !== null || !canEditClip() || selection.timeline.length === 0) return;
-    history.execute(deleteKeys([...selection.timeline]));
+    if (deleteKeysReason() !== null) return;
+    removeKeys();
     event.preventDefault();
   };
   const onLengthKey = (event) => {
@@ -499,6 +520,7 @@ export function createTimeline(element_, editor, player) {
   select.addEventListener('dblclick', startRename);
   newButton.addEventListener('click', addClip);
   deleteButton.addEventListener('click', removeClip);
+  deleteKeysButton.addEventListener('click', removeKeys);
   lengthInput.addEventListener('change', commitLength);
   lengthInput.addEventListener('keydown', onLengthKey);
   loopInput.addEventListener('change', commitLoop);
@@ -515,7 +537,10 @@ export function createTimeline(element_, editor, player) {
   lanes.addEventListener('keydown', onLanesKeyDown);
 
   const unsubscribe = [
-    selection.on('selection', renderKeySelection),
+    selection.on('selection', () => {
+      renderKeySelection();
+      renderControls();
+    }),
     model.on('change', render),
     model.on('reset', render),
     modes.on('mode', render),
