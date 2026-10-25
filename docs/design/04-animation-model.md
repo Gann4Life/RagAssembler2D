@@ -6,7 +6,7 @@
 |---|---|---|---|
 | `name` | string | `"New Clip"` | Display name. |
 | `key` | string | slug of `name` | Code identifier, `[a-z0-9_]+`, unique. It follows `name` automatically while it still equals the slug generated from `name`; editing it by hand to anything else stops this. The slug rule is in `docs/schema.md`. |
-| `loop` | bool | `true` | Loops at `length`. |
+| `loop` | bool | `true` | Loops at `length`, seamlessly: every track interpolates from its last key back to its first across the wrap ([§4.3](#43-keys-and-interpolation)). |
 | `hold` | bool | `true` | Non-loop only. `true`: the clip stays active holding its last frame until it is stopped or replaced. `false`: it stops itself on completion, using `fadeOut`. |
 | `layer` | int ≥ 0 | `0` | **The higher index wins.** Many clips can share a layer (e.g. `idle`, `walk` and `run` on layer 0), but only one is active per layer at a time. |
 | `blend` | `override` \| `additive` | `override` | How the clip combines with the layers below. |
@@ -43,9 +43,25 @@ Body and shape physics are never animated. The only animatable property of a sha
   - `ease`: smoothstep.
 - **Discrete channels** (`sprite`) always use `step`, and the editor only offers that option for them.
 - New keys use `linear` (`step` on discrete channels).
-- Before the first key the first value is held, after the last key the last value is held. A track with a single key is constant. A track with no keys (just added with "+ Track") has no effect on its channel.
-- Angles are interpolated linearly in radians, without wrapping, so a key can go beyond ±180°.
+- **Non-loop clip:** before the first key the first value is held, after the last key the last value is held.
+- **Looping clip (wrap segment):** the track behaves as if its first key were repeated at `t_first + length`. The **wrap segment** runs from the last key (`t_last`) to that copy, so its span is `d = t_first + length − t_last`, and it uses the **last key's `interp`**, like every segment uses its left key's. A looping clip is sampled at its time modulo `length`, so `t` is in `[0, length)` (this covers the motor look-ahead past `length`, [§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)); `t` lies on the wrap segment when `t ≥ t_last` (`u = (t − t_last) / d`) or `t < t_first` (`u = (t + length − t_last) / d`). The track is therefore continuous across the wrap and its value at `length` equals its value at `0`.
+  - A key at `t = length` is allowed: the wrap segment then runs from it to the first key (`d = t_first`). With keys at both `t = 0` and `t = length`, `d = 0` and there is no wrap segment: the clip reaches the last key's value at `length` and shows the first key's at the wrap, so the two values decide whether the loop is seamless (equal) or jumps (different).
+  - Discrete channels step across the wrap too: the last key's image stays until the first key's time in the next cycle.
+  - Events, the `loop` event and queues are unchanged ([§4.5](#45-playback-rules), [§4.7](#47-events)).
+- A track with a single key is constant, looping or not. A track with no keys (just added with "+ Track") has no effect on its channel.
+- Angles (joint `angle`, root `bodyAngle`) are interpolated linearly in radians, without wrapping, so a key can go beyond ±180°. The wrap segment follows the same rule: no shortest path, so a looping clip whose last key is a full turn past its first unwinds that turn on the wrap segment. A clip that keeps turning (e.g. a spin) keys `0` and `length` explicitly so that `d = 0`.
 - Keys are sorted by `t`, there is at most one key per `t` per track, and `0 ≤ t ≤ length`.
+
+**Example (looping, `length` 1 s).** A knee `angle` track has keys `{t: 0.2, v: 0, linear}` and `{t: 0.6, v: 1, ease}`. The wrap segment runs from 0.6 to 1.2 (`d` = 0.6) with `ease`, from 1 back to 0:
+
+| Clip time | Segment | `u` | Value | Before this rule |
+|---|---|---|---|---|
+| 0.4 | 0.2 → 0.6, linear | 0.5 | 0.5 | 0.5 |
+| 0.9 | wrap, ease | 0.5 | 1 − smoothstep(0.5) = 0.5 | 1 (held) |
+| 0.0 (= 1.0) | wrap, ease | 0.667 | 1 − 0.741 = 0.259 | 0 (held) |
+| 0.1 | wrap, ease | 0.833 | 1 − 0.926 = 0.074 | 0 (held) |
+
+A `sprite` track with `face_a` at 0.2 and `face_b` at 0.6 in the same clip shows `face_b` at 0.1 (it showed `face_a` before).
 
 ## 4.4 Channel resolution
 Each channel of each target is resolved independently, every step:
