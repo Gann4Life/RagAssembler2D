@@ -94,7 +94,7 @@ function lightCreature(motor) {
   };
 }
 
-function fitMotorTorque(json) {
+function applySuggestedTorque(json) {
   const suggestions = motorTorqueSuggestions(json);
   for (const joint of json.joints) joint.motor.maxTorque = suggestions.get(joint.id);
   return suggestions;
@@ -127,7 +127,7 @@ function peakKineticEnergy(motor, seconds, fit = false, substeps = SUBSTEPS) {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const world = groundWorld();
   const json = lightCreature(motor);
-  if (fit) fitMotorTorque(json);
+  if (fit) applySuggestedTorque(json);
   const rag = RagImporter.parse(json).spawn(world, { x: 0, y: 0.1 });
   let peak = 0;
   try {
@@ -160,7 +160,7 @@ test('a light creature held at rest by zero-gain motors stays still at the defau
 });
 
 test('the suggested torque of the light creature matches the DESIGN §3.1 examples', () => {
-  const suggestions = fitMotorTorque(lightCreature({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }));
+  const suggestions = applySuggestedTorque(lightCreature({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }));
   assert.equal(suggestions.get('j_finger'), 2.4);
   assert.equal(suggestions.get('j_hip'), 53);
   assert.ok([...suggestions.values()].every((value) => typeof value === 'number' && value >= 0.001));
@@ -180,7 +180,7 @@ function balancedTilt(seconds) {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const world = groundWorld();
   const json = lightCreature({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 });
-  fitMotorTorque(json);
+  applySuggestedTorque(json);
   json.ragdoll.balance = { enabled: true, maxTorque: balanceTorqueSuggestion(json), gain: 10, damping: 0.5, maxSpeed: 20 };
   const rag = RagImporter.parse(json).spawn(world, { x: 0, y: 0.1 });
   const root = rag.bodies.get('b_trunk');

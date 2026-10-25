@@ -42,7 +42,6 @@ export function poseTestJson(json) {
   return copy;
 }
 
-
 /**
  * Starts a pose test: a zero-gravity LiquidFun world holding the ragdoll at `options.root` in rest pose, or with the
  * bodies of `options.start` placed at those root-local transforms, every body damped, motors off, and a mouse joint
@@ -112,13 +111,11 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
     } finally {
       Box2D.destroy(jointDef);
     }
-
     grabbed.SetAwake(true);
   } catch (error) {
     release();
     throw error;
   }
-
 
   const toRoot = invertTransform(root);
   const target = { x: point.x, y: point.y };

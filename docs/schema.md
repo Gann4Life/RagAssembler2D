@@ -52,7 +52,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | `channels.gain` | number | `1` | 0–1 | mult | A |
 | `channels.damping` | number | `1` | 0–1 | mult | A |
 | `balance.enabled` | boolean | `true` | — | — | |
-| `balance.maxTorque` | number | `80` (Fit motor torque writes the suggested balance torque, `DESIGN.md` §3.2) | ≥0 | N·m | |
+| `balance.maxTorque` | number | `80` (the editor suggests the balance torque automatically on every rig change, `DESIGN.md` §3.2) | ≥0 | N·m | |
 | `balance.gain` | number | `10` | ≥0 | 1/s | |
 | `balance.damping` | number | `0.5` | ≥0 | — | |
 | `balance.maxSpeed` | number | `20` | ≥0 | rad/s | |

@@ -210,7 +210,7 @@ export function bipedRig() {
 }
 
 /**
- * Writes the suggested torques into a document, as Fit motor torque does: every joint's `motor.maxTorque` and
+ * Writes the suggested torques into a document, as the editor does on every rig change: every joint's `motor.maxTorque` and
  * `ragdoll.balance.maxTorque`.
  * @param {object} json Document; changed in place.
  * @returns {object} The same document.
