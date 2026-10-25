@@ -17,8 +17,8 @@ panel ──▶ editCommand(model, edit, value) ──▶ history.execute      (
 
 ```
 InspectorPage {
-  kind:      'empty' | 'mixed' | 'unbuilt' | 'object'
-  type:      string | null           node type of the page ('root', 'body', …); null for empty and mixed
+  kind:      'mixed' | 'unbuilt' | 'object'   an empty selection gives the root 'object' page
+  type:      string | null           node type of the page ('root', 'body', …); null for mixed
   uids:      number[]                the objects shown, in selection order
   title:     string                  e.g. 'Body · arm_l', '3 bodies', '3 objects selected'
   summary:   string | null           mixed only: count per type, e.g. '2 bodies, 1 joint'
@@ -59,12 +59,13 @@ PageContext {
 
 ## Rules
 
-- **Page choice** (`inspectorPage`): the list is `selection.objects`, or `selection.timeline` when `selection.focus` is `'timeline'`. Empty → `empty`; several types → `mixed`; one type without an entry in `PAGE_BUILDERS` → `unbuilt`; else `object` with the builder's sections.
+- **Page choice** (`inspectorPage`): the list is `selection.objects`, or `selection.timeline` when `selection.focus` is `'timeline'`. Empty → `object` page of type `root` with `uids` `[ROOT_UID]` (showing it does not select the root). The timeline list empty while focused also falls back to the root page; several types → `mixed`; one type without an entry in `PAGE_BUILDERS` → `unbuilt`; else `object` with the builder's sections.
 - **Rows from the schema** (`fieldRow`): label, unit, range and `readOnly` come from `fieldsOf(type)`; display conversion through `js/units.js` (`m` → px, `rad` → °, `mult` → %). Pages pass overrides only for what the schema cannot say (control kind, derived reason, a placement edit).
 - **Read-only:** a row is read-only when its schema field is `R`, when it is derived (mass, `balance.maxTorque` shown as "auto"), when `editable` is false, and, in Animate, for every `animated` row (evaluated value, until #39). Reasons: derived rows give their own (`ids never change`, `the root transform is locked`, `computed from the shapes`, `set automatically from the rig`); otherwise the mode reason; during a gesture `null`.
 - **Animate values:** `animated` rows of the root page show `resolveChannels(toJson(model), [{ clip, time }]).root` for the open clip at the playhead (`strength`, `gain`, `damping` as %, `bodyAngle` in °). The body angle row exists only in Animate. Body rows always show the document (rest-pose) values.
 - **Commits** (`editCommand`): converts the display value back to data units and returns `setProps(uids, { [path]: value }, label)` or `placeBodies(uids, { [field]: value }, label)`; `null` when every uid already holds the value. Labels: `Rename` for `name`, `Move` for position, `Rotate` for angle, `Pixels per meter` for `units.pixelsPerMeter` (as Settings), else `Edit <label>`. The panel validates against `min`/`max` before calling it. The automatic motor torque runs in the same undo step as any rig change, as for every command ([Editor composition](editor-composition.md#editor-composition)).
-- **`placeBodies(uids, values, label)`:** one command; for each uid in order, reads the body's current position and angle in the transaction's model, replaces the given fields, and applies the rigid transform from the old to the new placement (rotation by Δangle around the old origin, then the translation to the new origin) to `manipulationParts(model, { bodies: [uid], joints: [] }, { subtree: true })`, writing the results as `placeParts` does. Throws like `placeParts` for a uid that is not a body or a non-finite value.
+- **`placeBodies(uids, values, label)`:** one command; for each uid in order, reads the body's current position and angle in the transaction's model (so a body moved by an earlier one's subtree is read where it now is) and applies one rigid transform to `manipulationParts(model, { bodies: [uid], joints: [] }, { subtree: true })`, writing the results as `placeParts` does: `x`/`y` translate by the difference to the typed value; `angle` is `rotationAbout(rotationPivot(model, uid, false), Δangle)`, Select's ring pivot (the parent joint's anchor when it exists and is placed, else the body origin, so `rootBody` turns around its origin), and the position field then shows where the rotation put the origin. Throws like `placeParts` for a uid that is not a body or a non-finite value.
+- **`rotationPivot` moves to `js/commands/transform.js`**, unchanged, because `placeBodies` needs it inside the transaction and `js/tools/manipulation.js` already imports `transform.js` (the reverse import would be a cycle). `manipulation.js` re-exports it (`export { rotationPivot } from '../commands/transform.js'`), so its callers and `tests/manipulation.test.js` stay as they are.
 - **`Editor.setRootBody(bodyUid)`:** returns `false` and changes nothing when the action would be refused for that body (not Edit mode, a gesture, a pending confirmation, not a body, already `rootBody`); otherwise runs `setRootBody(bodyUid)` and shows the status message the action shows, and returns `true`. The `set-root-body` action becomes `setRootBody(selectedBody())`.
 
 ## Panel

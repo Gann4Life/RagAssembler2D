@@ -4,7 +4,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 - **Display units:** pixels and degrees in the UI, meters and radians in the file. Multipliers are shown as %, 0–100. Other units are shown as stored, with their unit ([`docs/schema.md`](../schema.md), Unit).
 - **Animation:** in Animate mode, animatable properties show a **key button ◆**. It is filled when a key exists at the playhead; clicking inserts or updates the key, and right-click removes it. The field shows the evaluated value at the playhead. Until key buttons exist (#39), animatable fields show the evaluated value read-only.
 - **Page.** The inspector shows one page for the objects list of the selection (the timeline list when the selection's focus is the timeline, [§5.8](05-8-animation-timeline.md#58-animation-timeline)):
-  - nothing selected: the hint "Select an object to see its properties";
+  - nothing selected: the Ragdoll (root) page, so document settings are always at hand;
   - objects of different types: "*N* objects selected" and the count per type (e.g. "2 bodies, 1 joint"), no fields;
   - one type: its page, titled with the type and the name (or the count when several are selected). A type whose page is not built yet shows its title and "Properties: not available yet".
 - **Shared and mixed values.** With several objects of one type selected, every field of the page is shown; a field whose value differs between them shows `—` (empty, `—` as placeholder) and a commit writes the typed value to all of them. A vector field is mixed per component. Lists and read-only derived values that differ show `—`.
@@ -31,7 +31,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | Property | Notes |
 |---|---|
 | name, id (read-only) | |
-| position, angle | Root-local, rest pose. An edit moves each selected body with its **subtree** and carried anchors, as a Select move or rotation without ALT ([§5.5](05-5-tools.md#55-tools)): a position edit translates the subtree, an angle edit turns it around the body's origin. Several bodies are set one after the other in selection order, so each ends at the typed value. |
+| position, angle | Root-local, rest pose. An edit moves each selected body with its **subtree** and carried anchors, as a Select move or rotation without ALT ([§5.5](05-5-tools.md#55-tools)): a position edit translates the subtree; an angle edit turns it around the anchor of the body's parent joint, the pivot of Select's rotation ring, so the body stays connected and its position changes accordingly (around the body's origin for `rootBody` and bodies without a parent joint). Several bodies are set one after the other in selection order, so each ends at the typed value. |
 | linearDamping, angularDamping | 1/s, ≥ 0. |
 | fixedRotation, bullet | bool. |
 | mass | Read-only, kg, 3 significant digits: computed from the shapes and their density (`bodyMass`). |
