@@ -290,3 +290,84 @@ test('jointAngleForBody respects direction and rest angles', () => {
   const angle = jointAngleForBody(def, 'j_1', pose.get('b_0').angle, pose);
   close(angle, 0.6);
 });
+const smooth = (u) => u * u * (3 - 2 * u);
+const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} !== ${expected}`);
+const kneeKeys = () => [k(0.2, 0, 'linear'), k(0.6, 1, 'ease')];
+
+test('looping: the worked example of the wrap segment', () => {
+  const keys = kneeKeys();
+  closeTo(sampleTrack(keys, 0.4, false, 1), 0.5);
+  closeTo(sampleTrack(keys, 0.9, false, 1), 1 - smooth(0.5));
+  closeTo(sampleTrack(keys, 0, false, 1), 1 - smooth(0.4 / 0.6));
+  closeTo(sampleTrack(keys, 0.1, false, 1), 1 - smooth(0.5 / 0.6));
+  closeTo(sampleTrack(keys, 1, false, 1), sampleTrack(keys, 0, false, 1));
+  closeTo(sampleTrack(keys, 1.9, false, 1), sampleTrack(keys, 0.9, false, 1));
+  closeTo(sampleTrack(keys, -0.1, false, 1), sampleTrack(keys, 0.9, false, 1));
+});
+
+test('looping: non-loop sampling is unchanged', () => {
+  const keys = kneeKeys();
+  assert.equal(sampleTrack(keys, 0.9), 1);
+  assert.equal(sampleTrack(keys, 0), 0);
+  assert.equal(sampleTrack(keys, 0.9, false, null), 1);
+});
+
+test('looping: a single key is constant', () => {
+  const keys = [k(0.3, 4, 'linear')];
+  for (const t of [0, 0.3, 0.7, 1.4]) assert.equal(sampleTrack(keys, t, false, 1), 4);
+});
+
+test('looping: keys at 0 and length leave no wrap segment', () => {
+  const keys = [k(0, 0, 'linear'), k(1, 5, 'linear')];
+  closeTo(sampleTrack(keys, 0.5, false, 1), 2.5);
+  closeTo(sampleTrack(keys, 1, false, 1), 5);
+  closeTo(sampleTrack(keys, 0.999, false, 1), 4.995);
+  closeTo(sampleTrack(keys, 1.0001, false, 1), 0.0005);
+});
+
+test('looping: a key at length only wraps toward the first key', () => {
+  const keys = [k(0.5, 2, 'linear'), k(1, 6, 'linear')];
+  closeTo(sampleTrack(keys, 1, false, 1), 6);
+  closeTo(sampleTrack(keys, 0.25, false, 1), 4);
+  closeTo(sampleTrack(keys, 0, false, 1), 6);
+  const lone = [k(1, 6, 'linear')];
+  assert.equal(sampleTrack(lone, 0.2, false, 1), 6);
+});
+
+test('looping: sprites step across the wrap', () => {
+  const keys = [k(0.2, 'face_a'), k(0.6, 'face_b')];
+  assert.equal(sampleTrack(keys, 0.1, true, 1), 'face_b');
+  assert.equal(sampleTrack(keys, 0.2, true, 1), 'face_a');
+  assert.equal(sampleTrack(keys, 0.7, true, 1), 'face_b');
+  assert.equal(sampleTrack(keys, 0.1, true), 'face_a');
+});
+
+test('looping: angles unwind linearly across the wrap without wrapping', () => {
+  const keys = [k(0, 0, 'linear'), k(0.5, 2 * Math.PI, 'linear')];
+  closeTo(sampleTrack(keys, 0.5, false, 1), 2 * Math.PI);
+  closeTo(sampleTrack(keys, 0.75, false, 1), Math.PI);
+  closeTo(sampleTrack(keys, 1, false, 1), 0);
+});
+
+test('looping: the last key interp drives the wrap segment', () => {
+  const keys = [k(0.2, 0, 'linear'), k(0.6, 1, 'step')];
+  assert.equal(sampleTrack(keys, 0.9, false, 1), 1);
+  assert.equal(sampleTrack(keys, 0.1, false, 1), 1);
+});
+
+test('looping: evaluateClip interpolates across the wrap only when loop is true', () => {
+  const tracks = [{ target: 'knee', channel: 'angle', keys: kneeKeys() }];
+  const looping = evaluateClip({ length: 1, loop: true, tracks }, 0.9);
+  closeTo(looping.get('knee').get('angle'), 1 - smooth(0.5));
+  const held = evaluateClip({ length: 1, loop: false, tracks }, 0.9);
+  assert.equal(held.get('knee').get('angle'), 1);
+});
+
+test('looping: the motor look-ahead target is continuous across the wrap', () => {
+  const def = { ragdoll: {}, joints: [{ id: 'knee' }], bodies: [] };
+  const clip = { length: 1, loop: true, tracks: [{ target: 'knee', channel: 'angle', keys: kneeKeys() }] };
+  const eps = 1e-6;
+  const before = resolveChannels(def, [{ clip, time: 1 - eps }]).joints.get('knee').angle;
+  const after = resolveChannels(def, [{ clip, time: 1 + eps }]).joints.get('knee').angle;
+  assert.ok(Math.abs(before - after) < 1e-4, `${before} vs ${after}`);
+});

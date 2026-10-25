@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createEditor } from '../js/editor.js';
 import { ROOT_UID } from '../js/model/model.js';
 import { loadJson, toJson } from '../js/model/io.js';
+import { sampleTrack } from '../lib/evaluate.js';
 import { animatePose } from '../js/model/animate-preview.js';
 import { rootBodyPlan, setRootBody } from '../js/commands/root-body.js';
 import { dispatchKey } from '../js/hotkeys.js';
@@ -281,4 +282,26 @@ test('set-root-body needs Edit mode, no gesture and exactly one non-root body in
   assert.equal(dispatchKey(event, { actions }), true);
   assert.equal(model.prop(ROOT_UID, 'rootBody'), 'thigh');
   assert.deepEqual(selection.objects, [uid('thigh'), shapeOf('thigh'), uid('hip'), ROOT_UID]);
+});
+
+test('a looping clip converts with the wrap rule, matching the summed terms on the wrap segment', () => {
+  const own = [key(0.1, 0.2), key(0.9, 0.4)];
+  const hip = [key(0.3, 0), key(0.7, 1)];
+  const clip = {
+    ...clipDef('spin', [
+      { target: 'root', channel: 'bodyAngle', keys: own },
+      { target: 'hip', channel: 'angle', keys: hip },
+    ]),
+    loop: true,
+    length: 1,
+  };
+  const { editor, model, uid } = humanoid('torso', [clip]);
+  editor.history.execute(setRootBody(uid('thigh')));
+  const [converted] = bodyAngleKeys(model, 'spin');
+  assert.deepEqual(converted.map((entry) => entry.t), [0.1, 0.3, 0.7, 0.9]);
+  assert.ok(converted.every((entry) => entry.interp === 'linear'));
+  for (const t of [0, 0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.999]) {
+    const sum = sampleTrack(own, t, false, 1) + sampleTrack(hip, t, false, 1);
+    near(sampleTrack(converted, t, false, 1), sum, `t=${t}`);
+  }
 });
