@@ -29,7 +29,9 @@ const physicsView = new PIXI.Graphics();
 sceneRoot.addChild(physicsView);
 app.stage.addChild(sceneRoot);
 
-const world = new Box2D.b2World(new Box2D.b2Vec2(0, -10));
+const gravity = new Box2D.b2Vec2(0, -10);
+const world = new Box2D.b2World(gravity);
+Box2D.destroy(gravity);
 const ground = createGround();
 
 let def = null;
@@ -96,6 +98,7 @@ function spawnOnGround() {
 function respawn() {
   if (def === null) return;
   instance?.destroy();
+  instance = null;
   instance = spawnOnGround();
   instance.setStrength(Number(strengthSlider.value));
   accumulator = 0;
