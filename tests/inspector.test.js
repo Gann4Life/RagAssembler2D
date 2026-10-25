@@ -252,6 +252,46 @@ test('inspector: Animate makes non-animated rows read-only and shows root channe
   assert.equal(rowOf(page(), 'channels.strength').value, 100);
 });
 
+test('inspector: playhead channels are cached per model change, clip and time', () => {
+  const { editor, model } = setup();
+  editor.actions.run('mode:animate');
+  editor.modes.setPlayhead(1);
+  let evaluations = 0;
+  const children = model.children.bind(model);
+  model.children = (uid, collection) => {
+    if (collection === 'clips') evaluations += 1;
+    return children(uid, collection);
+  };
+  const clip = editor.modes.clip;
+  const render = (time) => rootPage(ctxOf(editor, 'root', [ROOT_UID], { animate: { clip, time } }));
+  const cost = (time) => {
+    const before = evaluations;
+    render(time);
+    return evaluations - before;
+  };
+  const full = cost(1);
+  assert.ok(full > 0);
+  assert.equal(cost(1), 0);
+  assert.equal(cost(2), full);
+  assert.equal(cost(2), 0);
+  editor.history.execute(setProps([ROOT_UID], { 'channels.gain': 0.5 }));
+  assert.equal(cost(2), full);
+  assert.equal(cost(2), 0);
+});
+
+test('inspector: a failing playhead evaluation falls back to the document values', () => {
+  const { editor, model } = setup();
+  const children = model.children.bind(model);
+  model.children = (uid, collection) => {
+    if (collection === 'clips') throw new Error('boom');
+    return children(uid, collection);
+  };
+  const sections = rootPage(ctxOf(editor, 'root', [ROOT_UID], { animate: { clip: 1, time: 0 } }));
+  const rows = sections.flatMap((section) => section.rows);
+  assert.equal(rows.find((row) => row.id === 'bodyAngle'), undefined);
+  assert.ok(rows.find((row) => row.id === 'channels.strength'));
+});
+
 test('inspector: Simulate shows document values, every field read-only', () => {
   const { editor, page, rowOf } = setup();
   editor.modes.startSimulate();

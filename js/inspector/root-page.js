@@ -18,10 +18,40 @@ function rootBodyUid(model) {
   return uid !== null && model.get(uid)?.type === 'body' ? uid : null;
 }
 
-function playheadChannels(model, { clip, time }) {
-  const def = toJson(model, PREVIEW_VERSION);
-  const clipDef = def.clips[model.children(ROOT_UID, 'clips').indexOf(clip)];
-  return resolveChannels(def, clipDef ? [{ clip: clipDef, time }] : []).root;
+const playheadCaches = new WeakMap();
+
+function cacheOf(model) {
+  let cache = playheadCaches.get(model);
+  if (!cache) {
+    cache = { clip: null, time: null, result: null };
+    const invalidate = () => {
+      cache.result = null;
+    };
+    model.on('change', invalidate);
+    model.on('reset', invalidate);
+    playheadCaches.set(model, cache);
+  }
+  return cache;
+}
+
+function evaluateChannels(model, { clip, time }) {
+  try {
+    const def = toJson(model, PREVIEW_VERSION);
+    const clipDef = def.clips[model.children(ROOT_UID, 'clips').indexOf(clip)];
+    return resolveChannels(def, clipDef ? [{ clip: clipDef, time }] : []).root ?? {};
+  } catch {
+    return null;
+  }
+}
+
+function playheadChannels(model, animate) {
+  const cache = cacheOf(model);
+  if (cache.result === null || cache.clip !== animate.clip || cache.time !== animate.time) {
+    cache.clip = animate.clip;
+    cache.time = animate.time;
+    cache.result = { channels: evaluateChannels(model, animate) };
+  }
+  return cache.result.channels;
 }
 
 /**
@@ -36,9 +66,9 @@ export function rootPage(ctx) {
   const row = (path, overrides) => fieldRow(ctx, path, overrides);
   const playhead = ctx.animate === null ? null : playheadChannels(model, ctx.animate);
   const channel = (name, label) =>
-    row(`channels.${name}`, { label, ...(playhead === null ? {} : { value: playhead[name] }) });
+    row(`channels.${name}`, { label, ...(playhead?.[name] === undefined ? {} : { value: playhead[name] }) });
   const drive = [channel('strength', 'Strength'), channel('gain', 'Gain'), channel('damping', 'Damping')];
-  if (playhead !== null) {
+  if (playhead?.bodyAngle !== undefined) {
     drive.push(row('bodyAngle', { label: 'Body angle', control: 'number', dataUnit: 'rad', value: playhead.bodyAngle, animated: true, edit: null }));
   }
   const balance = (name, label, overrides = {}) => row(`balance.${name}`, { label, commitLabel: `Edit balance ${label.toLowerCase()}`, ...overrides });

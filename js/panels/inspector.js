@@ -11,7 +11,6 @@ import { attachTooltip } from '../tooltip.js';
 const NOT_BUILT = 'Properties: not available yet';
 const MIXED_TEXT = '—';
 const NUMBER_PATTERN = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i;
-const SELECT_KEYS = new Set([' ', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
 
 const SHAPE_ICONS = Object.freeze({
   circle: '<circle cx="12" cy="12" r="7"/>',
@@ -128,7 +127,7 @@ export function createInspector(element, editor) {
       input.value = state.displayed;
       setInvalid(false);
     };
-    const commit = () => {
+    const commit = (announceRejection = false) => {
       const text = input.value;
       if (state.row.readOnly) {
         revert();
@@ -136,7 +135,10 @@ export function createInspector(element, editor) {
       }
       if (text === state.displayed) return true;
       const value = parse(text);
-      if (value === null) return false;
+      if (value === null) {
+        if (announceRejection) editor.status(`${state.row.label}: ${rangeText(state.row)}`);
+        return false;
+      }
       const edit = state.captured ?? state.row.edit;
       if (edit === null) return false;
       state.displayed = text;
@@ -173,7 +175,7 @@ export function createInspector(element, editor) {
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        if (commit()) {
+        if (commit(true)) {
           state.reselect = true;
           input.select();
         }
@@ -288,7 +290,7 @@ export function createInspector(element, editor) {
       refuse(state.row);
     });
     select.addEventListener('keydown', (event) => {
-      if (!state.row.readOnly || !SELECT_KEYS.has(event.key)) return;
+      if (!state.row.readOnly || event.key === 'Tab') return;
       event.preventDefault();
       refuse(state.row);
     });
@@ -325,6 +327,7 @@ export function createInspector(element, editor) {
         button.type = 'button';
         button.className = 'inspector-list-item';
         button.dataset.row = current.id;
+        button.dataset.uid = String(entry.uid);
         const label = doc.createElement('span');
         label.className = entry.muted ? 'inspector-list-label is-muted' : 'inspector-list-label';
         label.textContent = entry.label;
@@ -429,6 +432,7 @@ export function createInspector(element, editor) {
     return {
       row: active.dataset.row,
       component: active.dataset.component ?? null,
+      uid: active.dataset.uid ?? null,
       draft: state && active.value !== state.displayed ? active.value : null,
     };
   }
@@ -437,9 +441,9 @@ export function createInspector(element, editor) {
     return a !== null && a.kind === b.kind && a.type === b.type && JSON.stringify(a.uids) === JSON.stringify(b.uids);
   }
 
-  function rebuild(next) {
+  function rebuild(next, previous) {
     const focus = focusTarget();
-    const keepDraft = sameObjects(page, next);
+    const keepDraft = sameObjects(previous, next);
     rebuilding = true;
     try {
       for (const handle of tooltips) handle.detach();
@@ -467,7 +471,9 @@ export function createInspector(element, editor) {
     }
     rendered = next.structure;
     if (focus === null) return;
-    const selector = focus.component === null ? `[data-row="${view.CSS.escape(focus.row)}"]` : `[data-row="${view.CSS.escape(focus.row)}"][data-component="${focus.component}"]`;
+    let selector = `[data-row="${view.CSS.escape(focus.row)}"]`;
+    if (focus.component !== null) selector += `[data-component="${focus.component}"]`;
+    if (focus.uid !== null) selector += `[data-uid="${view.CSS.escape(focus.uid)}"]`;
     const target = content.querySelector(selector);
     if (!target) return;
     target.focus({ preventScroll: true });
@@ -479,17 +485,18 @@ export function createInspector(element, editor) {
     if (frame !== 0) view.cancelAnimationFrame(frame);
     frame = 0;
     const next = inspectorPage(editor);
+    const previous = page;
+    page = next;
     title.textContent = next.title;
     summary.textContent = next.kind === 'mixed' ? next.summary : next.kind === 'unbuilt' ? NOT_BUILT : '';
     summary.hidden = next.kind === 'object';
     if (next.structure !== rendered) {
-      rebuild(next);
+      rebuild(next, previous);
     } else {
       for (const section of next.sections) {
         for (const row of section.rows) bindings.get(row.id)?.update(row);
       }
     }
-    page = next;
   }
 
   function schedule() {
