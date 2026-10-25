@@ -1,5 +1,5 @@
 import { Emitter } from '../../lib/emitter.js';
-import { STEP_SETTINGS } from '../../lib/ragimporter.js';
+import { RagFormatError, STEP_SETTINGS } from '../../lib/ragimporter.js';
 
 /**
  * Clip simulation constants: `step` in s (RagImporter's `STEP_SETTINGS.dt`), `budget` and `debounce` in ms, `maxStepsPerFrame` in steps, `cycleLimit`
@@ -123,6 +123,7 @@ export class ClipSimulation {
   #current = null;
   #previous = null;
   #failed = false;
+  #failure = null;
   #restartAt = null;
   #cycle = 1;
   #nextId = 1;
@@ -144,6 +145,11 @@ export class ClipSimulation {
   /** @returns {number} Most cycles a looping clip is run. */
   get cycleLimit() {
     return this.#options.cycleLimit;
+  }
+
+  /** @returns {string|null} Message of the last failure that is not a document validation error, else `null`. */
+  get failure() {
+    return this.#failed ? this.#failure : null;
   }
 
   /** @returns {boolean} Whether a clip is open and its document could be simulated. */
@@ -297,15 +303,24 @@ export class ClipSimulation {
 
   #start() {
     const spec = this.#spec;
+    let session = null;
     try {
-      this.#current = new Run(this.#nextId++, spec, this.#simulator(spec.json, { clip: spec.clip, pose: spec.clip }), this.#mainTarget(spec));
+      session = this.#simulator(spec.json, { clip: spec.clip, pose: spec.clip });
+      this.#current = new Run(this.#nextId++, spec, session, this.#mainTarget(spec));
       this.#failed = false;
-    } catch {
-      this.#failed = true;
-      this.#dropAll();
+      this.#failure = null;
+    } catch (error) {
+      session?.destroy();
+      this.#fail(error);
       return;
     }
     this.#schedule();
+  }
+
+  #fail(error) {
+    this.#failed = true;
+    this.#failure = error instanceof RagFormatError ? null : String(error?.message ?? error);
+    this.#dropAll();
   }
 
   #restart() {
@@ -355,10 +370,9 @@ export class ClipSimulation {
     for (let budget = this.#options.maxStepsPerFrame; run !== null && run.session !== null && !run.done && budget > 0; budget--) {
       if (budget < this.#options.maxStepsPerFrame && this.#now() - started >= this.#options.budget) break;
       try {
-        run.advance(stepSeconds(run.spec));
-      } catch {
-        this.#failed = true;
-        this.#dropAll();
+        run.advance(CLIP_SIMULATION.step);
+      } catch (error) {
+        this.#fail(error);
         this.#emit();
         return;
       }

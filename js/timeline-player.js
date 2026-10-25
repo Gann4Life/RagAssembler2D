@@ -40,6 +40,7 @@ import { ghostTimes, keyTimes } from './model/key-times.js';
  * @typedef {object} ClipSimulationService
  * @property {number} cycleLimit Most cycles a looping clip is run.
  * @property {boolean} available Whether a clip is open and its document could be simulated.
+ * @property {string|null} [failure] Message of the last failure other than document validation errors, else `null`.
  * @property {(spec: object) => void} open Starts a run of a clip now.
  * @property {(spec: object) => void} change Restarts the run after a committed change, debounced.
  * @property {() => void} close Drops every run.
@@ -384,7 +385,12 @@ export class TimelinePlayer {
       if (clip !== null) this.#withMoving(() => this.#modes.setPlayhead(this.#liveClipTime()));
     } catch (error) {
       this.#session = null;
-      session.destroy();
+      this.#liveClip = null;
+      try {
+        if (this.#modes.mode === 'simulate') this.#modes.stopSimulate();
+      } finally {
+        session.destroy();
+      }
       throw error;
     }
     this.#readLive();
@@ -588,7 +594,10 @@ export class TimelinePlayer {
 
   #reportAvailability(opening) {
     const available = this.simulationAvailable;
-    if (!available && (opening || this.#available)) this.#status(ERRORS_STATUS);
+    if (!available && (opening || this.#available)) {
+      const failure = this.#clips?.failure ?? null;
+      this.#status(failure === null ? ERRORS_STATUS : `Clip simulation failed: ${failure}`);
+    }
     this.#available = available;
   }
 

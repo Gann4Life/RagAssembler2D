@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { RagImporter, RagFormatError } from '../lib/ragimporter.js';
 import { composeTransforms, shapeBounds } from '../lib/geometry.js';
 import { SIMULATE_WORLD, createSimulateSession } from '../js/physics/simulate-session.js';
+import { ClipSimulation } from '../js/physics/clip-simulation.js';
 import { SIMULATE_STEP } from '../js/timeline-player.js';
 import { ragFile } from './helpers/rag-file.js';
 import { addHoldClip, bipedRig, fitTorque, humanoidRig } from './helpers/rigs.js';
@@ -159,6 +160,36 @@ test('a non-looping clip shows its keyed pose at step 0 and a clip without keys 
   } finally {
     empty.destroy();
     rest.destroy();
+  }
+});
+
+test('a clip simulation at speed 2 steps physics at 1/60 s and matches a Simulate session step for step', () => {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const { json } = humanoidRig();
+  addHoldClip(json, new Map([['j_shinR', 1.2]]), 1);
+  json.clips[0].speed = 2;
+  const frames = [];
+  const clock = {
+    request: (callback) => frames.push(callback),
+    cancel() {},
+    now: () => 0,
+  };
+  const sim = new ClipSimulation((doc, options) => createSimulateSession(Box2D, doc, options), clock);
+  sim.open({ json, clip: 'hold', length: 1, speed: 2, loop: false });
+  while (frames.length > 0) frames.shift()();
+  const reference = createSimulateSession(Box2D, json, { clip: 'hold', pose: 'hold' });
+  try {
+    assert.equal(sim.stepOf(1, 1), 30);
+    for (let i = 0; i < 30; i++) reference.step(SIMULATE_STEP);
+    const expected = reference.pose();
+    const actual = sim.pose(1, 1);
+    assert.equal(actual.exact, true);
+    for (const [id, transform] of expected) {
+      assert.deepEqual(actual.pose.get(id), transform, id);
+    }
+  } finally {
+    reference.destroy();
+    sim.close();
   }
 });
 

@@ -13,7 +13,7 @@ function fakeSimulator({ throws = () => false } = {}) {
       destroyed: false,
       step(dt) {
         assert.equal(session.destroyed, false);
-        assert.ok(Math.abs(dt - CLIP_SIMULATION.step * json.speed) < 1e-12);
+        assert.ok(Math.abs(dt - CLIP_SIMULATION.step) < 1e-12);
         session.steps++;
       },
       pose() {
@@ -242,6 +242,38 @@ test('close and open release every session and start over', () => {
   assert.equal(sim.pose(1, 0), null);
   clock.settle();
   assert.equal(sessions.length, 3);
+});
+
+test('a failing session start or step reports the message, but a validation error reports none', async () => {
+  const { RagFormatError } = await import('../lib/ragimporter.js');
+  const failing = simulation({ throws: () => true });
+  failing.sim.open(spec());
+  assert.equal(failing.sim.available, false);
+  assert.equal(failing.sim.failure, 'invalid document');
+
+  const invalid = new ClipSimulation(() => {
+    throw new RagFormatError('bad', [], []);
+  }, fakeClock());
+  invalid.open(spec());
+  assert.equal(invalid.available, false);
+  assert.equal(invalid.failure, null);
+
+  const clock = fakeClock();
+  const session = { destroyed: false, step() { throw new Error('native failure'); }, pose: () => new Map(), destroy() { session.destroyed = true; } };
+  const stepping = new ClipSimulation(() => session, clock);
+  stepping.open(spec());
+  clock.settle();
+  assert.equal(stepping.available, false);
+  assert.equal(stepping.failure, 'native failure');
+  assert.equal(session.destroyed, true);
+});
+
+test('a session whose first pose read fails is destroyed instead of leaking', () => {
+  const session = { destroyed: false, step() {}, pose() { throw new Error('pose failure'); }, destroy() { session.destroyed = true; } };
+  const sim = new ClipSimulation(() => session, fakeClock());
+  sim.open(spec());
+  assert.equal(session.destroyed, true);
+  assert.equal(sim.failure, 'pose failure');
 });
 
 test('the speed scales the step: clip time per step is 1/60 s times speed', () => {

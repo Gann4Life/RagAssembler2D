@@ -6,13 +6,14 @@ import { loadJson, saveJson, toJson } from '../js/model/io.js';
 import { createClip, createShapeBody } from '../js/commands/create.js';
 import { setProps } from '../js/commands/props.js';
 import { setJointAngleKey } from '../js/commands/keys.js';
+import { RagFormatError } from '../lib/ragimporter.js';
 import { ClipSimulation } from '../js/physics/clip-simulation.js';
 import { ANIMATE_MAX_FRAME, SIMULATE_MAX_STEPS, SIMULATE_STEP, TimelinePlayer } from '../js/timeline-player.js';
 
 function fakeSimulator({ throws = () => false } = {}) {
   const sessions = [];
   const simulator = (json, options) => {
-    if (throws(json, options)) throw new Error('invalid document');
+    if (throws(json, options)) throw new RagFormatError('invalid document', [], []);
     const session = {
       json,
       options,
@@ -419,6 +420,35 @@ test('without a simulator Edit cannot play, and a failing simulator leaves the m
   assert.throws(() => failing.play(), /invalid document/);
   assert.equal(editor.modes.mode, 'edit');
   assert.equal(failing.simulating, false);
+});
+
+test('a clip simulation failure that is not a validation error reports its message', () => {
+  const editor = createEditor();
+  editor.history.execute(createShapeBody({ position: { x: 0, y: 0 }, angle: 0, shape: { type: 'circle', radius: 0.5 } }));
+  const clip = editor.history.execute(createClip());
+  const clock = fakeClock();
+  const statuses = [];
+  const clipSimulation = new ClipSimulation(() => {
+    throw new Error('native failure');
+  }, clock);
+  new TimelinePlayer({ model: editor.model, modes: editor.modes, clock, clipSimulation, status: (text) => statuses.push(text) });
+  editor.modes.openClip(clip);
+  assert.deepEqual(statuses, ['Clip simulation failed: native failure']);
+});
+
+test('simulate() that fails after entering Simulate mode leaves Animate mode and no live clip', () => {
+  const { editor, clip, live, player } = setup();
+  editor.modes.openClip(clip);
+  const setPlayhead = editor.modes.setPlayhead.bind(editor.modes);
+  editor.modes.setPlayhead = (t) => {
+    if (editor.modes.mode === 'simulate') throw new Error('playhead failure');
+    setPlayhead(t);
+  };
+  assert.throws(() => player.simulate(), /playhead failure/);
+  assert.equal(editor.modes.mode, 'animate');
+  assert.equal(editor.modes.clip, clip);
+  assert.equal(player.simulating, false);
+  assert.equal(live.sessions[0].destroyed, true);
 });
 
 test('document edits during Animate playback do not stop it and restart the clip simulation', () => {
