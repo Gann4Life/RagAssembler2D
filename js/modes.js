@@ -7,7 +7,7 @@ import { Emitter } from '../lib/emitter.js';
 /**
  * Capability checked against the mode policy (`DESIGN.md` §5.1).
  * @typedef {'select'|'tool.pose'|'tool.circle'|'tool.box'|'tool.polygon'|'tool.hinge'
- *   |'edit.rest'|'edit.animation'|'assets.import'|'assets.delete'|'clip.open'|'clip.rename'|'timeline.scrub'
+ *   |'edit.rest'|'edit.animation'|'assets.import'|'assets.delete'|'clip.open'|'clip.rename'|'keys.clamp'|'timeline.scrub'
  *   |'preview.stack'|'preview.procedural'|'file'|'history'|'play'|'simulate.control'|'mode.switch'
  *   |'settings.editor'|'layout'|'camera'} Capability
  */
@@ -33,6 +33,7 @@ export const MODE_POLICY = Object.freeze({
   'assets.delete': allowed(true, false, false),
   'clip.open': allowed(true, true, false),
   'clip.rename': allowed(true, true, false),
+  'keys.clamp': allowed(true, true, false),
   'timeline.scrub': allowed(false, true, false),
   'preview.stack': allowed(false, true, true),
   'preview.procedural': allowed(false, false, true),

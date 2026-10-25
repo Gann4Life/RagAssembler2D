@@ -239,7 +239,10 @@ const RIG_ITEMS = Object.freeze([
     ['ungroup', 'Ungroup', 'Ctrl+Shift+G'],
     ['split', 'Split', 'Alt+G'],
   ],
-  [['set-root-body', 'Set as root body', 'Shift+R']],
+  [
+    ['set-root-body', 'Set as root body', 'Shift+R'],
+    ['clamp-keys-to-limits', 'Clamp keys to limits'],
+  ],
   [['sprite-edit', 'Sprite edit', 'S', 'checkbox']],
 ]);
 const VIEW_ITEMS = Object.freeze([

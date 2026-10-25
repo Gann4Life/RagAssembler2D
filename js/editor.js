@@ -5,6 +5,7 @@ import { createClip, createJoint, createShapeBody } from './commands/create.js';
 import { deleteObjects, deletionPlan } from './commands/delete.js';
 import { duplicatePlan, duplicateSelection } from './commands/duplicate.js';
 import { groupBodies, groupPlan, splitParts, splitShapes, ungroupBodies, ungroupParts } from './commands/group.js';
+import { clampKeysToLimits, keysOutsideLimits } from './commands/keys.js';
 import { rootBodyPlan, setRootBody } from './commands/root-body.js';
 import { selectedBodies } from './model/queries.js';
 import { Selection } from './model/selection.js';
@@ -235,7 +236,7 @@ const TOOLS = Object.freeze([selectTool, selectBoxTool, poseTool, circleTool, bo
  * actions. The tool registry is the first `mode` listener, so a mode change cancels the operation in progress
  * before anything else hears it. Registers the `undo`, `redo` and `escape` actions, one `tool:<id>` action
  * per registered tool, the `pivot-mode` action that toggles the `gizmo.pivot` setting (refused during a gesture),
- * the `delete`, `group`, `ungroup`, `split`, `duplicate`, `rename`, `add-shape`, `set-root-body`, `add-joint`, `new`
+ * the `delete`, `group`, `ungroup`, `split`, `duplicate`, `rename`, `add-shape`, `set-root-body`, `clamp-keys-to-limits`, `add-joint`, `new`
  * actions, the mode switch's `mode:edit` and `mode:animate`, plus `load` and `save` when `files` is given. Every new
  * undo step that changes bodies, joints or `rootBody` also sets the automatic motor torque in the same step.
  * Refused labelled actions and disabled tools report "*Label*: *reason*" through `status`.
@@ -601,6 +602,20 @@ export function createEditor({
       const body = selectedBody();
       if (body === null) return 'select one body';
       return isRootBody(body) ? 'already the root body' : null;
+    },
+  });
+  const canClampKeys = () => modes.can('keys.clamp') && !history.inGesture && !confirming && keysOutsideLimits(model).length > 0;
+  actions.register('clamp-keys-to-limits', {
+    run: () => {
+      if (!canClampKeys()) return;
+      const { keys, clips } = history.execute(clampKeysToLimits());
+      say(`Clamp keys to limits: ${keys === 1 ? '1 key' : `${keys} keys`} in ${countClips(clips)}`);
+    },
+    isEnabled: canClampKeys,
+    reason: () => {
+      const byMode = modeReason('keys.clamp');
+      if (byMode !== null || confirming || history.inGesture) return byMode;
+      return keysOutsideLimits(model).length === 0 ? 'no keys outside the joint limits' : null;
     },
   });
   actions.register('add-joint', {

@@ -35,6 +35,7 @@ const POLICY_ROW_OF = {
   'assets.delete': 'Asset delete',
   'clip.open': 'Clip selector, New clip',
   'clip.rename': 'Rename clip',
+  'keys.clamp': 'Clamp keys to limits',
   'timeline.scrub': 'Scrub',
   'preview.stack': 'Preview stack',
   'preview.procedural': 'Procedural preview',
