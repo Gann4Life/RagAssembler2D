@@ -1,4 +1,5 @@
 import { jointAngleForBody } from '../../lib/evaluate.js';
+import { invertTransform, transformPoint } from '../../lib/geometry.js';
 import { setJointAngleKey, setRootBodyAngleKey } from '../commands/keys.js';
 import { animatePose } from '../model/animate-preview.js';
 import { toJson } from '../model/io.js';
@@ -41,6 +42,16 @@ function withinLimits(model, joint, angle) {
   return Math.min(Math.max(angle, limits.lower), limits.upper);
 }
 
+function intentStart(intent, displayed, grabbed, press) {
+  const shown = displayed?.get(grabbed);
+  const keyed = intent.get(grabbed);
+  if (shown === undefined || keyed === undefined) return intent;
+  const point = transformPoint(keyed, transformPoint(invertTransform(shown), press));
+  const dx = press.x - point.x;
+  const dy = press.y - point.y;
+  return new Map([...intent].map(([uid, transform]) => [uid, { x: transform.x + dx, y: transform.y + dy, angle: transform.angle }]));
+}
+
 function jointAngles(model, def, pose) {
   const ids = byId(model, pose);
   const angles = new Map();
@@ -66,12 +77,13 @@ function jointKeys(model, def, pressed, result) {
 /**
  * Builds the Pose tool: a left press on a shape starts a physics test through `ctx.physics`, pulling the shape's
  * body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`. In Edit mode the
- * test starts from the rest pose and the result is discarded on release. In Animate mode it starts from exactly the
- * displayed bodies (`ctx.displayedPose`, the FK pose when nothing is shown), `rootBody` free like every body; a press while
- * playing pauses first (`ctx.playback.pause`, the playhead at the displayed step) and grabs in the same press. On a
- * release after a drag, with autokey on, every joint whose measured angle changed by more than 0.1° since the press gets
- * a key there worth its released angle, clamped to its limits when they are enabled, and the root `bodyAngle` likewise
- * (unclamped), in one undo step, so joints the drag did not move keep their keys; with
+ * test starts from the rest pose and the result is discarded on release. In Animate mode it is an intent edit: it starts
+ * from the keyed pose (the FK pose of the clip at the playhead), translated so that the grabbed point stays where it is
+ * on the displayed body (`ctx.displayedPose`), shown at once, `rootBody` free like every body, no gravity and no
+ * contacts; a press while playing pauses first (`ctx.playback.pause`, the playhead at the displayed step) and grabs in
+ * the same press. On a release after a drag, with autokey on, every joint whose measured angle changed by more than
+ * 0.1° since the press gets a key there worth its released angle, clamped to its limits when they are enabled, and the
+ * root `bodyAngle` likewise (unclamped), in one undo step, so joints the drag did not move keep their keys; with
  * autokey off nothing is written and the status line says so. A click writes nothing. Every Animate release hands the
  * released bodies to `ctx.playback.hold`. Cancel always discards. A press the physics service refuses shows
  * `not-allowed` until the release. Never changes the selection.
@@ -181,17 +193,21 @@ export function poseTool() {
       if (session !== null || refused || !canStart()) return;
       const shape = shapeAt(e.screen);
       if (shape === null) return;
-      const body = ctx.model.get(ctx.model.get(shape).parent);
+      const bodyUid = ctx.model.get(shape).parent;
+      const body = ctx.model.get(bodyUid);
       let keying = null;
       try {
+        const json = toJson(ctx.model, ctx.editorVersion());
         if (!ctx.modes.can('edit.rest')) {
           const clip = ctx.modes.clip;
           const displayed = ctx.displayedPose();
           if (ctx.playback.playing) ctx.playback.pause();
           const time = ctx.modes.playhead;
-          keying = { clip, time, from: displayed ?? animatePose(ctx.model, clip, time), screen: e.screen, dragged: false };
+          const press = transformPoint(invertTransform(rootTransform(json)), e.world);
+          const from = intentStart(animatePose(ctx.model, clip, time), displayed, bodyUid, press);
+          keying = { clip, time, from, screen: e.screen, dragged: false };
         }
-        startPose(toJson(ctx.model, ctx.editorVersion()), body, e, keying);
+        startPose(json, body, e, keying);
       } catch {
         session = null;
         refused = true;
@@ -200,6 +216,7 @@ export function poseTool() {
         return;
       }
       animate = keying;
+      if (keying !== null) ctx.setPose(uidPose(session.pose()));
       hoverCursor = 'grabbing';
       ctx.setCursor('grabbing');
       ctx.invalidateOverlay();

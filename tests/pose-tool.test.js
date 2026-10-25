@@ -8,6 +8,8 @@ import { toJson } from '../js/model/io.js';
 import { poseTool } from '../js/tools/pose.js';
 import { COLORS, GIZMO_SIZE, LINE_WIDTH } from '../js/viewport/style.js';
 import { defaultsOf } from '../lib/schema.js';
+import { invertTransform, transformPoint } from '../lib/geometry.js';
+import { animatePose } from '../js/model/animate-preview.js';
 
 const NO_MODIFIERS = { shift: false, ctrl: false, alt: false };
 
@@ -238,12 +240,25 @@ function drag(env) {
   send(env.tools, 'up', 270, 190);
 }
 
-test('Animate: the press starts from exactly the displayed bodies', () => {
+test('Animate: the press starts from the keyed pose, moved so that the grabbed point stays on the displayed body', () => {
   const env = animateEnvironment();
+  seedJointKey(env, 0.4);
   env.view.displayed = new Map(env.bodies.map((uid, index) => [uid, { x: index, y: 0.25, angle: 0.7 + index }]));
   send(env.tools, 'down', 260, 190);
-  const { start } = env.physics.starts[0].options;
-  assert.deepEqual(start, new Map(env.ids.map((id, index) => [id, { x: index, y: 0.25, angle: 0.7 + index }])));
+  const { start, root, point } = env.physics.starts[0].options;
+  const keyed = animatePose(env.model, env.clip, 0.5);
+  const press = transformPoint(invertTransform(root), point);
+  const local = transformPoint(invertTransform(env.view.displayed.get(env.bodies[1])), press);
+  const grabbed = transformPoint(start.get(env.ids[1]), local);
+  assert.ok(Math.hypot(grabbed.x - press.x, grabbed.y - press.y) < 1e-9, 'the grabbed point stays under the pointer');
+  const shift = { x: start.get(env.ids[0]).x - keyed.get(env.bodies[0]).x, y: start.get(env.ids[0]).y - keyed.get(env.bodies[0]).y };
+  env.bodies.forEach((uid, index) => {
+    const placed = start.get(env.ids[index]);
+    assert.ok(Math.abs(placed.angle - keyed.get(uid).angle) < 1e-12, 'keyed angles');
+    assert.ok(Math.abs(placed.x - keyed.get(uid).x - shift.x) < 1e-12 && Math.abs(placed.y - keyed.get(uid).y - shift.y) < 1e-12, 'one translation');
+  });
+  assert.equal(env.view.poses.length, 1, 'the keyed pose shows at the press');
+  assert.ok(env.view.poses[0] instanceof Map);
   assert.equal('holdRoot' in env.physics.starts[0].options, false);
   assert.equal(env.physics.starts[0].options.falloff, true);
   env.actions.run('escape');
@@ -311,7 +326,7 @@ function seedJointKey(env, value) {
   });
 }
 
-test('Animate: a changed joint is keyed at its released angle, not the evaluated value plus the change', () => {
+test('Animate: a display that lags the keys does not leak into them: the drag starts from the keyed angle', () => {
   const env = animateEnvironment({ turn: 0.3 });
   env.history.execute(setProps([ROOT_UID], { rootBody: env.ids[0] }));
   seedJointKey(env, 0.4);
@@ -325,7 +340,7 @@ test('Animate: a changed joint is keyed at its released angle, not the evaluated
   assert.equal(tracks.length, 1);
   assert.equal(tracks[0].channel, 'angle');
   const key = tracks[0].keys.find(([t]) => Math.abs(t - 0.5) < 1e-9);
-  assert.ok(Math.abs(key[1] - 0.45) < 1e-9, `v ${key[1]}`);
+  assert.ok(Math.abs(key[1] - 0.7) < 1e-9, `v ${key[1]}`);
   env.history.undo();
   assert.equal(env.snapshot().json, before.json);
 });
@@ -346,7 +361,7 @@ test('Animate: repeated drags from a display that lags the keys never key past t
     ]);
     drag(env);
     const key = angleKeys(env)[0].keys.find(([t]) => Math.abs(t - 0.5) < 1e-9);
-    assert.ok(Math.abs(key[1] - 0.45) < 1e-9, `drag ${i}: v ${key[1]}`);
+    assert.ok(Math.abs(key[1] - 0.5) < 1e-9, `drag ${i}: v ${key[1]}`);
   }
 });
 
