@@ -51,6 +51,7 @@ Sprites follow the evaluated clip at the playhead in every case.
 | Asset delete | ✓ | — | — |
 | Clip selector, New clip | ✓ | ✓ | — |
 | Rename clip | ✓ | ✓ | — |
+| Clamp keys to limits (all clips, [§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | ✓ | ✓ | — |
 | Mode switch | ✓ | ✓ | ✓ (below) |
 | Scrub | — | ✓ | — |
 | Preview stack | — | ✓ | ✓ |

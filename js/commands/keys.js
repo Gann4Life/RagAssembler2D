@@ -1,3 +1,4 @@
+import { LIMIT_TOLERANCE, clampToLimits } from '../../lib/evaluate.js';
 import { ROOT_UID } from '../model/model.js';
 import { snapTime } from '../timeline-time.js';
 
@@ -120,6 +121,54 @@ export function setClipLength(clip, length, label = 'Set clip length') {
       tx.set(clip, 'length', length);
       for (const uid of [...outsideKeys, ...outsideEvents]) tx.remove(uid);
       return { keys: outsideKeys.length, events: outsideEvents.length };
+    },
+  });
+}
+
+function outsideLimits(model) {
+  const found = [];
+  for (const clip of model.children(ROOT_UID, 'clips')) {
+    if (model.prop(clip, 'blend') === 'additive') continue;
+    for (const track of model.children(clip, 'tracks')) {
+      if (model.prop(track, 'channel') !== 'angle') continue;
+      const joint = model.uidOf(model.prop(track, 'target'));
+      if (joint === null || model.get(joint)?.type !== 'joint') continue;
+      const limits = model.prop(joint, 'limits');
+      for (const key of model.children(track, 'keys')) {
+        const v = model.prop(key, 'v');
+        if (!Number.isFinite(v)) continue;
+        const clamped = clampToLimits(v, limits);
+        if (Math.abs(clamped - v) > LIMIT_TOLERANCE) found.push({ clip, key, clamped });
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Lists the joint `angle` keys that lie more than `LIMIT_TOLERANCE` outside the enabled limits of their joint, in
+ * every `override` clip (the keys `W_KEY_OUTSIDE_LIMITS` reports).
+ * @param {import('../model/model.js').Model} model Document model.
+ * @returns {number[]} Key uids in clip, track and key order.
+ */
+export function keysOutsideLimits(model) {
+  return outsideLimits(model).map(({ key }) => key);
+}
+
+/**
+ * Builds a command that sets every key of `keysOutsideLimits` to the nearer limit of its joint, in one undo step.
+ * `t` and `interp` never change and nothing is added or removed. Mutates nothing when no key is outside.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command; `run` returns `{ keys: number, clips: number }`, the number
+ *   of keys changed and of clips holding them.
+ */
+export function clampKeysToLimits(label = 'Clamp keys to limits') {
+  return Object.freeze({
+    label,
+    run(tx) {
+      const outside = outsideLimits(tx.model);
+      for (const { key, clamped } of outside) tx.set(key, 'v', clamped);
+      return { keys: outside.length, clips: new Set(outside.map(({ clip }) => clip)).size };
     },
   });
 }

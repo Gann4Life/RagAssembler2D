@@ -136,6 +136,10 @@ function summary(problems) {
   return problems.map(({ code, path }) => ({ code, path }));
 }
 
+function kneeTrack(values, target = 'j_knee_l') {
+  return { target, channel: 'angle', keys: values.map((v, index) => ({ t: index, v, interp: 'linear' })) };
+}
+
 const cases = [
   { code: 'E_FORMAT', mutate: () => 42, path: '' },
   { code: 'E_VERSION_UNSUPPORTED', mutate: (j) => void (j.version = 1), path: '/version' },
@@ -221,6 +225,7 @@ const cases = [
     path: '/sprites/0/src',
   },
   { code: 'W_DUPLICATE_NAME', mutate: (j) => void (j.bodies[1].name = 'torso'), path: '/bodies/1/name' },
+  { code: 'W_KEY_OUTSIDE_LIMITS', mutate: (j) => void j.clips[0].tracks.push(kneeTrack([-1, 0.5])), path: '/clips/0/tracks/2' },
 ];
 
 test('a complete valid file has no problems', () => {
@@ -230,7 +235,7 @@ test('a complete valid file has no problems', () => {
 
 test('PROBLEM_CODES lists exactly the contract codes, frozen, with severity from the prefix', () => {
   assert.ok(Object.isFrozen(PROBLEM_CODES));
-  assert.equal(Object.keys(PROBLEM_CODES).length, 44);
+  assert.equal(Object.keys(PROBLEM_CODES).length, 45);
   for (const [code, severity] of Object.entries(PROBLEM_CODES)) {
     assert.equal(severity, code.startsWith('E_') ? 'error' : 'warning', code);
   }
@@ -729,4 +734,67 @@ test('the balance torque check is skipped on errors in bodies or in the ragdoll'
   rootError.ragdoll.balance.maxTorque = 0;
   rootError.ragdoll.balance.gain = -1;
   assert.ok(!problemsOf(rootError).some((problem) => problem.code.startsWith('W_MOTOR')));
+});
+function limitWarnings(json) {
+  return validate(json).warnings.filter((warning) => warning.code === 'W_KEY_OUTSIDE_LIMITS');
+}
+
+test('W_KEY_OUTSIDE_LIMITS: one warning per track with count, joint name and clip target', () => {
+  const json = validFile();
+  json.clips[0].tracks.push(kneeTrack([-1, 0.5, 0.7, -3]));
+  json.clips.push({ ...structuredClone(json.clips[0]), key: 'other', name: 'Other' });
+  const warnings = limitWarnings(json);
+  assert.deepEqual(warnings.map(({ path }) => path), ['/clips/0/tracks/2', '/clips/1/tracks/2']);
+  assert.equal(warnings[0].severity, 'warning');
+  assert.deepEqual(warnings[0].target, { type: 'clip', id: 'dead' });
+  assert.equal(
+    warnings[0].message,
+    'Clip "Dead": 3 angle keys of joint "knee_l" are outside its limits; use Rig › Clamp keys to limits in RagAssembler',
+  );
+  json.clips[0].tracks[2] = kneeTrack([0.5]);
+  assert.match(limitWarnings(json)[0].message, /: 1 angle key of joint "knee_l" is outside its limits;/);
+});
+
+test('W_KEY_OUTSIDE_LIMITS: the tolerance is 1e-5 rad beyond the limit', () => {
+  const json = validFile();
+  json.clips[0].tracks.push(kneeTrack([0.000009, -2.400009]));
+  assert.equal(limitWarnings(json).length, 0);
+  json.clips[0].tracks[2] = kneeTrack([0.00002]);
+  assert.equal(limitWarnings(json).length, 1);
+  json.clips[0].tracks[2] = kneeTrack([-2.40002]);
+  assert.equal(limitWarnings(json).length, 1);
+});
+
+test('W_KEY_OUTSIDE_LIMITS: skips additive clips, disabled limits and keys inside the limits', () => {
+  const additive = validFile();
+  additive.clips[0].blend = 'additive';
+  additive.clips[0].tracks.push(kneeTrack([5]));
+  assert.equal(limitWarnings(additive).length, 0);
+  const disabled = validFile();
+  disabled.clips[0].tracks.push(kneeTrack([5], 'j_hip_l'));
+  assert.equal(limitWarnings(disabled).length, 0);
+  const inside = validFile();
+  inside.clips[0].tracks.push(kneeTrack([-2.4, -1, 0]));
+  assert.equal(limitWarnings(inside).length, 0);
+  const empty = validFile();
+  empty.clips[0].tracks.push(kneeTrack([]));
+  assert.equal(limitWarnings(empty).length, 0);
+});
+
+test('W_KEY_OUTSIDE_LIMITS: skipped when the limits, the track or the key value have errors', () => {
+  const limits = validFile();
+  limits.clips[0].tracks.push(kneeTrack([0.5]));
+  limits.joints[1].limits.lower = 1;
+  assert.equal(limitWarnings(limits).length, 0);
+  const target = validFile();
+  target.clips[0].tracks.push({ ...kneeTrack([0.5]), target: 'j_nope' });
+  assert.equal(limitWarnings(target).length, 0);
+  const duplicate = validFile();
+  duplicate.clips[0].tracks.push(kneeTrack([0.5]), kneeTrack([0.5]));
+  assert.deepEqual(limitWarnings(duplicate).map(({ path }) => path), ['/clips/0/tracks/2']);
+  const value = validFile();
+  value.clips[0].tracks.push(kneeTrack([0.5, 0.6]));
+  value.clips[0].tracks[2].keys[0].v = 'x';
+  assert.equal(limitWarnings(value).length, 1);
+  assert.match(limitWarnings(value)[0].message, /: 1 angle key /);
 });

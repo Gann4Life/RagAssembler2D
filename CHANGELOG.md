@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-25
+
+### Added
+- Validation warns when a clip has joint angle keys outside the joint's limits.
+- Rig > Clamp keys to limits moves out-of-limit joint angle keys to the nearest limit in one undo step.
+
 ## [0.15.0] - 2026-10-25
 
 ### Added

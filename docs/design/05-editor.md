@@ -38,5 +38,6 @@ These rules hold everywhere in the editor ([§5.1](05-1-modes.md#51-editor-modes
 | Ungroup | no selected body has two or more shapes | "each selected body has a single shape" |
 | Split | no body has some, not all, of its shapes selected | "select some, not all, shapes of a body" |
 | Set as root body | not exactly one body in the selection; that body is already `rootBody` | "select one body"; "already the root body" |
+| Clamp keys to limits | no joint `angle` key is outside its enabled limits ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) | "no keys outside the joint limits" |
 | Sprite edit | Select is not the active tool; no single shape with a sprite is selected | "choose the Select tool"; "select one shape with a sprite" |
 | Delete clip | no clip is open | "open a clip" |

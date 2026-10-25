@@ -1,4 +1,4 @@
-import { jointAngleForBody } from '../../lib/evaluate.js';
+import { clampToLimits, jointAngleForBody } from '../../lib/evaluate.js';
 import { invertTransform, transformPoint } from '../../lib/geometry.js';
 import { setJointAngleKey, setRootBodyAngleKey } from '../commands/keys.js';
 import { animatePose } from '../model/animate-preview.js';
@@ -36,9 +36,7 @@ function rootKey(model, pressed, result) {
 }
 
 function withinLimits(model, joint, angle) {
-  const limits = model.prop(joint, 'limits');
-  if (limits?.enabled !== true || !Number.isFinite(limits.lower) || !Number.isFinite(limits.upper)) return angle;
-  return Math.min(Math.max(angle, limits.lower), limits.upper);
+  return clampToLimits(angle, model.prop(joint, 'limits'));
 }
 
 function intentStart(intent, displayed, grabbed, press) {

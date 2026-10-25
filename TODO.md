@@ -110,10 +110,11 @@
 - [x] #192 Pose recording is inaccurate: released parts drift from where they were left
 - [ ] #193 Moving ghost that previews the next frames from the current state
 - [x] #194 Pose drag moves and keys joints the user did not touch
-- [ ] #195 Warn about and clamp joint keys outside their limits
+- [x] #195 Warn about and clamp joint keys outside their limits
 - [x] #198 Looping clips interpolate across the wrap back to the first key
 - [ ] #199 Pinned preview in Animate: no gravity, root position fixed
 - [ ] #200 Extract the delete keys enabled rule into a tested helper
+- [ ] #203 Timeline summary row: select and edit all keys at a time
 
 ## Phase 3 – Round-trip verification
 - [ ] #40 Valid round-trip fixture set
@@ -155,7 +156,7 @@
 - [ ] #180 Demo humanoid: sprites, faces, events, aimAxis and alive/pain/dead clips
 - [ ] #181 Demo scene: walls, second flipX instance and world reuse
 - [ ] #182 Demo controls: hit, kill, revive, debug toggle and respawn
-- [ ] #183 Load a .rag.json in the demo with a file picker or drag-and-drop
+- [x] #183 Load a .rag.json in the demo with a file picker or drag-and-drop
 - [x] #196 Demo breaks with the robot rig: step like the editor
 
 ## No milestone
