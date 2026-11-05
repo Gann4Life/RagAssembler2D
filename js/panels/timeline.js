@@ -3,7 +3,7 @@ import { setProps } from '../commands/props.js';
 import { createClip } from '../commands/create.js';
 import { deleteKeys, moveKeys, setClipLength } from '../commands/keys.js';
 import { deleteClip } from '../commands/delete.js';
-import { jointAngleRows } from '../timeline-rows.js';
+import { clickSelection, jointAngleRows, selectionState, summaryKeys } from '../timeline-rows.js';
 import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '../timeline-time.js';
 
 const REST_POSE = '';
@@ -11,6 +11,7 @@ const RULER_LABEL = 'Playhead';
 const ONION_TITLE = 'Onion skins: ghosts of the nearest key times in Animate';
 const DELETE_KEYS_TITLE = 'Delete keys (Del)';
 const GHOSTS_SETTING = 'display.ghosts';
+const SUMMARY_LABEL = 'Summary';
 
 /**
  * @typedef {object} Timeline
@@ -232,9 +233,40 @@ export function createTimeline(element_, editor, player) {
     select.value = open ? String(modes.clip) : REST_POSE;
   }
 
+  function summaryTitle(time, state) {
+    return `${formatSeconds(time)} s: ${state.total} key(s), ${state.selected} selected`;
+  }
+
+  function paintSummary(diamond) {
+    const keys = JSON.parse(diamond.dataset.keys);
+    const { selected, state } = selectionState(keys, selection.timeline);
+    diamond.dataset.state = state;
+    diamond.title = summaryTitle(Number(diamond.dataset.time), { total: keys.length, selected });
+  }
+
+  function summaryLane(rows, length) {
+    const lane = element(doc, 'div', 'timeline-lane timeline-summary');
+    lane.append(
+      ...summaryKeys(rows, selection.timeline).map((group) => {
+        const diamond = element(doc, 'span', 'timeline-summary-key');
+        diamond.dataset.keys = JSON.stringify(group.keys);
+        diamond.dataset.time = String(group.t);
+        diamond.style.left = `${fractionOfTime(group.t, length) * 100}%`;
+        paintSummary(diamond);
+        return diamond;
+      }),
+    );
+    return lane;
+  }
+
   function renderRows(rows, length) {
-    labels.replaceChildren(...rows.map((row) => element(doc, 'div', 'timeline-row-label', `${row.label} · angle`)));
+    const open = modes.clip !== null;
+    labels.replaceChildren(
+      ...(open ? [element(doc, 'div', 'timeline-row-label', SUMMARY_LABEL)] : []),
+      ...rows.map((row) => element(doc, 'div', 'timeline-row-label', `${row.label} · angle`)),
+    );
     lanes.replaceChildren(
+      ...(open ? [summaryLane(rows, length)] : []),
       ...rows.map((row) => {
         const lane = element(doc, 'div', 'timeline-lane');
         lane.append(
@@ -257,6 +289,7 @@ export function createTimeline(element_, editor, player) {
     for (const diamond of lanes.querySelectorAll('.timeline-key')) {
       diamond.classList.toggle('selected', selection.timeline.includes(Number(diamond.dataset.key)));
     }
+    for (const diamond of lanes.querySelectorAll('.timeline-summary-key')) paintSummary(diamond);
   }
 
   function render() {
@@ -428,7 +461,14 @@ export function createTimeline(element_, editor, player) {
     scrubPointer = null;
     if (ruler.hasPointerCapture?.(event.pointerId)) ruler.releasePointerCapture(event.pointerId);
   };
+  const playOnSpace = (event) => {
+    if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return false;
+    event.preventDefault();
+    if (!event.repeat) togglePlay();
+    return true;
+  };
   const onKeyDown = (event) => {
+    if (playOnSpace(event)) return;
     if (!canScrub()) return;
     const length = clipLength();
     const targets = { ArrowLeft: modes.playhead - SNAP_STEP, ArrowRight: modes.playhead + SNAP_STEP, Home: 0, End: length };
@@ -440,9 +480,13 @@ export function createTimeline(element_, editor, player) {
     return [...lanes.querySelectorAll('.timeline-key.selected')];
   }
 
+  function draggedDiamonds() {
+    return [...selectedDiamonds(), ...lanes.querySelectorAll('.timeline-summary-key[data-state="all"]')];
+  }
+
   function previewDrag(delta) {
     const length = clipLength();
-    for (const diamond of selectedDiamonds()) {
+    for (const diamond of draggedDiamonds()) {
       const t = snapTime(Number(diamond.dataset.time) + delta, length);
       diamond.style.left = `${fractionOfTime(t, length) * 100}%`;
     }
@@ -471,13 +515,14 @@ export function createTimeline(element_, editor, player) {
   }
 
   const onKeyPointerDown = (event) => {
-    const diamond = event.target.closest?.('.timeline-key');
+    const diamond = event.target.closest?.('.timeline-key, .timeline-summary-key');
     if (event.button !== 0 || !diamond || keyDrag !== null) return;
-    const uid = Number(diamond.dataset.key);
-    if (!selection.timeline.includes(uid)) selection.set([uid]);
-    lanes.focus();
+    const targets = diamond.dataset.keys === undefined ? [Number(diamond.dataset.key)] : JSON.parse(diamond.dataset.keys);
+    const next = clickSelection(selection.timeline, targets, { shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey });
+    selection.set(next);
+    lanes.focus({ preventScroll: true });
     event.preventDefault();
-    if (!canEditClip()) return;
+    if (!canEditClip() || !targets.every((uid) => next.includes(uid))) return;
     const keys = [...selection.timeline];
     const times = selectedDiamonds().map((node) => Number(node.dataset.time));
     keyDrag = { pointer: event.pointerId, startX: event.clientX, keys, times, anchor: Number(diamond.dataset.time), delta: 0 };
@@ -489,6 +534,7 @@ export function createTimeline(element_, editor, player) {
     previewDrag(keyDrag.delta);
   };
   const onLanesKeyDown = (event) => {
+    if (playOnSpace(event)) return;
     if (event.key !== 'Delete' && event.key !== 'Backspace') return;
     if (deleteKeysReason() !== null) return;
     removeKeys();

@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-05
+
+### Added
+- Timeline summary row: one diamond per key time. Click selects every key at that time, drag moves them together, Delete removes them; Shift/Ctrl click adds or removes keys.
+
+### Fixed
+- Space plays and pauses while the Timeline has focus instead of scrolling the panel.
+- Pressing a key no longer scrolls the Timeline.
+
 ## [0.19.0] - 2026-11-05
 
 ### Added

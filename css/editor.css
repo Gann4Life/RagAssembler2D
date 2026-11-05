@@ -1459,3 +1459,25 @@ body.dock-resizing-column * {
     grid-column: 1 / -1;
   }
 }
+
+.timeline-summary-key {
+  position: absolute;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  box-sizing: border-box;
+  border: 2px solid var(--focus);
+  background: transparent;
+  transform: rotate(45deg) scale(0.8);
+  cursor: grab;
+}
+
+.timeline-summary-key[data-state="some"] {
+  background: linear-gradient(135deg, var(--focus) 50%, transparent 50%);
+}
+
+.timeline-summary-key[data-state="all"] {
+  background: var(--focus);
+  transform: rotate(45deg) scale(1);
+}

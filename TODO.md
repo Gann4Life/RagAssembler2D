@@ -116,7 +116,7 @@
 - [x] #198 Looping clips interpolate across the wrap back to the first key
 - [ ] #199 Pinned preview in Animate: no gravity, root position fixed
 - [ ] #200 Extract the delete keys enabled rule into a tested helper
-- [ ] #203 Timeline summary row: select and edit all keys at a time
+- [x] #203 Timeline summary row: select and edit all keys at a time
 - [ ] #213 Authored follow-through after fast keys
 
 ## Phase 3 – Round-trip verification
