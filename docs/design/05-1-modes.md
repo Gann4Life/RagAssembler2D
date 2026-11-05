@@ -46,7 +46,7 @@ Sprites follow the evaluated clip at the playhead in every case.
 | Pose | ✓ | ✓ (into keys, below) | — |
 | Creation tools: Circle, Box, Polygon, Hinge | ✓ | — | — |
 | Rest-pose and object edits: inspector fields of root, bodies, shapes, sprites, joints and sprite assets (and `pixelsPerMeter` in Settings); Hierarchy add, rename and delete; Group, Ungroup, Split, Duplicate, Set as root body; Select move, rotate and resize (objects and transform gizmo), joint anchor, `aimAxis` and sprite edit | ✓ | — | — |
-| Animation edits: clip properties, tracks, keys, events, key buttons ◆, Key selected (K), Pose → keys | — | ✓ | — |
+| Animation edits: clip properties, tracks, keys, events, key buttons ◇, Key selected (K), Pose → keys | — | ✓ | — |
 | Asset import | ✓ | ✓ | — |
 | Asset delete | ✓ | — | — |
 | Clip selector, New clip | ✓ | ✓ | — |
