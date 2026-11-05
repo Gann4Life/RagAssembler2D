@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-05
+
+### Added
+- Procedural joint control in RagImporter: `jointControl(name)` handles with `setAngle`, `lookAt` and `clearOverride`, plus name-based `setJointAngle`, `lookAt`, `clearJointOverride` and `clearAllOverrides`. Overrides blend with the animation by weight, fade in and out, respect joint limits when aiming, and stop when the ragdoll's strength reaches zero.
+- `toWorld` and `toPixi` to convert between PIXI and world coordinates.
+
 ## [0.21.0] - 2026-11-05
 
 ### Added
