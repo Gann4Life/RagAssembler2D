@@ -111,7 +111,7 @@ suggestion  = roundUp2(I_tot · α + M_O · g · |C_O − c_root|),  at least τ
 `null` when `rootBody` is not a body id or `R` has zero mass. Example (1 kg bodies): `rootBody` a 0.5 × 0.5 m box at (0, 0) and one jointed 0.5 × 0.5 m box at (0, 0.5), 1 kg each: `I_tot = 2 · (1/24 + 1 · 0.25²) ≈ 0.2083 kg·m²`, gravity term `1 · 10 · 0.5 = 5`, suggestion `roundUp2(20.83 + 5) = 26 N·m`. Used by the automatic motor torque ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) and by the 1 → 2 migration ([§6.3](06-file-format.md#63-versioning)).
 
 ## 3.3 Body mass
-Every body has a mass, `body.mass` (kg, > 0), **1 kg by default**: new bodies and the 2 → 3 migration ([§6.3](06-file-format.md#63-versioning)) write 1, and nothing else is needed for a working rig. The user may set it per body in the Body inspector page ([§5.7](05-7-inspector.md#57-inspector)), for example heavier feet for a steadier stance. Shapes do not add mass: they only decide how the body's mass is distributed, that is its center of mass and rotational inertia.
+Every body has a mass, `body.mass` (kg, > 0), **1 kg by default**: new bodies and the 2 → 3 migration ([§6.3](06-file-format.md#63-versioning)) write 1, and nothing else is needed for a working rig. The user may set it per body in the Body inspector page ([§5.7](05-7-inspector.md#57-inspector--properties-panel)), for example heavier feet for a steadier stance. Shapes do not add mass: they only decide how the body's mass is distributed, that is its center of mass and rotational inertia.
 
 ```
 carriers   = the body's non-sensor shapes; all of its shapes when it has only sensors
