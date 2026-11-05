@@ -25,11 +25,8 @@ function document({ limp }) {
   fitTorque(json);
   addHoldClip(json, new Map(), 1);
   if (limp) {
-    json.clips[0].tracks.push({
-      target: json.ragdoll.id,
-      channel: 'strength',
-      keys: [{ t: 0, v: 1, interp: 'linear' }, { t: 0.3, v: 0, interp: 'linear' }],
-    });
+    const keys = [{ t: 0, v: 1, interp: 'linear' }, { t: 0.3, v: 0, interp: 'linear' }];
+    for (const channel of ['strength', 'balance']) json.clips[0].tracks.push({ target: json.ragdoll.id, channel, keys });
   }
   return json;
 }
@@ -51,13 +48,14 @@ function pelvisDrop(json, seconds) {
 
 const BENT_KNEES = new Map([['j_thighL', -0.4], ['j_shinL', 0.8], ['j_footL', -0.4], ['j_thighR', -0.4], ['j_shinR', 0.8], ['j_footR', -0.4]]);
 
-function crouch(strengthKeys, length = 1) {
+function crouch(strengthKeys, length = 1, balanceKeys = strengthKeys) {
   const { json } = humanoidRig();
   fitTorque(json);
   addHoldClip(json, BENT_KNEES, length);
   const clip = json.clips[0];
   for (const track of clip.tracks) track.keys = [{ t: 0, v: BENT_KNEES.get(track.target), interp: 'linear' }];
   clip.tracks.push({ target: json.ragdoll.id, channel: 'strength', keys: strengthKeys });
+  clip.tracks.push({ target: json.ragdoll.id, channel: 'balance', keys: balanceKeys });
   return json;
 }
 
@@ -78,7 +76,7 @@ function dropsAt(json, seconds, marks) {
   }
 }
 
-test('a crouching humanoid held at each strength sags more as S falls and collapses at S ≤ 0.25 (§3.4)', () => {
+test('a crouching humanoid held at each strength, balance alike, sags more as S falls and collapses at S ≤ 0.25 (§3.4)', () => {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const drop = new Map();
   for (const S of [1, 0.75, 0.5, 0.4, 0.25, 0]) {
@@ -91,7 +89,7 @@ test('a crouching humanoid held at each strength sags more as S falls and collap
   assert.ok(drop.get(0.25) > 0.3 && drop.get(0) > 0.8, table);
 });
 
-test('a strength key from 1 to 0 over a 2 s clip sags the crouching humanoid gradually, not at the end (§3.4)', () => {
+test('a strength and balance key from 1 to 0 over a 2 s clip sags the crouching humanoid gradually, not at the end (§3.4)', () => {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const keys = [{ t: 0, v: 1, interp: 'linear' }, { t: 2, v: 0, interp: 'linear' }];
   const [half, three, late, end] = dropsAt(crouch(keys, 2), 2, [1, 1.5, 1.75, 2]);
@@ -101,14 +99,46 @@ test('a strength key from 1 to 0 over a 2 s clip sags the crouching humanoid gra
   assert.ok(late > 0.1 && end > 0.5, table);
 });
 
-test('a root strength key from 1 to 0 over 0.3 s resolves S to 0 for every joint and the balance', () => {
+function rootPath(json, seconds) {
+  const session = createSimulateSession(Box2D, json, { clip: 'hold', pose: 'hold' });
+  try {
+    const path = [];
+    for (let i = 0; i < Math.round(seconds / SIMULATE_STEP); i++) {
+      session.step(SIMULATE_STEP);
+      const { x, y, angle } = session.pose().get(json.ragdoll.rootBody);
+      path.push([x, y, angle]);
+    }
+    return path;
+  } finally {
+    session.destroy();
+  }
+}
+
+test('a death with balance 0 from its start and strength fading 1 → 0 lets rootBody fall with no balance torque (§3.2, §4.6)', () => {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const fade = [{ t: 0, v: 1, interp: 'linear' }, { t: 2, v: 0, interp: 'linear' }];
+  const death = rootPath(crouch(fade, 2, [{ t: 0, v: 0, interp: 'linear' }]), 3);
+  const unbalanced = crouch(fade, 2, [{ t: 0, v: 1, interp: 'linear' }]);
+  unbalanced.ragdoll.balance.enabled = false;
+  assert.deepEqual(death, rootPath(unbalanced, 3));
+  const balanced = rootPath(crouch(fade, 2, [{ t: 0, v: 1, interp: 'linear' }]), 3);
+  assert.notDeepEqual(death, balanced);
+  const [, startY, startAngle] = death[0];
+  const [, endY, endAngle] = death.at(-1);
+  assert.ok(startY - endY > 1, `drop ${startY - endY} m`);
+  assert.ok(Math.abs(endAngle - startAngle) > 1, `tilt ${endAngle - startAngle} rad`);
+});
+
+test('root strength and balance keys from 1 to 0 over 0.3 s resolve S to 0 for every joint and the balance', () => {
   const json = document({ limp: true });
   const clip = json.clips[0];
   const early = resolveChannels(json, [{ clip, time: 0.15 }]);
   assert.ok(Math.abs(early.root.strength - 0.5) < 1e-9);
+  assert.ok(Math.abs(early.root.balance - 0.5) < 1e-9);
   for (const pose of early.joints.values()) assert.ok(Math.abs(pose.S - 0.5) < 1e-9);
   const late = resolveChannels(json, [{ clip, time: 0.5 }]);
   assert.equal(late.root.strength, 0);
+  assert.equal(late.root.balance, 0);
   for (const pose of late.joints.values()) assert.equal(pose.S, 0);
 });
 
