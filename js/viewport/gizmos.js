@@ -1,4 +1,4 @@
-import { bodyMass, transformPoint } from '../../lib/geometry.js';
+import { bodyMassData, transformPoint } from '../../lib/geometry.js';
 import { ROOT_UID } from '../model/model.js';
 import { placement } from './placement.js';
 import { COLORS, GIZMO_SIZE, LABEL_SIZE, LINE_WIDTH } from './style.js';
@@ -189,7 +189,7 @@ export function createGizmos(PIXI, { model, camera, selection, modes, settings, 
     for (const bodyUid of model.children(ROOT_UID, 'bodies')) {
       const transform = placed.bodies.get(bodyUid);
       const fixtures = model.children(bodyUid, 'fixtures').map((uid) => model.get(uid).props);
-      const { center } = bodyMass(fixtures);
+      const { center } = bodyMassData({ mass: model.prop(bodyUid, 'mass'), fixtures });
       if (!center || !isFinitePoint(transform)) continue;
       const screen = camera.worldToScreen(transformPoint(transform, center));
       if (!isFinitePoint(screen)) continue;

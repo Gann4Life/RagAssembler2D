@@ -43,15 +43,15 @@ test('driveMotor clamps the correction to maxSpeed, never the keyed rate', () =>
 
 test('the suggested torques of the test rigs (DESIGN §3.1, α = 1000 rad/s², balance α = 100 rad/s²)', () => {
   const creature = motorTorqueSuggestions(creatureRig().json);
-  assert.equal(creature.get('j_finger'), 2.4);
-  assert.equal(creature.get('j_hip'), 150);
-  assert.equal(balanceTorqueSuggestion(creatureRig().json), 55);
+  assert.equal(creature.get('j_finger'), 30);
+  assert.equal(creature.get('j_hip'), 2900);
+  assert.equal(balanceTorqueSuggestion(creatureRig().json), 880);
   const humanoid = motorTorqueSuggestions(humanoidRig().json);
-  assert.deepEqual([humanoid.get('j_handL'), humanoid.get('j_footL'), humanoid.get('j_shinL'), humanoid.get('j_thighL')], [8.1, 22, 110, 290]);
-  assert.equal(balanceTorqueSuggestion(humanoidRig().json), 98);
+  assert.deepEqual([humanoid.get('j_handL'), humanoid.get('j_footL'), humanoid.get('j_shinL'), humanoid.get('j_thighL')], [64, 190, 1100, 2500]);
+  assert.equal(balanceTorqueSuggestion(humanoidRig().json), 850);
   const biped = [...motorTorqueSuggestions(bipedRig().json).values()];
-  assert.deepEqual([Math.min(...biped), Math.max(...biped)], [3.7, 39]);
-  assert.equal(balanceTorqueSuggestion(bipedRig().json), 14);
+  assert.deepEqual([Math.min(...biped), Math.max(...biped)], [52, 440]);
+  assert.equal(balanceTorqueSuggestion(bipedRig().json), 150);
 });
 
 test('driveMotor disables the motor when S is 0', () => {

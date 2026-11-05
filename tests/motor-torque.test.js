@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { MOTOR_TORQUE, motorTorqueSuggestions } from '../lib/motor.js';
 
 function circleBody(id, position, radius, density = 1) {
-  return { id, position, angle: 0, fixtures: [{ shape: { type: 'circle', center: [0, 0], radius }, density }] };
+  return { id, position, angle: 0, mass: density * Math.PI * radius * radius, fixtures: [{ shape: { type: 'circle', center: [0, 0], radius } }] };
 }
 
 function boxBody(id, position, width, height, density = 1) {
-  return { id, position, angle: 0, fixtures: [{ shape: { type: 'box', center: [0, 0], width, height, angle: 0 }, density }] };
+  return { id, position, angle: 0, mass: density * width * height, fixtures: [{ shape: { type: 'box', center: [0, 0], width, height, angle: 0 } }] };
 }
 
 function joint(id, bodyA, bodyB, anchor) {
@@ -82,13 +82,13 @@ test('a light limb joint carries the whole ragdoll weight, so a heavier body any
   assert.ok(heavy >= 2 * (1 + 0.01 + 6) * 10 * fingerReach, `${heavy}`);
 });
 
-test('sensor shapes add mass but are no lever', () => {
+test('sensor shapes carry no mass and are no lever', () => {
   const plain = {
     bodies: [boxBody('a', [0, 0], 1, 1), boxBody('b', [1, 0], 1, 0.2)],
     joints: [joint('j', 'a', 'b', [0.5, 0])],
   };
   const probe = structuredClone(plain);
-  probe.bodies[1].fixtures.push({ shape: { type: 'circle', center: [3, 0], radius: 0.5 }, density: 1e-6, isSensor: true });
+  probe.bodies[1].fixtures.push({ shape: { type: 'circle', center: [3, 0], radius: 0.5 }, isSensor: true });
   assert.equal(motorTorqueSuggestions(probe).get('j'), motorTorqueSuggestions(plain).get('j'));
   probe.bodies[1].fixtures[1].isSensor = false;
   assert.ok(motorTorqueSuggestions(probe).get('j') > motorTorqueSuggestions(plain).get('j'));
@@ -154,11 +154,11 @@ test('joints without a usable pair or mass get null', () => {
 
 test('bodies are placed root-local through position and angle', () => {
   const straight = motorTorqueSuggestions({
-    bodies: [boxBody('a', [0, 0], 1, 1), { ...boxBody('b', [1, 0], 1, 0.2), fixtures: [{ shape: { type: 'box', center: [0.5, 0], width: 1, height: 0.2, angle: 0 }, density: 1 }] }],
+    bodies: [boxBody('a', [0, 0], 1, 1), { ...boxBody('b', [1, 0], 1, 0.2), fixtures: [{ shape: { type: 'box', center: [0.5, 0], width: 1, height: 0.2, angle: 0 } }] }],
     joints: [joint('j', 'a', 'b', [1, 0])],
   });
   const turned = motorTorqueSuggestions({
-    bodies: [boxBody('a', [0, 0], 1, 1), { ...boxBody('b', [1, 0], 1, 0.2), angle: Math.PI / 2, fixtures: [{ shape: { type: 'box', center: [0.5, 0], width: 1, height: 0.2, angle: 0 }, density: 1 }] }],
+    bodies: [boxBody('a', [0, 0], 1, 1), { ...boxBody('b', [1, 0], 1, 0.2), angle: Math.PI / 2, fixtures: [{ shape: { type: 'box', center: [0.5, 0], width: 1, height: 0.2, angle: 0 } }] }],
     joints: [joint('j', 'a', 'b', [1, 0])],
   });
   assert.equal(straight.get('j'), turned.get('j'));

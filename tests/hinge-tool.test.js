@@ -230,7 +230,7 @@ test('a click on an overlap creates a pin at the snapped point and selects it', 
 
 test('a new joint keeps the default torque without a suggestion, and one undo removes it', () => {
   const { model, registry, view, history, shapes } = environment();
-  history.execute(setProps([shapes[1]], { density: 0 }));
+  history.execute(setProps([model.get(shapes[1]).parent], { mass: 0 }));
   view.hits = [shapes[1], shapes[0]];
   gesture(registry, [[px(0.5), py(0)]]);
   assert.equal(lastJoint(model).props.motor.maxTorque, defaultsOf('joint').motor.maxTorque);

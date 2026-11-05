@@ -47,7 +47,6 @@ function fixtureOf(part) {
     id: `f_${part.id}`,
     name: part.id,
     shape,
-    density: 1,
     friction: 0.6,
     restitution: 0,
     isSensor: false,
@@ -61,7 +60,7 @@ function fixtureOf(part) {
 function lightCreature(motor) {
   return {
     format: 'ragassembler',
-    version: 2,
+    version: 3,
     meta: { name: 'creature', editorVersion: '0.9.0' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
@@ -72,6 +71,7 @@ function lightCreature(motor) {
       name: part.id,
       position: part.at,
       angle: part.angle ?? 0,
+      mass: 1,
       linearDamping: 0,
       angularDamping: 0,
       fixedRotation: false,
@@ -161,8 +161,8 @@ test('a light creature held at rest by zero-gain motors stays still at the defau
 
 test('the suggested torque of the light creature matches the DESIGN §3.1 examples', () => {
   const suggestions = applySuggestedTorque(lightCreature({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }));
-  assert.equal(suggestions.get('j_finger'), 2.4);
-  assert.equal(suggestions.get('j_hip'), 150);
+  assert.equal(suggestions.get('j_finger'), 30);
+  assert.equal(suggestions.get('j_hip'), 2900);
   assert.ok([...suggestions.values()].every((value) => typeof value === 'number' && value >= 0.001));
 });
 

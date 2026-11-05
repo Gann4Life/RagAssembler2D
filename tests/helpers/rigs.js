@@ -13,12 +13,11 @@ function circle(radius, center = [0, 0]) {
   return { type: 'circle', center, radius };
 }
 
-function fixture(id, index, shape, density) {
+function fixture(id, index, shape) {
   return {
     id: `f_${id}_${index}`,
     name: `${id}_${index}`,
     shape,
-    density,
     friction: 0.6,
     restitution: 0,
     isSensor: false,
@@ -30,18 +29,18 @@ function fixture(id, index, shape, density) {
 }
 
 /**
- * Builds a valid format version 2 document from a part list: one body per part, one revolute joint per part with a
+ * Builds a valid format version 3 document from a part list: one body per part, one revolute joint per part with a
  * `parent`, every motor at `MOTOR` and balance on.
  * @param {string} name Ragdoll name.
  * @param {string} rootBody Id of the part used as `rootBody`.
- * @param {ReadonlyArray<{ id: string, at: number[], angle?: number, shapes: object[], density?: number,
+ * @param {ReadonlyArray<{ id: string, at: number[], angle?: number, shapes: object[], mass?: number,
  *   parent?: string, anchor?: number[], lower?: number, upper?: number }>} parts Parts, root-local meters and radians.
  * @returns {object} A fresh document.
  */
 export function rigDocument(name, rootBody, parts) {
   return {
     format: 'ragassembler',
-    version: 2,
+    version: 3,
     meta: { name, editorVersion: '0.0.0' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
@@ -60,11 +59,12 @@ export function rigDocument(name, rootBody, parts) {
       name: part.id,
       position: part.at,
       angle: part.angle ?? 0,
+      mass: part.mass ?? 1,
       linearDamping: 0,
       angularDamping: 0,
       fixedRotation: false,
       bullet: false,
-      fixtures: part.shapes.map((shape, index) => fixture(part.id, index, shape, part.density ?? 1)),
+      fixtures: part.shapes.map((shape, index) => fixture(part.id, index, shape)),
     })),
     joints: parts.filter((part) => part.parent !== undefined).map((part) => ({
       id: `j_${part.id}`,
@@ -115,7 +115,7 @@ const CREATURE = [
 ];
 
 /**
- * A one-legged 1.6 kg creature with a long tail whose `rootBody` (the trunk) is about 0.11 kg.
+ * A one-legged creature with a long tail, every body 1 kg, `rootBody` the trunk.
  * @returns {{ json: object, pose: Map<string, number> }} Document and a keyed pose, radians by joint id.
  */
 export function creatureRig() {
@@ -183,24 +183,24 @@ export function humanoidRig() {
 }
 
 /**
- * A 1.3 m, 0.9 kg biped like a small robot: a light `rootBody` pelvis (94 g) joining two overlapping legs of 20 g
- * thighs, 48 g shins and 120 g feet, a torso, a head and two overlapping arms.
+ * A 1.3 m biped like a small robot, every body 1 kg: a `rootBody` pelvis joining two overlapping legs of thin
+ * thighs, shins and feet, a torso, a head and two overlapping arms.
  * @returns {{ json: object, pose: Map<string, number> }} Document and a keyed pose with both knees bent.
  */
 export function bipedRig() {
   const leg = (side) => [
-    { id: `thigh${side}`, at: [0, 0.55], shapes: [box(0.04, 0.2)], density: 2.5, parent: 'pelvis', anchor: [0, 0.64], lower: -1.05, upper: 1.05 },
-    { id: `shin${side}`, at: [0, 0.35], shapes: [box(0.06, 0.2)], density: 4, parent: `thigh${side}`, anchor: [0, 0.45], lower: -1.57, upper: 1.57 },
-    { id: `foot${side}`, at: [0.02, 0.12], shapes: [box(0.1, 0.24)], density: 5, parent: `shin${side}`, anchor: [0, 0.25], lower: -1.57, upper: 0.26 },
+    { id: `thigh${side}`, at: [0, 0.55], shapes: [box(0.04, 0.2)], parent: 'pelvis', anchor: [0, 0.64], lower: -1.05, upper: 1.05 },
+    { id: `shin${side}`, at: [0, 0.35], shapes: [box(0.06, 0.2)], parent: `thigh${side}`, anchor: [0, 0.45], lower: -1.57, upper: 1.57 },
+    { id: `foot${side}`, at: [0.02, 0.12], shapes: [box(0.1, 0.24)], parent: `shin${side}`, anchor: [0, 0.25], lower: -1.57, upper: 0.26 },
   ];
   const arm = (side) => [
-    { id: `upper${side}`, at: [0, 0.92], shapes: [box(0.06, 0.25)], density: 3, parent: 'torso', anchor: [0, 1.04] },
-    { id: `fore${side}`, at: [0, 0.67], shapes: [box(0.06, 0.25)], density: 3, parent: `upper${side}`, anchor: [0, 0.795], lower: -1.05, upper: 1.57 },
+    { id: `upper${side}`, at: [0, 0.92], shapes: [box(0.06, 0.25)], parent: 'torso', anchor: [0, 1.04] },
+    { id: `fore${side}`, at: [0, 0.67], shapes: [box(0.06, 0.25)], parent: `upper${side}`, anchor: [0, 0.795], lower: -1.05, upper: 1.57 },
   ];
   const json = rigDocument('biped', 'pelvis', [
-    { id: 'pelvis', at: [0, 0.7], shapes: [circle(0.1)], density: 3 },
-    { id: 'torso', at: [0, 0.95], shapes: [box(0.2, 0.3)], density: 3, parent: 'pelvis', anchor: [0, 0.8], lower: -0.78, upper: 0.78 },
-    { id: 'head', at: [0, 1.18], shapes: [circle(0.08)], density: 4, parent: 'torso', anchor: [0, 1.1], lower: -0.78, upper: 0.78 },
+    { id: 'pelvis', at: [0, 0.7], shapes: [circle(0.1)] },
+    { id: 'torso', at: [0, 0.95], shapes: [box(0.2, 0.3)], parent: 'pelvis', anchor: [0, 0.8], lower: -0.78, upper: 0.78 },
+    { id: 'head', at: [0, 1.18], shapes: [circle(0.08)], parent: 'torso', anchor: [0, 1.1], lower: -0.78, upper: 0.78 },
     ...leg('L'),
     ...leg('R'),
     ...arm('L'),

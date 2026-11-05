@@ -26,7 +26,7 @@ test('the FK preview turns rootBody about its rest center of mass and the childr
   const pose = animatePose(editor.model, clip, 0);
   const torso = doc.bodies[0];
   const rest = { x: torso.position[0], y: torso.position[1], angle: torso.angle };
-  const center = bodyMassData(torso.fixtures).center;
+  const center = bodyMassData(torso).center;
   const posed = pose.get(uid('b_torso'));
   near(posed.angle, torso.angle + 0.5);
   const fixed = transformPoint(posed, center);
@@ -79,7 +79,7 @@ test('the balance torque follows rig changes and rootBody in the same undo step'
   history.undo();
   assert.equal(model.prop(ROOT_UID, 'balance.maxTorque'), before);
 });
-test('loading a version 1 file migrates it and saving writes version 2', () => {
+test('loading a version 1 file migrates it and saving writes version 3', () => {
   const doc = ragFile();
   doc.version = 1;
   delete doc.ragdoll.balance;
@@ -92,6 +92,6 @@ test('loading a version 1 file migrates it and saving writes version 2', () => {
   const saved = saveJson(editor.model, 'dev');
   assert.equal(saved.ok, true);
   const written = JSON.parse(saved.text);
-  assert.equal(written.version, 2);
+  assert.equal(written.version, 3);
   assert.deepEqual(Object.keys(written.ragdoll.balance).toSorted(), ['damping', 'enabled', 'gain', 'maxSpeed', 'maxTorque']);
 });

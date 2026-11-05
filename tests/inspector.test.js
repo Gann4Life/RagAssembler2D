@@ -19,6 +19,7 @@ function rigJson() {
     { id: 'tip', at: [0, 1.3], shapes: [{ type: 'circle', center: [0, 0], radius: 0.1 }], parent: 'pole', anchor: [0, 1.2] },
   ]);
   json.bodies[2].fixtures[0].name = '';
+  json.bodies[1].mass = 1.2345;
   json.clips.push({
     key: 'walk',
     name: 'walk',
@@ -123,11 +124,13 @@ test('inspector: body rows show display units, the mass, the shapes and the root
   assert.equal(rowOf(current, 'fixedRotation').control, 'checkbox');
   assert.equal(rowOf(current, 'fixedRotation').value, false);
   const mass = rowOf(current, 'mass');
-  assert.equal(mass.control, 'readout');
+  assert.equal(mass.control, 'number');
   assert.equal(mass.unit, 'kg');
-  assert.equal(mass.value, String(Number((0.1 + Math.PI * 0.01).toPrecision(3))));
-  assert.equal(mass.readOnly, true);
-  assert.equal(mass.reason, 'computed from the shapes');
+  assert.equal(mass.value, 1.2345);
+  assert.equal(mass.text, '1.23');
+  assert.deepEqual([mass.min, mass.exclusiveMin], [0, true]);
+  assert.equal(mass.readOnly, false);
+  assert.equal(mass.edit.kind, 'props');
   const shapes = rowOf(current, 'shapes');
   assert.equal(shapes.control, 'list');
   assert.deepEqual(shapes.items.map((item) => [item.label, item.muted, item.icon]), [['pole_0', false, 'box'], ['pole_1', false, 'circle']]);
@@ -152,7 +155,7 @@ test('inspector: shared values are shown once, differing ones as MIXED, per vect
   assert.equal(name.text, '');
   assert.equal(rowOf(current, 'linearDamping').value, 0);
   assert.equal(rowOf(current, 'mass').value, MIXED);
-  assert.equal(rowOf(current, 'mass').text, '—');
+  assert.equal(rowOf(current, 'mass').text, '');
   assert.equal(rowOf(current, 'shapes').value, MIXED);
   assert.deepEqual(rowOf(current, 'shapes').items, []);
   assert.equal(rowOf(current, 'set-root-body').label, 'Set as root body');
@@ -344,6 +347,20 @@ test('editCommand: props edits convert display units and label the undo step', (
   history.undo();
   assert.equal(model.prop(uid('b_pole'), 'linearDamping'), 0);
   assert.equal(model.prop(uid('b_tip'), 'linearDamping'), 0);
+});
+
+test('editCommand: a mass commit sets every selected body and recomputes the motor torques in one undo step', () => {
+  const { editor, model, uid, page, rowOf } = setup();
+  const { history } = editor;
+  const torque = () => model.prop(uid('j_pole'), 'motor.maxTorque');
+  const before = torque();
+  editor.selection.set([uid('b_pole'), uid('b_tip')]);
+  history.execute(editCommand(model, rowOf(page(), 'mass').edit, 3, { pixelsPerMeter: 32 }));
+  assert.deepEqual([model.prop(uid('b_pole'), 'mass'), model.prop(uid('b_tip'), 'mass')], [3, 3]);
+  assert.equal(history.state.undoLabel, 'Edit mass');
+  assert.ok(torque() > before, `${torque()} vs ${before}`);
+  history.undo();
+  assert.deepEqual([model.prop(uid('b_pole'), 'mass'), model.prop(uid('b_tip'), 'mass'), torque()], [1.2345, 1, before]);
 });
 
 test('editCommand: a vec2 component edit of several objects keeps each other component, in one step', () => {

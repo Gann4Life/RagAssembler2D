@@ -2,7 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { RagImporter, RagFormatError } from '../lib/ragimporter.js';
-import { composeTransforms, shapeBounds } from '../lib/geometry.js';
+import { bodyMassData, composeTransforms, shapeBounds, transformPoint } from '../lib/geometry.js';
 import { SIMULATE_WORLD, createSimulateSession } from '../js/physics/simulate-session.js';
 import { ClipSimulation } from '../js/physics/clip-simulation.js';
 import { SIMULATE_STEP } from '../js/timeline-player.js';
@@ -58,6 +58,17 @@ function worldY(json, transform) {
   return composeTransforms(root(json), transform).y;
 }
 
+function massCenterY(json, pose) {
+  let mass = 0;
+  let moment = 0;
+  for (const body of json.bodies) {
+    const data = bodyMassData(body);
+    mass += data.mass;
+    moment += data.mass * transformPoint(composeTransforms(root(json), pose.get(body.id)), data.center).y;
+  }
+  return moment / mass;
+}
+
 function run(session, seconds) {
   for (let elapsed = 0; elapsed < seconds - 1e-9; elapsed += SIMULATE_STEP) session.step(SIMULATE_STEP);
 }
@@ -90,9 +101,10 @@ test('gravity pulls a limp ragdoll down and the ground under its rest pose stops
   const session = start(json);
   try {
     const restY = worldY(json, session.pose().get('b_torso'));
+    const restCenter = massCenterY(json, session.pose());
     run(session, 0.25);
-    const fallingY = worldY(json, session.pose().get('b_torso'));
-    assert.ok(fallingY < restY, `torso did not fall: ${fallingY} >= ${restY}`);
+    const fallingCenter = massCenterY(json, session.pose());
+    assert.ok(fallingCenter < restCenter, `ragdoll did not fall: ${fallingCenter} >= ${restCenter}`);
     run(session, 3);
     const settledY = worldY(json, session.pose().get('b_torso'));
     assert.ok(restY - settledY < 1, `torso fell through the ground: ${restY} -> ${settledY}`);

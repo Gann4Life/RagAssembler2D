@@ -3,7 +3,6 @@ function shape(id, name, geometry, asset) {
     id,
     name,
     shape: geometry,
-    density: 1,
     friction: 0.6,
     restitution: 0,
     isSensor: false,
@@ -20,6 +19,7 @@ function body(id, name, position, angle, fixture) {
     name,
     position,
     angle,
+    mass: 1,
     linearDamping: 0.2,
     angularDamping: 0.3,
     fixedRotation: false,
@@ -51,7 +51,7 @@ function joint(id, name, bodyA, bodyB, anchor, limits, aimAxis) {
 export function ragFile() {
   return {
     format: 'ragassembler',
-    version: 2,
+    version: 3,
     meta: { name: 'sample', editorVersion: '0.1.0' },
     units: { pixelsPerMeter: 40 },
     preview: { gravity: [0, -10] },

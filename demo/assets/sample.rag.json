@@ -1,6 +1,6 @@
 {
   "format": "ragassembler",
-  "version": 2,
+  "version": 3,
   "meta": {
     "name": "sample",
     "editorVersion": "0.1.0"
@@ -30,7 +30,7 @@
     },
     "balance": {
       "enabled": true,
-      "maxTorque": 96,
+      "maxTorque": 170,
       "gain": 10,
       "damping": 0.5,
       "maxSpeed": 20
@@ -46,6 +46,7 @@
         1.2
       ],
       "angle": 0,
+      "mass": 1,
       "linearDamping": 0.1,
       "angularDamping": 0.2,
       "fixedRotation": false,
@@ -64,7 +65,6 @@
             "height": 0.7,
             "angle": 0
           },
-          "density": 5,
           "friction": 0.6,
           "restitution": 0,
           "isSensor": false,
@@ -88,6 +88,7 @@
         1.75
       ],
       "angle": 0,
+      "mass": 1,
       "linearDamping": 0.1,
       "angularDamping": 0.2,
       "fixedRotation": false,
@@ -104,7 +105,6 @@
             ],
             "radius": 0.2
           },
-          "density": 5,
           "friction": 0.6,
           "restitution": 0,
           "isSensor": false,
@@ -128,6 +128,7 @@
         1.25
       ],
       "angle": 0,
+      "mass": 1,
       "linearDamping": 0.1,
       "angularDamping": 0.2,
       "fixedRotation": false,
@@ -146,7 +147,6 @@
             "height": 0.5,
             "angle": 0
           },
-          "density": 5,
           "friction": 0.6,
           "restitution": 0,
           "isSensor": false,
@@ -170,6 +170,7 @@
         1.25
       ],
       "angle": 0,
+      "mass": 1,
       "linearDamping": 0.1,
       "angularDamping": 0.2,
       "fixedRotation": false,
@@ -188,7 +189,6 @@
             "height": 0.5,
             "angle": 0
           },
-          "density": 5,
           "friction": 0.6,
           "restitution": 0,
           "isSensor": false,
@@ -212,6 +212,7 @@
         0.5
       ],
       "angle": 0,
+      "mass": 1,
       "linearDamping": 0.1,
       "angularDamping": 0.2,
       "fixedRotation": false,
@@ -230,7 +231,6 @@
             "height": 0.7,
             "angle": 0
           },
-          "density": 5,
           "friction": 0.6,
           "restitution": 0,
           "isSensor": false,
@@ -254,6 +254,7 @@
         0.5
       ],
       "angle": 0,
+      "mass": 1,
       "linearDamping": 0.1,
       "angularDamping": 0.2,
       "fixedRotation": false,
@@ -272,7 +273,6 @@
             "height": 0.7,
             "angle": 0
           },
-          "density": 5,
           "friction": 0.6,
           "restitution": 0,
           "isSensor": false,
@@ -307,7 +307,7 @@
         "upper": 0.5
       },
       "motor": {
-        "maxTorque": 40,
+        "maxTorque": 84,
         "gain": 12,
         "damping": 0.6,
         "maxSpeed": 12
@@ -331,7 +331,7 @@
         "upper": 2.8
       },
       "motor": {
-        "maxTorque": 40,
+        "maxTorque": 150,
         "gain": 12,
         "damping": 0.6,
         "maxSpeed": 12
@@ -355,7 +355,7 @@
         "upper": 2.8
       },
       "motor": {
-        "maxTorque": 40,
+        "maxTorque": 150,
         "gain": 12,
         "damping": 0.6,
         "maxSpeed": 12
@@ -379,7 +379,7 @@
         "upper": 1
       },
       "motor": {
-        "maxTorque": 40,
+        "maxTorque": 240,
         "gain": 12,
         "damping": 0.6,
         "maxSpeed": 12
@@ -403,7 +403,7 @@
         "upper": 1
       },
       "motor": {
-        "maxTorque": 40,
+        "maxTorque": 240,
         "gain": 12,
         "damping": 0.6,
         "maxSpeed": 12

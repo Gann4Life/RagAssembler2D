@@ -154,8 +154,7 @@ test('the robot-like biped holds a bent-knee pose within 1° without trembling',
   assert.ok(result.tremble < 0.2, text);
 });
 
-function limbShare(json, joint) {
-  const mass = new Map(json.bodies.map((body) => [body.id, bodyMassData(body.fixtures).mass]));
+function limbBodies(json, joint) {
   const depth = treeDepth(json);
   const child = depth.get(joint.bodyA) > depth.get(joint.bodyB) ? joint.bodyA : joint.bodyB;
   const seen = new Set([joint.bodyA, joint.bodyB]);
@@ -169,8 +168,13 @@ function limbShare(json, joint) {
       queue.push(next);
     }
   }
+  return new Set(queue);
+}
+
+function limbShare(json, joint) {
+  const mass = new Map(json.bodies.map((body) => [body.id, bodyMassData(body).mass]));
   const total = [...mass.values()].reduce((sum, value) => sum + value, 0);
-  return queue.reduce((sum, id) => sum + mass.get(id), 0) / total;
+  return [...limbBodies(json, joint)].reduce((sum, id) => sum + mass.get(id), 0) / total;
 }
 
 function liftCases(json) {
@@ -187,17 +191,18 @@ function liftCases(json) {
   return cases;
 }
 
-function centerHeight(rag) {
+function centerHeight(rag, limb) {
   let mass = 0;
   let height = 0;
-  for (const body of rag.bodies.values()) {
+  for (const [id, body] of rag.bodies) {
+    if (limb.has(id)) continue;
     mass += body.GetMass();
     height += body.GetMass() * body.GetWorldCenter().get_y();
   }
   return height / mass;
 }
 
-test('every light limb keyed into the ground lifts the whole ragdoll lying beside it', () => {
+test('every light limb keyed into the ground lifts the rest of the ragdoll lying beside it', () => {
   for (const build of [bipedRig, humanoidRig]) {
     const rig = fitTorque(build().json);
     const cases = liftCases(rig);
@@ -205,14 +210,15 @@ test('every light limb keyed into the ground lifts the whole ragdoll lying besid
     for (const target of cases) {
       const json = structuredClone(rig);
       addHoldClip(json, new Map([[target.joint, target.value]]), 1);
+      const limb = limbBodies(rig, rig.joints.find((joint) => joint.id === target.joint));
       const run = scene(json, Math.PI / 2);
       let rise;
       try {
         run.rag.play('hold');
         run.step();
-        const start = centerHeight(run.rag);
+        const start = centerHeight(run.rag, limb);
         for (let i = 0; i < 4 / STEP; i++) run.step();
-        rise = centerHeight(run.rag) - start;
+        rise = centerHeight(run.rag, limb) - start;
       } finally {
         run.destroy();
       }

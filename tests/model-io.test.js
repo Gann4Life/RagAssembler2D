@@ -91,7 +91,7 @@ test('toJson leaves the model unchanged and shares nothing with it', () => {
   model.on('change', (event) => changes.push(event));
   const before = JSON.stringify(toJson(model, 'dev'));
   const json = toJson(model, 'dev');
-  json.bodies[0].fixtures[0].density = 99;
+  json.bodies[0].fixtures[0].friction = 99;
   json.ragdoll.position[0] = 42;
   json.meta.name = 'changed';
   assert.equal(JSON.stringify(toJson(model, 'dev')), before);

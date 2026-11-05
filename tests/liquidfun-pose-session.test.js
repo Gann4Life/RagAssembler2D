@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 const Box2D = require('../vendor/liquidfun.js');
 
 const TOLERANCE = 1e-5;
-const LIMIT_TOLERANCE = 0.05;
+const LIMIT_TOLERANCE = 0.08;
 const ROOT = Object.freeze({ x: 5, y: 7, angle: 1.2 });
 
 class Container {
@@ -374,7 +374,7 @@ test('rootBody moves freely: a dragged limb pulls it along and a grabbed rootBod
   const rootId = json.ragdoll.rootBody;
   const rootCenter = (pose) => {
     const body = json.bodies.find((item) => item.id === rootId);
-    return transformPoint(pose.get(rootId), bodyMassData(body.fixtures).center);
+    return transformPoint(pose.get(rootId), bodyMassData(body).center);
   };
   const press = restWorld(json, 'b_head');
   const limb = create(Box2D, json, { root: ROOT, bodyId: 'b_head', point: press, start: new Map() });

@@ -14,7 +14,6 @@ function box(id, name, width, height) {
     id,
     name,
     shape: { type: 'box', center: [0, 0], width, height, angle: 0 },
-    density: 1,
     friction: 0.6,
     restitution: 0,
     isSensor: false,
@@ -31,6 +30,7 @@ function body(id, name, position, fixture) {
     name,
     position,
     angle: 0,
+    mass: 1,
     linearDamping: 0,
     angularDamping: 0.1,
     fixedRotation: false,
@@ -63,7 +63,7 @@ function validFile() {
   head.sprite.asset = 's_face_normal';
   return {
     format: 'ragassembler',
-    version: 2,
+    version: 3,
     meta: { name: 'humanoid', editorVersion: '0.1.0' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
@@ -205,7 +205,7 @@ const cases = [
     path: '/joints/3',
   },
   { code: 'W_ANCHOR_OUTSIDE', mutate: (j) => void (j.joints[1].anchor = [0.5, 0.35]), path: '/joints/1/anchor' },
-  { code: 'W_BODY_ZERO_MASS', mutate: (j) => void (j.bodies[1].fixtures[0].density = 0), path: '/bodies/1' },
+  { code: 'W_JOINT_MASS_RATIO', mutate: (j) => void (j.bodies[3].mass = 0.095), path: '/joints/2' },
   { code: 'W_MOTOR_OVERPOWERED', mutate: (j) => void (j.joints[2].motor.maxTorque = 1e6), path: '/joints/2/motor/maxTorque' },
   { code: 'W_MOTOR_UNDERPOWERED', mutate: (j) => void (j.joints[2].motor.maxTorque = 0.001), path: '/joints/2/motor/maxTorque' },
   {
@@ -330,7 +330,7 @@ test('inputs that are not objects give only E_FORMAT at the document', () => {
 });
 
 test('validate never throws on odd documents', () => {
-  const header = { format: 'ragassembler', version: 2 };
+  const header = { format: 'ragassembler', version: 3 };
   const odd = [
     { ...header },
     { ...header, ragdoll: null, sprites: null, bodies: 5, joints: 'x', clips: {} },
@@ -570,11 +570,21 @@ test('W_ANCHOR_OUTSIDE tolerates an anchor within 1 mm of a shape and rotates wi
   assert.deepEqual(validate(rotated).warnings, []);
 });
 
-test('W_BODY_ZERO_MASS is skipped when the body has errors in its shapes', () => {
+test('W_JOINT_MASS_RATIO fires only above 10:1, names both bodies without values, and skips mass errors', () => {
   const json = validFile();
-  json.bodies[1].fixtures[0].density = 0;
-  json.bodies[1].fixtures[0].friction = -1;
-  assert.deepEqual(summary(problemsOf(json)), [{ code: 'E_FIELD_RANGE', path: '/bodies/1/fixtures/0/friction' }]);
+  json.bodies[3].mass = 10;
+  const suggestions = motorTorqueSuggestions(json);
+  for (const each of json.joints) each.motor.maxTorque = suggestions.get(each.id);
+  json.ragdoll.balance.maxTorque = balanceTorqueSuggestion(json);
+  assert.deepEqual(validate(json).warnings, []);
+  json.bodies[3].mass = 0.0999;
+  const ratio = validate(json).warnings.find((warning) => warning.code === 'W_JOINT_MASS_RATIO');
+  assert.equal(ratio.path, '/joints/2');
+  assert.match(ratio.message, /body "torso" and body "head"/);
+  assert.doesNotMatch(ratio.message, /\d/);
+  json.bodies[3].mass = -1;
+  assert.ok(!problemsOf(json).some((problem) => problem.code === 'W_JOINT_MASS_RATIO'));
+  assert.ok(problemsOf(json).some((problem) => problem.code === 'E_FIELD_RANGE' && problem.path === '/bodies/3/mass'));
 });
 
 test('W_MOTOR_OVERPOWERED fires only above 1000 times the suggestion, without values in the message', () => {
@@ -601,7 +611,7 @@ test('W_MOTOR_OVERPOWERED is skipped on errors in bodies or in the joint, and wi
   assert.ok(!problemsOf(jointError).some((problem) => problem.code === 'W_MOTOR_OVERPOWERED'));
   const massless = validFile();
   massless.joints[2].motor.maxTorque = 1e6;
-  massless.bodies[3].fixtures[0].density = 0;
+  massless.bodies[3].fixtures[0].shape.width = 0;
   assert.ok(!problemsOf(massless).some((problem) => problem.code === 'W_MOTOR_OVERPOWERED'));
 });
 
@@ -684,7 +694,7 @@ test('RagImporter.validate delegates to validate and supportedVersions is the fr
   assert.deepEqual(RagImporter.validate(null), validate(null));
   assert.equal(RagImporter.supportedVersions, SUPPORTED_VERSIONS);
   assert.ok(Object.isFrozen(SUPPORTED_VERSIONS));
-  assert.deepEqual([...SUPPORTED_VERSIONS], [2]);
+  assert.deepEqual([...SUPPORTED_VERSIONS], [3]);
   const calls = [];
   RagImporter.validate(validFile(), { hasImage: (asset) => calls.push(asset) });
   assert.deepEqual(calls, []);
