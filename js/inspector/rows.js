@@ -29,7 +29,7 @@ import { displayUnit, fromDisplay, toDisplay } from '../units.js';
 /**
  * What a committed row does.
  * @typedef {{ kind: 'props', uids: ReadonlyArray<number>, path: string, unit: string, label: string }
- * *   | { kind: 'root-body' }
+ *   | { kind: 'root-body' }
  *   | { kind: 'rest-angle', uids: ReadonlyArray<number>, label: string }
  *   | { kind: 'action', action: string, label: string }
  *   | { kind: 'channel-key', clip: number, target: number, channel: string, time: number, label: string }
@@ -292,7 +292,7 @@ export function channelRow(ctx, { id, label, channel }) {
   const { model, uids } = ctx;
   const hint = CHANNEL_HINTS[channel];
   if (ctx.animate === null || model.get(ctx.animate.clip)?.type !== 'clip') {
-    const key ={ state: 'empty', disabled: true, reason: ANIMATE_ONLY, label: `Key ${channel}`, value: null, edit: null };
+    const key = { state: 'empty', disabled: true, reason: ANIMATE_ONLY, label: `Key ${channel}`, value: null, edit: null };
     return fieldRow(ctx, id, { label, hint, key });
   }
   const { clip, time, editable } = ctx.animate;
@@ -383,7 +383,7 @@ function propsCommand(model, edit, displayed, component, pixelsPerMeter) {
  * @param {{ component?: 0|1, pixelsPerMeter: number }} options Vec2 component, and the document scale, px/m.
  * @returns {import('../commands/history.js').Command|null} The command, or `null` when every object already
  *   holds the value.
- * @throws {Error} When the edit is neither a props nor a rest-angle edit.
+ * @throws {Error} When the edit is not a props, rest-angle or channel-key edit.
  */
 export function editCommand(model, edit, displayValue, { component, pixelsPerMeter } = {}) {
   if (edit?.kind === 'props') return propsCommand(model, edit, displayValue, component, pixelsPerMeter);
