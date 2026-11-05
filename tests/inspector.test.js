@@ -56,20 +56,35 @@ function ctxOf(editor, type, uids, overrides = {}) {
   return { model: editor.model, type, uids, editable: true, reason: null, animate: null, pixelsPerMeter: 32, ...overrides };
 }
 
-test('inspector: an empty selection shows the Ragdoll page without selecting the root', () => {
-  const { editor, page } = setup();
+test('inspector: an empty selection shows only the Document page, without selecting the root', () => {
+  const { editor, page, rowOf } = setup();
   const current = page();
   assert.equal(current.kind, 'object');
-  assert.equal(current.type, 'root');
+  assert.equal(current.type, 'document');
   assert.deepEqual(current.uids, [ROOT_UID]);
-  assert.equal(current.title, 'Ragdoll · puppet');
+  assert.equal(current.title, 'Document');
   assert.equal(current.summary, null);
-  assert.deepEqual(current.sections.map((section) => section.id), ['ragdoll', 'document', 'drive', 'balance']);
-  assert.deepEqual(current.sections.map((section) => section.label), ['Ragdoll', 'Document', 'Drive', 'Balance']);
+  assert.deepEqual(current.sections.map((section) => section.id), ['document']);
+  assert.deepEqual(current.sections.flatMap((section) => section.rows).map((row) => row.id), ['units.pixelsPerMeter', 'preview.gravity']);
   assert.deepEqual(editor.selection.objects, []);
   editor.selection.set([ROOT_UID]);
-  assert.equal(page().structure, current.structure);
+  const root = page();
+  assert.notEqual(root.structure, current.structure);
+  assert.equal(root.type, 'root');
+  assert.equal(root.title, 'Ragdoll · puppet');
+  assert.deepEqual(root.sections.map((section) => section.id), ['ragdoll', 'drive', 'balance']);
+  assert.deepEqual(root.sections.map((section) => section.label), ['Ragdoll', 'Drive', 'Balance controller']);
+  assert.deepEqual(root.sections[0].rows.map((row) => row.id), ['name', 'id', 'position', 'angle', 'rootBody']);
+  assert.deepEqual(root.sections[1].rows.map((row) => [row.id, row.label]), [
+    ['channels.strength', 'Strength'],
+    ['channels.balance', 'Balance'],
+    ['channels.gain', 'Gain'],
+    ['channels.damping', 'Damping'],
+  ]);
+  assert.equal(rowOf(root, 'units.pixelsPerMeter'), undefined);
+  assert.equal(rowOf(root, 'preview.gravity'), undefined);
   assert.equal(PAGE_BUILDERS.root, rootPage);
+  assert.equal(PAGE_BUILDERS.document, rootPage);
   assert.equal(PAGE_BUILDERS.body, bodyPage);
   assert.equal(PAGE_BUILDERS.joint, jointPage);
   assert.ok(Object.isFrozen(PAGE_BUILDERS));
@@ -107,7 +122,7 @@ test('inspector: the timeline list is shown when focused, and the root page when
   assert.equal(page().title, 'Key');
   editor.selection.remove([key]);
   assert.equal(editor.selection.focus, 'timeline');
-  assert.equal(page().type, 'root');
+  assert.equal(page().type, 'document');
 });
 
 test('inspector: body rows show display units, the mass, the shapes and the root body button', () => {
@@ -168,15 +183,21 @@ test('inspector: shared values are shown once, differing ones as MIXED, per vect
 
 test('inspector: root rows convert units and show balance maxTorque as automatic', () => {
   const { editor, page, rowOf, uid } = setup();
-  editor.history.execute(setProps([ROOT_UID], { 'units.pixelsPerMeter': 100, 'channels.gain': 0.25 }));
+  editor.history.execute(setProps([ROOT_UID], { 'units.pixelsPerMeter': 100, 'channels.gain': 0.25, 'channels.balance': 0.5 }));
+  const documentPage = page();
+  assert.equal(documentPage.pixelsPerMeter, 100);
+  const ppm = rowOf(documentPage, 'units.pixelsPerMeter');
+  assert.deepEqual([ppm.label, ppm.value, ppm.unit, ppm.min, ppm.exclusiveMin, ppm.text], ['Pixels per meter', 100, 'px/m', 0, true, '100']);
+  const gravity = rowOf(documentPage, 'preview.gravity');
+  assert.deepEqual([gravity.label, gravity.unit, gravity.text], ['Preview gravity', 'm/s²', ['0', '-10']]);
+  editor.selection.set([ROOT_UID]);
   const current = page();
   assert.equal(current.pixelsPerMeter, 100);
-  const ppm = rowOf(current, 'units.pixelsPerMeter');
-  assert.deepEqual([ppm.label, ppm.value, ppm.unit, ppm.min, ppm.exclusiveMin, ppm.text], ['Pixels per meter', 100, 'px/m', 0, true, '100']);
   const gain = rowOf(current, 'channels.gain');
   assert.deepEqual([gain.label, gain.value, gain.unit, gain.min, gain.max, gain.animated], ['Gain', 25, '%', 0, 100, true]);
-  const gravity = rowOf(current, 'preview.gravity');
-  assert.deepEqual([gravity.label, gravity.unit, gravity.text], ['Preview gravity', 'm/s²', ['0', '-10']]);
+  const balance = rowOf(current, 'channels.balance');
+  assert.deepEqual([balance.label, balance.value, balance.unit, balance.min, balance.max, balance.animated], ['Balance', 50, '%', 0, 100, true]);
+  assert.equal(balance.key.disabled, true);
   const rootBody = rowOf(current, 'rootBody');
   assert.equal(rootBody.control, 'select');
   assert.equal(rootBody.value, uid('b_base'));
@@ -201,6 +222,7 @@ test('inspector: root rows convert units and show balance maxTorque as automatic
 test('inspector: a rootBody that is not set shows no value', () => {
   const { editor, page, rowOf } = setup();
   editor.history.execute(setProps([ROOT_UID], { rootBody: null }));
+  editor.selection.set([ROOT_UID]);
   assert.equal(rowOf(page(), 'rootBody').value, null);
 });
 
@@ -208,6 +230,7 @@ test('inspector: Animate makes non-animated rows read-only and shows root channe
   const { editor, page, rowOf, uid, model } = setup();
   editor.actions.run('mode:animate');
   editor.modes.setPlayhead(1);
+  editor.selection.set([ROOT_UID]);
   const root = page();
   const strength = rowOf(root, 'channels.strength');
   assert.equal(strength.readOnly, false);
@@ -237,7 +260,7 @@ test('inspector: Animate makes non-animated rows read-only and shows root channe
   assert.equal(rowOf(body, 'position'), undefined);
   assert.equal(rowOf(body, 'linearDamping').reason, 'only in Edit mode');
   assert.equal(rowOf(body, 'shapes').readOnly, false);
-  editor.selection.clear();
+  editor.selection.set([ROOT_UID]);
   editor.modes.setPlayhead(2);
   assert.equal(page().structure, root.structure);
   near(rowOf(page(), 'channels.strength').value, 25);
@@ -290,6 +313,7 @@ test('inspector: a failing playhead evaluation falls back to the document values
 test('inspector: Simulate shows document values, every field read-only', () => {
   const { editor, page, rowOf } = setup();
   editor.modes.startSimulate();
+  editor.selection.set([ROOT_UID]);
   const current = page();
   const rows = current.sections.flatMap((section) => section.rows);
   assert.ok(rows.every((row) => row.readOnly));
@@ -329,6 +353,8 @@ test('editCommand: props edits convert display units and label the undo step', (
   const { editor, page, rowOf, model, uid } = setup();
   const { history } = editor;
   const opts = { pixelsPerMeter: 32 };
+  const documentPage = page();
+  editor.selection.set([ROOT_UID]);
   const root = page();
   history.execute(editCommand(model, rowOf(root, 'name').edit, 'doll', opts));
   assert.equal(model.prop(ROOT_UID, 'name'), 'doll');
@@ -337,7 +363,7 @@ test('editCommand: props edits convert display units and label the undo step', (
   history.execute(editCommand(model, rowOf(root, 'channels.strength').edit, 50, opts));
   assert.equal(model.prop(ROOT_UID, 'channels.strength'), 0.5);
   assert.equal(history.state.undoLabel, 'Edit strength');
-  history.execute(editCommand(model, rowOf(root, 'units.pixelsPerMeter').edit, 64, opts));
+  history.execute(editCommand(model, rowOf(documentPage, 'units.pixelsPerMeter').edit, 64, opts));
   assert.equal(model.prop(ROOT_UID, 'units.pixelsPerMeter'), 64);
   assert.equal(history.state.undoLabel, 'Pixels per meter');
   history.execute(editCommand(model, rowOf(root, 'balance.gain').edit, 4, opts));
@@ -345,7 +371,7 @@ test('editCommand: props edits convert display units and label the undo step', (
   assert.equal(history.state.undoLabel, 'Edit balance gain');
   history.execute(editCommand(model, rowOf(root, 'balance.enabled').edit, false, opts));
   assert.equal(model.prop(ROOT_UID, 'balance.enabled'), false);
-  history.execute(editCommand(model, rowOf(root, 'preview.gravity').edit, -9.8, { component: 1, pixelsPerMeter: 32 }));
+  history.execute(editCommand(model, rowOf(documentPage, 'preview.gravity').edit, -9.8, { component: 1, pixelsPerMeter: 32 }));
   assert.deepEqual(model.prop(ROOT_UID, 'preview.gravity'), [0, -9.8]);
   assert.equal(history.state.undoLabel, 'Edit preview gravity');
   editor.selection.set([uid('b_pole'), uid('b_tip')]);

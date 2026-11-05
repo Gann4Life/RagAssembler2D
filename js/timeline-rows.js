@@ -7,6 +7,7 @@ const CHANNEL_LABELS = Object.freeze({
   angle: 'angle',
   bodyAngle: 'body angle',
   strength: 'strength',
+  balance: 'balance',
   gain: 'gain',
   damping: 'damping',
   sprite: 'sprite',
@@ -17,7 +18,7 @@ const CHANNEL_LABELS = Object.freeze({
  * @typedef {object} TrackRow
  * @property {number} track Track uid.
  * @property {string} channel Channel name.
- * @property {string} label Channel label: `angle`, `body angle`, `strength`, `gain`, `damping` or `sprite`.
+ * @property {string} label Channel label: `angle`, `body angle`, `strength`, `balance`, `gain`, `damping` or `sprite`.
  * @property {ReadonlyArray<{ uid: number, t: number, v: (number|string|null) }>} keys Keys in track order: uid, time
  *   (s) and value in the channel unit.
  */
@@ -95,8 +96,8 @@ export function trackGroups(model, clip) {
 }
 
 /**
- * What "+ Track" offers for the object selection (`DESIGN.md` §5.8): the selected joint, or the root when the root or
- * nothing is selected, with its channels that have no track in the clip.
+ * What "+ Track" offers for the object selection (`DESIGN.md` §5.8): the selected joint or the selected root, with its
+ * channels that have no track in the clip. Nothing selected offers nothing.
  * @param {import('./model/model.js').Model} model Document model.
  * @param {number|null} clip Open clip uid, or `null`.
  * @param {ReadonlyArray<number>} objects Selected object uids.
@@ -106,7 +107,7 @@ export function trackGroups(model, clip) {
  */
 export function trackMenu(model, clip, objects) {
   const only = objects.length === 1 ? objects[0] : null;
-  const target = objects.length === 0 ? ROOT_UID : only !== null && (only === ROOT_UID || model.get(only)?.type === 'joint') ? only : null;
+  const target = only !== null && (only === ROOT_UID || model.get(only)?.type === 'joint') ? only : null;
   if (target === null) return { target: null, label: '', channels: [], reason: 'select one joint or the root' };
   const label = targetLabel(model, target);
   if (clip === null || model.get(clip)?.type !== 'clip') return { target, label, channels: [], reason: 'open a clip' };

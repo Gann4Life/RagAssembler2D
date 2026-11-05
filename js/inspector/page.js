@@ -8,10 +8,10 @@ import { rootPage } from './root-page.js';
  * What the inspector shows for the current selection.
  * @typedef {object} InspectorPage
  * @property {'mixed'|'unbuilt'|'object'} kind Objects of several types, a type without a page, or one type's page;
- *   an empty selection gives the root `object` page.
- * @property {string|null} type Node type of the page; `null` when mixed.
+ *   an empty selection gives the `document` `object` page of the root node.
+ * @property {string|null} type Node type of the page, or `document` for an empty selection; `null` when mixed.
  * @property {ReadonlyArray<number>} uids Objects shown, in selection order.
- * @property {string} title E.g. `Body · arm_l`, `3 bodies`, `3 objects selected`.
+ * @property {string} title E.g. `Document`, `Body · arm_l`, `3 bodies`, `3 objects selected`.
  * @property {string|null} summary Mixed only: the count per type, e.g. `2 bodies, 1 joint`.
  * @property {ReadonlyArray<import('./rows.js').InspectorSection>} sections Empty unless `kind` is `object`.
  * @property {number} pixelsPerMeter Document scale used for the display values, px/m.
@@ -20,12 +20,13 @@ import { rootPage } from './root-page.js';
  */
 
 /**
- * Page builders by node type. Later object types add one entry each.
+ * Page builders by node type, plus `document` for an empty selection. Later object types add one entry each.
  * @type {Readonly<Record<string, (ctx: import('./rows.js').PageContext) => ReadonlyArray<import('./rows.js').InspectorSection>>>}
  */
-export const PAGE_BUILDERS = Object.freeze({ root: rootPage, body: bodyPage, joint: jointPage });
+export const PAGE_BUILDERS = Object.freeze({ document: rootPage, root: rootPage, body: bodyPage, joint: jointPage });
 
 const TYPE_NAMES = Object.freeze({
+  document: ['Document', 'document', 'documents'],
   root: ['Ragdoll', 'ragdoll', 'ragdolls'],
   spriteAsset: ['Sprite asset', 'sprite asset', 'sprite assets'],
   body: ['Body', 'body', 'bodies'],
@@ -36,6 +37,7 @@ const TYPE_NAMES = Object.freeze({
   event: ['Event', 'event', 'events'],
 });
 
+const DOCUMENT = 'document';
 const FALLBACK_PIXELS_PER_METER = defaultsOf('document').units.pixelsPerMeter;
 
 function names(type) {
@@ -89,8 +91,8 @@ function page(fields, mode) {
 
 /**
  * The inspector page of the selection (`DESIGN.md` §5.7): the objects list, or the timeline list when it has the
- * focus; nothing selected gives the Ragdoll (root) page; several types give a `mixed` page; a type without a builder
- * gives an `unbuilt` page. Rows are editable only in Edit mode without a gesture; in Animate, animated rows show the
+ * focus; nothing selected gives the Document page (the root node's document settings); several types give a `mixed`
+ * page; a type without a builder gives an `unbuilt` page. Rows are editable only in Edit mode without a gesture; in Animate, animated rows show the
  * value at the playhead. Pure.
  * @param {{ model: import('../model/model.js').Model, selection: import('../model/selection.js').Selection,
  *   modes: import('../modes.js').Modes, history: import('../commands/history.js').History }} editor Editor core parts.
@@ -98,12 +100,13 @@ function page(fields, mode) {
  */
 export function inspectorPage({ model, selection, modes, history }) {
   const list = selection.focus === 'timeline' ? selection.timeline : selection.objects;
-  const uids = list.length === 0 ? [ROOT_UID] : [...list];
+  const empty = list.length === 0;
+  const uids = empty ? [ROOT_UID] : [...list];
   const pixelsPerMeter = pixelsPerMeterOf(model);
   const types = [];
   const counts = new Map();
   for (const uid of uids) {
-    const type = model.get(uid)?.type ?? 'unknown';
+    const type = empty ? DOCUMENT : model.get(uid)?.type ?? 'unknown';
     if (!counts.has(type)) types.push(type);
     counts.set(type, (counts.get(type) ?? 0) + 1);
   }
@@ -118,7 +121,7 @@ export function inspectorPage({ model, selection, modes, history }) {
     }, modes.mode);
   }
   const [type] = types;
-  const title = titleOf(model, type, uids);
+  const title = empty ? names(DOCUMENT)[0] : titleOf(model, type, uids);
   const build = Object.hasOwn(PAGE_BUILDERS, type) ? PAGE_BUILDERS[type] : null;
   if (build === null) return page({ kind: 'unbuilt', type, uids, title, pixelsPerMeter }, modes.mode);
   const gesture = history.inGesture;

@@ -7,7 +7,7 @@ import { toJson } from './io.js';
  * Channel order of a target's tracks in the timeline and the inspector.
  * @type {ReadonlyArray<string>}
  */
-export const CHANNEL_ORDER = Object.freeze(['angle', 'bodyAngle', 'strength', 'gain', 'damping', 'sprite']);
+export const CHANNEL_ORDER = Object.freeze(['angle', 'bodyAngle', 'strength', 'balance', 'gain', 'damping', 'sprite']);
 
 /**
  * Two key times closer than this, in seconds, are the same time.

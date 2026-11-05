@@ -272,13 +272,13 @@ function keyStateOf(model, clip, targets, channel, time) {
 }
 
 /**
- * Row of a multiplier channel (`strength`, `gain`, `damping`) of the root or of joints, with its key button ◇
+ * Row of a multiplier channel (`strength`, `balance`, `gain`, `damping`) of the root or of joints, with its key button ◇
  * (`DESIGN.md` §5.7, Animation). Outside Animate it is the schema field `id` (the root's base value) with ◇ disabled
  * "only in Animate mode". In Animate it shows the open clip's own value at the playhead (the neutral value without a
  * track) as a % field: editable and keyed at the playhead when the channel has a track, else read-only "click ◇ to
  * animate this channel"; with several targets read-only and ◇ disabled "select one joint". Pure.
  * @param {PageContext} ctx Page context; `uids` are the targets (the root, or joints).
- * @param {{ id: string, label: string, channel: 'strength'|'gain'|'damping' }} options Row id (the schema path for
+ * @param {{ id: string, label: string, channel: 'strength'|'balance'|'gain'|'damping' }} options Row id (the schema path for
  *   the root), label and channel.
  * @returns {Readonly<InspectorRow>} The frozen row with `key`.
  */

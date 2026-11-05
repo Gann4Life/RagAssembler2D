@@ -34,14 +34,17 @@ test('trackGroups lists the root first, then joints in joints order, each with s
   history.execute(setChannelKey(clip, joints[1], 'damping', 0.2, 0.5));
   history.execute(setJointAngleKey(clip, joints[1], 0.1, 1));
   history.execute(addTrack(clip, joints[0], 'strength'));
+  history.execute(addTrack(clip, ROOT_UID, 'gain'));
+  history.execute(setChannelKey(clip, ROOT_UID, 'balance', 0, 0));
   history.execute(setChannelKey(clip, ROOT_UID, 'strength', 0, 1));
   history.execute(setRootBodyAngleKey(clip, 0.5, 0.2));
   const groups = trackGroups(model, clip);
   assert.deepEqual(groups.map((group) => [group.target, group.label]), [[ROOT_UID, 'Root'], [joints[0], model.prop(joints[0], 'name')], [joints[1], 'knee']]);
-  assert.deepEqual(groups[0].tracks.map((track) => track.label), ['body angle', 'strength']);
+  assert.deepEqual(groups[0].tracks.map((track) => track.label), ['body angle', 'strength', 'balance', 'gain']);
   assert.deepEqual(groups[1].tracks.map((track) => [track.channel, track.keys.length]), [['strength', 0]]);
   assert.deepEqual(groups[2].tracks.map((track) => track.channel), ['angle', 'damping']);
   assert.equal(summaryKeys(groups.flatMap((group) => group.tracks), []).length, 4);
+  assert.equal(groups[0].tracks[2].keys[0].v, 0);
   assert.deepEqual(trackGroups(model, null), []);
 });
 
@@ -141,15 +144,20 @@ test('neutral and track values follow the clip blend, the root base and the keys
   near(trackValueAt(model, track, 0.15), 0.5);
   assert.equal(trackValueAt(model, track, 0.9), 0);
   assert.equal(findTrack(model, clip, ROOT_UID, 'strength'), track);
-  assert.deepEqual(channelsOf(model, ROOT_UID), ['bodyAngle', 'strength', 'gain', 'damping']);
+  assert.deepEqual(channelsOf(model, ROOT_UID), ['bodyAngle', 'strength', 'balance', 'gain', 'damping']);
+  history.execute(setProps([ROOT_UID], { 'channels.balance': 0.3 }));
+  assert.equal(neutralValue(model, clip, ROOT_UID, 'balance'), 0.3);
   assert.deepEqual(channelsOf(model, joints[0]), ['angle', 'strength', 'gain', 'damping']);
   assert.deepEqual(channelsOf(model, clip), []);
 });
 
-test('trackMenu targets the selected joint, or the root with nothing selected, and gives the reasons', () => {
+test('trackMenu targets the selected joint or root, offers balance after strength for the root, and gives the reasons', () => {
   const { model, history, joints, clip } = environment();
-  assert.deepEqual(trackMenu(model, clip, []), { target: ROOT_UID, label: 'Root', channels: ['bodyAngle', 'strength', 'gain', 'damping'], reason: null });
-  assert.equal(trackMenu(model, clip, [ROOT_UID]).target, ROOT_UID);
+  assert.deepEqual(trackMenu(model, clip, []), { target: null, label: '', channels: [], reason: 'select one joint or the root' });
+  assert.deepEqual(trackMenu(model, clip, [ROOT_UID]), { target: ROOT_UID, label: 'Root', channels: ['bodyAngle', 'strength', 'balance', 'gain', 'damping'], reason: null });
+  history.execute(addTrack(clip, ROOT_UID, 'strength'));
+  assert.deepEqual(trackMenu(model, clip, [ROOT_UID]).channels, ['bodyAngle', 'balance', 'gain', 'damping']);
+  assert.equal(trackMenu(model, clip, [joints[0]]).channels.includes('balance'), false);
   assert.equal(trackMenu(model, null, [joints[1]]).reason, 'open a clip');
   assert.equal(trackMenu(model, clip, joints).reason, 'select one joint or the root');
   const body = model.get(model.uidOf(model.prop(joints[0], 'bodyA'))).uid;
@@ -203,6 +211,19 @@ test('channelRow: the key button adds the track and keys the field value at the 
   assert.equal(model.prop(key, 'v'), 1);
 });
 
+test('channelRow: the root balance ◇ keys a root balance track from its base value', () => {
+  const editor = environment();
+  const { model, history, clip } = editor;
+  history.execute(setProps([ROOT_UID], { 'channels.balance': 0.25 }));
+  const row = channelRow(animateCtx(editor, [ROOT_UID]), { id: 'channels.balance', label: 'Balance', channel: 'balance' });
+  assert.equal(row.value, 25);
+  assert.equal(row.key.label, 'Key balance at 0.50 s (not animated)');
+  const key = history.execute(keyCommand(model, row.key));
+  assert.equal(history.state.undoLabel, 'Key balance');
+  assert.equal(model.prop(key, 'v'), 0.25);
+  assert.equal(model.get(key).parent, findTrack(model, clip, ROOT_UID, 'balance'));
+});
+
 test('channelRow: outlined without a key at the playhead, and several joints are read-only', () => {
   const editor = environment();
   const { model, history, joints, clip } = editor;
@@ -223,7 +244,10 @@ test('inspector pages: root ◇ disabled outside Animate, joint channel rows onl
   const editor = environment();
   const { selection, modes, joints, clip } = editor;
   const rowOf = (page, id) => page.sections.flatMap((section) => section.rows).find((row) => row.id === id);
+  assert.equal(rowOf(inspectorPage(editor), 'channels.strength'), undefined);
+  selection.set([ROOT_UID]);
   const edit = inspectorPage(editor);
+  assert.equal(rowOf(edit, 'channels.balance').key.reason, 'only in Animate mode');
   assert.equal(rowOf(edit, 'channels.strength').readOnly, false);
   assert.equal(rowOf(edit, 'channels.strength').key.disabled, true);
   assert.equal(rowOf(edit, 'channels.strength').key.reason, 'only in Animate mode');
