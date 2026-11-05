@@ -118,6 +118,9 @@
 - [ ] #200 Extract the delete keys enabled rule into a tested helper
 - [x] #203 Timeline summary row: select and edit all keys at a time
 - [ ] #213 Authored follow-through after fast keys
+- [x] #217 Clicking empty space in the Timeline key lanes clears the key selection
+- [ ] #218 Strength, gain and damping tracks with + Track and track deletion
+- [ ] #220 Pose tool: Shift+drag rotates the body about its parent joint
 
 ## Phase 3 – Round-trip verification
 - [ ] #40 Valid round-trip fixture set
