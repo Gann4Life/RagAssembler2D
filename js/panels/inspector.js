@@ -197,7 +197,7 @@ export function createInspector(element, editor) {
       const name = component === undefined ? fieldName(current) : `${fieldName(current)} ${component === 0 ? 'x' : 'y'}`;
       if (current.readOnly && current.reason) return `${name} (${current.reason})`;
       if (state.invalid) return `${name} (${rangeText(current)})`;
-      return name;
+      return current.hint ? `${name}. ${current.hint}` : name;
     }, { placement: 'below' });
     tooltips.push(handle);
     update(row);

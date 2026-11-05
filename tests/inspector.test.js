@@ -8,6 +8,7 @@ import { MIXED, editCommand, fieldRow, sharedValue } from '../js/inspector/rows.
 import { PAGE_BUILDERS, inspectorPage } from '../js/inspector/page.js';
 import { rootPage } from '../js/inspector/root-page.js';
 import { bodyPage } from '../js/inspector/body-page.js';
+import { jointPage } from '../js/inspector/joint-page.js';
 import { rigDocument } from './helpers/rigs.js';
 
 const near = (actual, expected, label = '') => assert.ok(Math.abs(actual - expected) < 1e-9, `${label} ${actual} !== ${expected}`);
@@ -70,6 +71,7 @@ test('inspector: an empty selection shows the Ragdoll page without selecting the
   assert.equal(page().structure, current.structure);
   assert.equal(PAGE_BUILDERS.root, rootPage);
   assert.equal(PAGE_BUILDERS.body, bodyPage);
+  assert.equal(PAGE_BUILDERS.joint, jointPage);
   assert.ok(Object.isFrozen(PAGE_BUILDERS));
 });
 
@@ -83,10 +85,10 @@ test('inspector: several types give a mixed page, a type without a builder an un
   assert.equal(mixed.summary, '2 bodies, 1 joint');
   assert.deepEqual(mixed.sections, []);
   assert.deepEqual(mixed.uids, [uid('b_base'), uid('j_pole'), uid('b_tip')]);
-  editor.selection.set([uid('j_pole')]);
-  assert.equal(page().kind, 'unbuilt');
-  assert.equal(page().title, 'Joint · pole');
   const shapes = model.children(uid('b_pole'), 'fixtures');
+  editor.selection.set([shapes[0]]);
+  assert.equal(page().kind, 'unbuilt');
+  assert.equal(page().title, 'Shape · pole_0');
   editor.selection.set([...shapes]);
   assert.equal(page().title, '2 shapes');
   assert.equal(page().type, 'shape');
@@ -375,7 +377,7 @@ test('editCommand: a vec2 component edit of several objects keeps each other com
   assert.equal(editCommand(model, edit, 0, { component: 0, pixelsPerMeter: 32 }), null);
 });
 
-test('editCommand: only props edits are commands', () => {
+test('editCommand: only props and rest-angle edits are commands', () => {
   const { model, uid } = setup();
   assert.throws(() => editCommand(model, { kind: 'root-body' }, 3, { pixelsPerMeter: 32 }), /not a command/);
   assert.throws(() => editCommand(model, { kind: 'placement', uids: [uid('b_pole')], field: 'angle', label: 'Rotate' }, 3, { pixelsPerMeter: 32 }), /not a command/);
@@ -393,4 +395,158 @@ test('fieldRow: a path outside the schema needs a control; derived reasons hold 
   assert.equal(locked.reason, null);
   assert.equal(locked.edit.kind, 'props');
   assert.ok(Object.isFrozen(row));
+});
+
+function bodyPose(model, uid) {
+  return { position: model.prop(uid, 'position'), angle: model.prop(uid, 'angle') };
+}
+
+function reverseRig(editor, uid) {
+  editor.selection.set([uid('b_tip')]);
+  editor.actions.run('set-root-body');
+}
+
+test('joint page: sections, display units and the read-only rows', () => {
+  const { editor, model, uid, page, rowOf } = setup();
+  editor.history.execute(setProps([uid('j_pole')], { 'limits': { enabled: true, lower: -Math.PI / 6, upper: Math.PI / 4 } }));
+  editor.history.execute(setProps([uid('j_pole')], { 'aimAxis': Math.PI / 2 }));
+  editor.selection.set([uid('j_pole')]);
+  const current = page();
+  assert.equal(current.title, 'Joint · pole');
+  assert.deepEqual(current.sections.map((section) => section.id), ['joint', 'limits', 'motor', 'aim']);
+  const [name, id, type, bodyA, bodyB] = ['name', 'id', 'type', 'bodyA', 'bodyB'].map((path) => rowOf(current, path));
+  assert.equal(name.readOnly, false);
+  assert.deepEqual([id.readOnly, type.readOnly, type.value], [true, true, 'revolute']);
+  assert.deepEqual([bodyA.control, bodyA.value, bodyA.readOnly, bodyA.edit], ['readout', 'base', true, null]);
+  assert.deepEqual([bodyB.value, bodyB.readOnly], ['pole', true]);
+  const anchor = rowOf(current, 'anchor');
+  assert.deepEqual([anchor.unit, anchor.value], ['px', [0, 6.4]]);
+  const lower = rowOf(current, 'limits.lower');
+  assert.deepEqual([lower.unit, lower.text, lower.max, lower.min], ['°', '-30', 0, undefined]);
+  const upper = rowOf(current, 'limits.upper');
+  assert.deepEqual([upper.text, upper.min, upper.max], ['45', 0, undefined]);
+  assert.equal(rowOf(current, 'limits.enabled').value, true);
+  assert.equal(rowOf(current, 'aimAxis').text, '90');
+  const torque = rowOf(current, 'motor.maxTorque');
+  assert.deepEqual([torque.control, torque.readOnly, torque.reason], ['readout', true, 'set automatically from the rig']);
+  assert.match(torque.value, /^auto \(.+ N·m\)$/);
+  assert.equal(rowOf(current, 'motor.gain').unit, '1/s');
+  assert.equal(rowOf(current, 'motor.maxSpeed').unit, 'rad/s');
+  assert.equal(rowOf(current, 'motor.maxSpeed').hint, 'Caps the correction speed only; keyed motion is never slowed by it.');
+  assert.equal(rowOf(current, 'motor.gain').hint, undefined);
+});
+
+test('joint page: limits are edited in degrees, one undo step, and the schema bounds keep lower <= 0 <= upper', () => {
+  const { editor, model, uid, page, rowOf } = setup();
+  editor.selection.set([uid('j_pole')]);
+  const opts = { pixelsPerMeter: 32 };
+  editor.history.execute(editCommand(model, rowOf(page(), 'limits.enabled').edit, true, opts));
+  editor.history.execute(editCommand(model, rowOf(page(), 'limits.lower').edit, -45, opts));
+  near(model.prop(uid('j_pole'), 'limits.lower'), -Math.PI / 4);
+  assert.equal(editor.history.state.undoLabel, 'Edit limit lower');
+  editor.history.execute(editCommand(model, rowOf(page(), 'limits.upper').edit, 90, opts));
+  near(model.prop(uid('j_pole'), 'limits.upper'), Math.PI / 2);
+  const bounds = page();
+  assert.equal(rowOf(bounds, 'limits.lower').max, 0);
+  assert.equal(rowOf(bounds, 'limits.upper').min, 0);
+  editor.history.undo();
+  near(model.prop(uid('j_pole'), 'limits.upper'), 0);
+});
+
+test('joint page: an anchor edit moves only the anchor', () => {
+  const { editor, model, uid, page, rowOf } = setup();
+  editor.selection.set([uid('j_pole')]);
+  const before = ['b_base', 'b_pole', 'b_tip'].map((id) => bodyPose(model, uid(id)));
+  editor.history.execute(editCommand(model, rowOf(page(), 'anchor').edit, 32, { component: 0, pixelsPerMeter: 32 }));
+  assert.deepEqual(model.prop(uid('j_pole'), 'anchor'), [1, 0.2]);
+  assert.equal(editor.history.state.undoLabel, 'Edit anchor');
+  assert.deepEqual(['b_base', 'b_pole', 'b_tip'].map((id) => bodyPose(model, uid(id))), before);
+});
+
+test('joint page: the rest angle turns the child subtree about the anchor', () => {
+  const { editor, model, uid, page, rowOf } = setup();
+  editor.selection.set([uid('j_pole')]);
+  const row = rowOf(page(), 'restAngle');
+  assert.deepEqual([row.readOnly, row.unit, row.text, row.edit.kind], [false, '°', '28.6', 'rest-angle']);
+  const tipBefore = model.prop(uid('b_tip'), 'position');
+  editor.history.execute(editCommand(model, row.edit, 90, { pixelsPerMeter: 32 }));
+  near(model.prop(uid('b_pole'), 'angle'), Math.PI / 2);
+  near(model.prop(uid('b_base'), 'angle'), 0);
+  near(model.prop(uid('b_tip'), 'angle'), Math.PI / 2 - 0.5);
+  const anchor = model.prop(uid('j_pole'), 'anchor');
+  const turn = Math.PI / 2 - 0.5;
+  const dx = tipBefore[0] - anchor[0];
+  const dy = tipBefore[1] - anchor[1];
+  near(model.prop(uid('b_tip'), 'position')[0], anchor[0] + dx * Math.cos(turn) - dy * Math.sin(turn));
+  near(model.prop(uid('b_tip'), 'position')[1], anchor[1] + dx * Math.sin(turn) + dy * Math.cos(turn));
+  assert.equal(rowOf(page(), 'restAngle').text, '90');
+  assert.equal(editor.history.state.undoLabel, 'Edit rest angle');
+  assert.equal(editCommand(model, rowOf(page(), 'restAngle').edit, 90, { pixelsPerMeter: 32 }), null);
+  editor.history.undo();
+  near(model.prop(uid('b_pole'), 'angle'), 0.5);
+  assert.deepEqual(model.prop(uid('b_tip'), 'position'), tipBefore);
+});
+
+test('joint page: the rest angle of a reversed joint turns the subtree the opposite way', () => {
+  const { editor, model, uid, page, rowOf } = setup();
+  reverseRig(editor, uid);
+  editor.selection.set([uid('j_pole')]);
+  const current = page();
+  const angleA = model.prop(uid('b_base'), 'angle');
+  const angleB = model.prop(uid('b_pole'), 'angle');
+  const row = rowOf(current, 'restAngle');
+  near(row.value, ((angleB - angleA) * 180) / Math.PI);
+  assert.equal(row.readOnly, false);
+  const poleBefore = bodyPose(model, uid('b_pole'));
+  const tipBefore = bodyPose(model, uid('b_tip'));
+  editor.history.execute(editCommand(model, row.edit, 10, { pixelsPerMeter: 32 }));
+  near(model.prop(uid('b_pole'), 'angle') - model.prop(uid('b_base'), 'angle'), (10 * Math.PI) / 180);
+  near(model.prop(uid('b_pole'), 'angle'), angleB);
+  assert.deepEqual(bodyPose(model, uid('b_pole')), poleBefore);
+  assert.deepEqual(bodyPose(model, uid('b_tip')), tipBefore);
+  assert.notEqual(model.prop(uid('b_base'), 'angle'), angleA);
+  editor.history.undo();
+  near(model.prop(uid('b_base'), 'angle'), angleA);
+});
+
+test('joint page: several joints show MIXED and one rest angle edit is one undo step', () => {
+  const { editor, model, uid, page, rowOf } = setup();
+  editor.selection.set([uid('j_pole'), uid('j_tip')]);
+  const current = page();
+  assert.equal(current.title, '2 joints');
+  const row = rowOf(current, 'restAngle');
+  assert.equal(row.value, MIXED);
+  assert.equal(row.text, '');
+  assert.equal(rowOf(current, 'name').value, MIXED);
+  assert.equal(rowOf(current, 'bodyA').value, MIXED);
+  assert.equal(rowOf(current, 'limits.enabled').value, false);
+  editor.history.execute(editCommand(model, row.edit, 20, { pixelsPerMeter: 32 }));
+  const rest = (jointId, a, b) => model.prop(uid(b), 'angle') - model.prop(uid(a), 'angle');
+  near(rest('j_pole', 'b_base', 'b_pole'), (20 * Math.PI) / 180);
+  near(rest('j_tip', 'b_pole', 'b_tip'), (20 * Math.PI) / 180);
+  assert.equal(editor.history.state.undoLabel, 'Edit rest angle');
+  editor.history.undo();
+  assert.notEqual(editor.history.state.undoLabel, 'Edit rest angle');
+  near(model.prop(uid('b_pole'), 'angle'), 0.5);
+  near(model.prop(uid('b_tip'), 'angle'), 0);
+});
+
+test('joint page: the rest angle is read-only without a child body or a placed anchor, and outside Edit mode', () => {
+  const { editor, model, uid, page, rowOf } = setup();
+  editor.history.execute(setProps([uid('j_pole')], { 'bodyB': 'b_base' }));
+  editor.selection.set([uid('j_pole')]);
+  const loop = rowOf(page(), 'restAngle');
+  assert.deepEqual([loop.readOnly, loop.reason], [true, 'the joint has no child body']);
+  assert.throws(() => editor.history.execute(editCommand(model, loop.edit, 5, { pixelsPerMeter: 32 })), /no child body/);
+  editor.history.execute(setProps([uid('j_pole')], { 'bodyB': 'b_pole' }));
+  editor.history.execute(setProps([uid('j_pole')], { 'anchor': [Number.NaN, 0] }));
+  const unplaced = rowOf(page(), 'restAngle');
+  assert.deepEqual([unplaced.readOnly, unplaced.reason], [true, 'the joint has no placed anchor']);
+  editor.history.execute(setProps([uid('j_pole')], { 'anchor': [0, 0.2] }));
+  assert.equal(rowOf(page(), 'restAngle').readOnly, false);
+  const clip = model.children(ROOT_UID, 'clips')[0];
+  editor.modes.openClip(clip);
+  const animate = rowOf(page(), 'restAngle');
+  assert.equal(animate.readOnly, true);
+  assert.equal(animate.reason, 'only in Edit mode');
 });

@@ -33,7 +33,7 @@
 - [x] #20 Inspector framework with root and body properties
 - [ ] #21 Assets panel with import, drag-assign, usage and delete guard
 - [ ] #22 Inspector: shape and sprite properties
-- [ ] #23 Inspector: joint properties
+- [x] #23 Inspector: joint properties
 - [ ] #24 Select tool: aimAxis handle and sprite edit mode
 - [x] #25 Implement RagImporter.validate with all errors and warnings
 - [ ] #26 Problems panel with live validation
@@ -84,7 +84,7 @@
 - [x] #187 Choose the root body (Set as root body)
 - [x] #188 Body-level mass override
 - [ ] #189 Specify the Inspector swap of joint bodies
-- [ ] #190 Warn when the root body is too light
+- [x] #190 Warn when the root body is too light
 - [ ] #191 Make Set as root body discoverable in the Hierarchy
 - [ ] #207 Inspector number fields: drag the label to scrub the value
 - [ ] #208 Read menu and hierarchy shortcuts from HOTKEYS

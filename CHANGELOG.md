@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-05
+
+### Added
+- Joint page in the Inspector: name, id, type, connected bodies, anchor, collide connected, limits in degrees, a rest angle that turns the child branch about the anchor, motor gain, damping and max speed with the automatic max torque shown, and the aim axis.
+
 ## [0.18.0] - 2026-11-05
 
 ### Added

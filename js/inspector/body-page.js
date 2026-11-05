@@ -20,7 +20,7 @@ function isRootBody(model, uid) {
 
 /**
  * Sections of the Body page (`DESIGN.md` §5.7), physics only: BODY (name, id), PHYSICS (damping, `fixedRotation`,
- * `bullet`, read-only mass), SHAPES (the shapes of one body, `—` for several) and the Set as root body button
+ * `bullet`, editable mass), SHAPES (the shapes of one body, `—` for several) and the Set as root body button
  * ("Root body" when it already is). Pure.
  * @param {import('./rows.js').PageContext} ctx Page context; `uids` are bodies.
  * @returns {ReadonlyArray<import('./rows.js').InspectorSection>} Frozen sections.

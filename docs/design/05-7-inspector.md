@@ -59,12 +59,14 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | Property | Notes |
 |---|---|
 | name, id (read-only), type (read-only) | |
-| bodyA, bodyB | Dropdowns, plus a swap button. |
-| anchor | Root-local. |
+| bodyA, bodyB | Read-only: each body's name (or id when the name is empty). No swap or reassignment in the inspector for now ([§12](12-open-items.md#12-open-items--to-verify), Joint body swap). |
+| anchor | Root-local, px in the UI. An edit moves only the anchor, like ALT + dragging the joint ([§5.5](05-5-tools.md#55-tools)): no body moves. Validation warns when it ends outside both bodies' shapes ([§6.4](06-file-format.md#64-validation)). |
+| rest angle | `bodyB.angle − bodyA.angle` in degrees (derived, not stored, [§2.4](02-object-model.md#24-joints)). An edit turns the subtree of the joint's **child body** (the body it is the parent joint of, [§2.4](02-object-model.md#24-joints)) about the anchor until the rest angle is the typed value, as the Select rotation ring does on this joint without ALT ([§5.5](05-5-tools.md#55-tools)); bodyA and the parent side stay. When the child is bodyA (reversed joint) the subtree turns the opposite way. Limits, `aimAxis` and keys stay, since they are relative to rest. Read-only with its reason when the joint has no child body (a loop joint, or invalid bodies) or no placed anchor. Not animatable: Edit mode only. This is the inspector's only rotation of bodies (the Body page has none). |
 | collideConnected | Default false. |
-| limits: enabled, lower, upper | Degrees in the UI, `lower ≤ 0 ≤ upper`. |
-| motor: maxTorque, gain, damping, maxSpeed | Base values ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)). maxTorque is automatic ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels), Automatic motor torque): shown read-only with "auto" until user-set values are specified ([§12](12-open-items.md#12-open-items--to-verify)). |
-| aimAxis | Degrees in the UI ([§4.8](04-animation-model.md#48-procedural-joint-control)). |
+| limits: enabled, lower, upper | Degrees in the UI. `lower ≤ 0` and `upper ≥ 0`, so `lower ≤ 0 ≤ upper` always holds; other values are invalid and revert. |
+| motor: maxTorque | Read-only, shown as "auto (*value* N·m)": it is automatic ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels), Automatic motor torque) and every rig change sets it to the suggestion, `—` with no suggestion. A user-set torque is a later feature ([§12](12-open-items.md#12-open-items--to-verify), User-set motor torque). |
+| motor: gain, damping, maxSpeed | Base values ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)), ≥ 0; gain in 1/s, maxSpeed in rad/s. maxSpeed's hint: "Caps the correction speed only; keyed motion is never slowed by it." |
+| aimAxis | Degrees in the UI, any finite value, local to bodyB ([§4.8](04-animation-model.md#48-procedural-joint-control)). |
 | angle ◆, strength ◆, gain ◆, damping ◆ | Animated channels at the playhead. |
 
 **Sprite asset**
