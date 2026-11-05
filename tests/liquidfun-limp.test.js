@@ -49,6 +49,58 @@ function pelvisDrop(json, seconds) {
   }
 }
 
+const BENT_KNEES = new Map([['j_thighL', -0.4], ['j_shinL', 0.8], ['j_footL', -0.4], ['j_thighR', -0.4], ['j_shinR', 0.8], ['j_footR', -0.4]]);
+
+function crouch(strengthKeys, length = 1) {
+  const { json } = humanoidRig();
+  fitTorque(json);
+  addHoldClip(json, BENT_KNEES, length);
+  const clip = json.clips[0];
+  for (const track of clip.tracks) track.keys = [{ t: 0, v: BENT_KNEES.get(track.target), interp: 'linear' }];
+  clip.tracks.push({ target: json.ragdoll.id, channel: 'strength', keys: strengthKeys });
+  return json;
+}
+
+function dropsAt(json, seconds, marks) {
+  const session = createSimulateSession(Box2D, json, { clip: 'hold', pose: 'hold' });
+  try {
+    const start = session.pose().get(json.ragdoll.rootBody).y;
+    let lowest = start;
+    const drops = [];
+    for (let i = 1; i <= Math.round(seconds / SIMULATE_STEP); i++) {
+      session.step(SIMULATE_STEP);
+      lowest = Math.min(lowest, session.pose().get(json.ragdoll.rootBody).y);
+      if (marks.some((mark) => Math.abs(mark - i * SIMULATE_STEP) < SIMULATE_STEP / 2)) drops.push(start - lowest);
+    }
+    return drops;
+  } finally {
+    session.destroy();
+  }
+}
+
+test('a crouching humanoid held at each strength sags more as S falls and collapses at S ≤ 0.25 (§3.4)', () => {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const drop = new Map();
+  for (const S of [1, 0.75, 0.5, 0.4, 0.25, 0]) {
+    drop.set(S, dropsAt(crouch([{ t: 0, v: S, interp: 'linear' }]), 2, [2])[0]);
+  }
+  const table = [...drop].map(([S, value]) => `${S}: ${value.toFixed(3)} m`).join(', ');
+  assert.ok(drop.get(1) < 0.002, table);
+  assert.ok(drop.get(0.75) <= drop.get(0.5) && drop.get(0.5) < drop.get(0.4), table);
+  assert.ok(drop.get(0.5) > 0.001 && drop.get(0.4) < 0.2, table);
+  assert.ok(drop.get(0.25) > 0.3 && drop.get(0) > 0.8, table);
+});
+
+test('a strength key from 1 to 0 over a 2 s clip sags the crouching humanoid gradually, not at the end (§3.4)', () => {
+  RagImporter.configure({ Box2D, PIXI: { Container } });
+  const keys = [{ t: 0, v: 1, interp: 'linear' }, { t: 2, v: 0, interp: 'linear' }];
+  const [half, three, late, end] = dropsAt(crouch(keys, 2), 2, [1, 1.5, 1.75, 2]);
+  const table = `1 s: ${half.toFixed(3)}, 1.5 s: ${three.toFixed(3)}, 1.75 s: ${late.toFixed(3)}, 2 s: ${end.toFixed(3)} m`;
+  assert.ok(half < 0.01, table);
+  assert.ok(three > 0.01 && three < late && late < end, table);
+  assert.ok(late > 0.1 && end > 0.5, table);
+});
+
 test('a root strength key from 1 to 0 over 0.3 s resolves S to 0 for every joint and the balance', () => {
   const json = document({ limp: true });
   const clip = json.clips[0];
