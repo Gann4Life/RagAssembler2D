@@ -1,7 +1,11 @@
 import { RagImporter, RagFormatError, STEP_SETTINGS, stepWorld } from '../lib/ragimporter.js';
 import { drawPhysics } from './debug-draw.js';
+import { createJointAim } from './joint-aim.js';
+import { createBodyGrab } from './body-grab.js';
 
-const PIXELS_PER_METER = 80;
+const DISPLAY_PIXELS_PER_METER = 80;
+const DEFAULT_PIXELS_PER_METER = 32;
+const CLICK_TOLERANCE_PX = 5;
 const STEP = STEP_SETTINGS.dt;
 const MAX_FRAME = 0.25;
 const SAMPLE_URL = './assets/sample.rag.json';
@@ -18,26 +22,48 @@ const clipsPanel = document.getElementById('clips');
 const errorBox = document.getElementById('error');
 const dropHint = document.getElementById('drop-hint');
 
+const lookAim = createJointAim({
+  toggle: document.getElementById('look-toggle'),
+  select: document.getElementById('look-joint'),
+  slider: document.getElementById('look-weight'),
+  output: document.getElementById('look-weight-value'),
+  patterns: [/^neck$/i, /neck|head/i],
+});
+const armAim = createJointAim({
+  toggle: document.getElementById('aim-toggle'),
+  select: document.getElementById('aim-joint'),
+  slider: document.getElementById('aim-weight'),
+  output: document.getElementById('aim-weight-value'),
+  patterns: [/^shoulder_?r$|right.*shoulder|shoulder.*right|^r(ight)?[_ .-]?shoulder/i, /shoulder|arm/i],
+});
+
 RagImporter.configure({ Box2D, PIXI });
 
 const app = new PIXI.Application();
 await app.init({ resizeTo: stage, background: 0x1b1d22, antialias: true });
 stage.appendChild(app.canvas);
 
+const camera = new PIXI.Container();
 const sceneRoot = new PIXI.Container();
 const physicsView = new PIXI.Graphics();
 sceneRoot.addChild(physicsView);
-app.stage.addChild(sceneRoot);
+camera.addChild(sceneRoot);
+app.stage.addChild(camera);
+app.stage.eventMode = 'static';
+app.stage.hitArea = app.screen;
 
 const gravity = new Box2D.b2Vec2(0, -10);
 const world = new Box2D.b2World(gravity);
 Box2D.destroy(gravity);
 const ground = createGround();
+const grab = createBodyGrab(Box2D, world, ground);
 
 let def = null;
 let instance = null;
 let accumulator = 0;
 let clipButtons = [];
+let cursor = null;
+let pointerDown = null;
 
 function createGround() {
   const bodyDef = new Box2D.b2BodyDef();
@@ -52,9 +78,15 @@ function createGround() {
   return body;
 }
 
+function sceneScale() {
+  return def?.pixelsPerMeter ?? DEFAULT_PIXELS_PER_METER;
+}
+
 function layoutScene() {
-  sceneRoot.scale.set(PIXELS_PER_METER, -PIXELS_PER_METER);
-  sceneRoot.position.set(app.screen.width / 2, app.screen.height - 80);
+  const pixelsPerMeter = sceneScale();
+  camera.scale.set(DISPLAY_PIXELS_PER_METER / pixelsPerMeter);
+  camera.position.set(app.screen.width / 2, app.screen.height - 80);
+  physicsView.scale.set(pixelsPerMeter, -pixelsPerMeter);
 }
 
 function showError(message) {
@@ -97,10 +129,14 @@ function spawnOnGround() {
 
 function respawn() {
   if (def === null) return;
+  grab.release();
+  pointerDown = null;
   instance?.destroy();
   instance = null;
   instance = spawnOnGround();
   instance.setStrength(Number(strengthSlider.value));
+  lookAim.bind(instance);
+  armAim.bind(instance);
   accumulator = 0;
 }
 
@@ -134,11 +170,19 @@ function refreshClipButtons() {
   }
 }
 
+function jointNames(json) {
+  return [...new Set(json.joints.map((joint) => joint.name))];
+}
+
 function loadText(text, label) {
   try {
-    const nextDef = RagImporter.parse(JSON.parse(text));
+    const json = JSON.parse(text);
+    const nextDef = RagImporter.parse(json);
     def = nextDef;
     fileName.textContent = label;
+    layoutScene();
+    lookAim.setJoints(jointNames(json));
+    armAim.setJoints(jointNames(json));
     buildClipButtons();
     respawn();
     clearError();
@@ -197,10 +241,42 @@ strengthSlider.addEventListener('input', () => {
   instance?.setStrength(value);
 });
 
+app.stage.on('pointermove', (event) => {
+  cursor = { x: event.global.x, y: event.global.y };
+  if (pointerDown === null || instance === null) return;
+  if (Math.hypot(event.global.x - pointerDown.x, event.global.y - pointerDown.y) > CLICK_TOLERANCE_PX) pointerDown.moved = true;
+  grab.drag(instance.toWorld(event.global));
+});
+
+app.stage.on('pointerdown', (event) => {
+  if (instance === null) return;
+  const point = instance.toWorld(event.global);
+  const body = grab.pick(instance, point);
+  if (body === null) return;
+  grab.grab(body, point);
+  pointerDown = { x: event.global.x, y: event.global.y, body, point, moved: false };
+});
+
+function endPointer(event) {
+  if (pointerDown === null) return;
+  const { body, point, moved } = pointerDown;
+  pointerDown = null;
+  grab.release();
+  if (!moved && instance !== null && !instance.destroyed) grab.push(body, point);
+}
+
+app.stage.on('pointerup', endPointer);
+app.stage.on('pointerupoutside', endPointer);
+
 app.renderer.on('resize', layoutScene);
 layoutScene();
 
 app.ticker.add((ticker) => {
+  if (instance !== null && cursor !== null) {
+    const target = instance.toWorld(cursor);
+    lookAim.apply(target);
+    armAim.apply(target);
+  }
   accumulator = Math.min(accumulator + ticker.deltaMS / 1000, MAX_FRAME);
   while (accumulator >= STEP) {
     stepWorld(world, instance === null ? [] : [instance], STEP);

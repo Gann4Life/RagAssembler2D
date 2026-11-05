@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-05
+
+### Added
+- Demo controls: Look at cursor and Aim arm toggles with joint pickers and weight sliders, click a body to push it, and drag a body with the mouse.
+- The sample ragdoll shoulders have an aim axis.
+
 ## [0.22.0] - 2026-11-05
 
 ### Added

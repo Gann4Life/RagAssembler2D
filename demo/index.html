@@ -22,6 +22,22 @@
       <span>Strength <output id="strength-value">1.00</output></span>
       <input id="strength" type="range" min="0" max="1" step="0.01" value="1">
     </label>
+    <h2>Aim</h2>
+    <div class="aim">
+      <button id="look-toggle" type="button" aria-pressed="false">Look at cursor</button>
+      <select id="look-joint" aria-label="Look at cursor joint"></select>
+      <label>Weight <output id="look-weight-value">0.80</output>
+        <input id="look-weight" type="range" min="0" max="1" step="0.01" value="0.8">
+      </label>
+    </div>
+    <div class="aim">
+      <button id="aim-toggle" type="button" aria-pressed="false">Aim arm</button>
+      <select id="aim-joint" aria-label="Aim arm joint"></select>
+      <label>Weight <output id="aim-weight-value">1.00</output>
+        <input id="aim-weight" type="range" min="0" max="1" step="0.01" value="1">
+      </label>
+    </div>
+    <p class="hint">Click a body for an impulse, drag it with a mouse joint.</p>
     <h2>Clips</h2>
     <div id="clips"></div>
     <pre id="error" hidden></pre>

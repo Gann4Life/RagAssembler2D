@@ -10,7 +10,7 @@
 npx http-server -c-1 .     # editor: http://localhost:8080, demo: http://localhost:8080/demo/
 ```
 
-ES modules require HTTP. Opening `index.html` from disk does not work. The demo page is **(planned)**.
+ES modules require HTTP. Opening `index.html` from disk does not work.
 
 What the editor shows now (see [Editor boot](architecture/editor-boot.md#editor-boot)):
 - A header toolbar across the top: New, Load, Save | Undo, Redo | Play, Pause, Next frame, Stop, and Window, Settings at the right end. Every button is disabled (muted text, tooltip ends with "(not available yet)"), but stays focusable. Tab reaches the toolbar once; Left/Right/Home/End move between buttons. On narrow windows the header scrolls horizontally.

@@ -337,7 +337,7 @@
         "damping": 0.6,
         "maxSpeed": 12
       },
-      "aimAxis": 0
+      "aimAxis": -1.5707963267948966
     },
     {
       "id": "j_shoulderR",
@@ -361,7 +361,7 @@
         "damping": 0.6,
         "maxSpeed": 12
       },
-      "aimAxis": 0
+      "aimAxis": -1.5707963267948966
     },
     {
       "id": "j_hipL",
