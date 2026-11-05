@@ -2,7 +2,6 @@
 
 > Generated from [GitHub issues](https://github.com/Gann4Life/RagAssembler2D/issues) by `doc-writer`. Do not edit by hand; file new work as issues through `planner`.
 
-
 ## Phase 0 – Foundations
 - [x] #2 Pin PIXI.js v8 and liquidfun.js builds in vendor/
 - [x] #3 Add node --test harness with a first smoke test
@@ -83,10 +82,13 @@
 - [ ] #169 Snap while holding Ctrl instead of the Snap to grid setting
 - [ ] #185 Render a body's shapes as one merged silhouette
 - [x] #187 Choose the root body (Set as root body)
-- [ ] #188 Body-level mass override
+- [x] #188 Body-level mass override
 - [ ] #189 Specify the Inspector swap of joint bodies
 - [ ] #190 Warn when the root body is too light
 - [ ] #191 Make Set as root body discoverable in the Hierarchy
+- [ ] #207 Inspector number fields: drag the label to scrub the value
+- [ ] #208 Read menu and hierarchy shortcuts from HOTKEYS
+- [ ] #212 User-set motor torque per joint with automatic opt-out
 
 ## Phase 2 – Editor: animation
 - [x] #30 Evaluator: track sampling, interpolation and channel defaults
@@ -115,6 +117,7 @@
 - [ ] #199 Pinned preview in Animate: no gravity, root position fixed
 - [ ] #200 Extract the delete keys enabled rule into a tested helper
 - [ ] #203 Timeline summary row: select and edit all keys at a time
+- [ ] #213 Authored follow-through after fast keys
 
 ## Phase 3 – Round-trip verification
 - [ ] #40 Valid round-trip fixture set
@@ -146,6 +149,10 @@
 - [x] #186 Suggested motor torque too weak to hold a humanoid up
 - [ ] #197 Robot slides backwards after landing a jump
 - [ ] #201 Spike: verify balance under loose joints and low strength
+- [x] #209 Motors follow keyframe velocity so fast strikes land at full speed
+- [ ] #210 Spike: find the remaining leg jitter at 20 velocity iterations
+- [ ] #211 Spike: measure whether fewer substeps are enough with 1 kg bodies
+- [ ] #214 Keyed target rate during fades
 
 ## Phase 5 – Demo
 - [ ] #57 Author the demo humanoid with idle and walk clips in the editor

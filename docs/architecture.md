@@ -83,7 +83,7 @@ Each topic lives in its own file; read only the one you need.
 
 ```
 8 × rag.update(dt / 8)            advance clips, fire events, resolve channels + overrides, write motors and textures
-    world.Step(dt / 8, 8, 3)      LiquidFun integrates
+    world.Step(dt / 8, 20, 3)     LiquidFun integrates
 rag.sync()                        body transforms → PIXI sprites (hosts)
 ```
 

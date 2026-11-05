@@ -10,7 +10,7 @@ RagImporter is the `lib/` folder of ES modules, with `lib/ragimporter.js` as its
 - `parse` and `validate` need neither library. `spawn` resolves both on every call, before it creates anything, and throws an `Error` naming the missing one (`liquidfun.js (Box2D)` or `PIXI.js (PIXI)`). A configured value wins over the global; a value is accepted when it is a non-null object or function.
 - The editor uses these same modules for validation, evaluation, Simulate mode and rendering. It may also import the internal `lib/` modules (schema, serializer, emitter); host projects and `demo/` use only `lib/ragimporter.js`.
 
-> **Hosts must step the world with `stepWorld`.** The motor torques and the PD of [§3](03-physics-drive-model.md) are tuned for the editor's stepping (`STEP_SETTINGS`: 1/60 s frames, 8 substeps of 8 velocity and 3 position iterations). A host that calls `world.Step` its own way gets ragdolls that differ from the editor preview and can gain energy and blow up. Call `stepWorld(world, instances)` once per fixed frame instead of `update` + `world.Step`, then `sync()`.
+> **Hosts must step the world with `stepWorld`.** The motor torques and the PD of [§3](03-physics-drive-model.md) are tuned for the editor's stepping (`STEP_SETTINGS`: 1/60 s frames, 8 substeps of 20 velocity and 3 position iterations). A host that calls `world.Step` its own way gets ragdolls that differ from the editor preview and can gain energy and blow up. Call `stepWorld(world, instances)` once per fixed frame instead of `update` + `world.Step`, then `sync()`.
 
 ```js
 import { RagImporter, stepWorld, STEP_SETTINGS } from './lib/ragimporter.js';
@@ -44,7 +44,7 @@ let accumulator = 0;
 app.ticker.add((ticker) => {
   accumulator = Math.min(accumulator + ticker.deltaMS / 1000, 0.25);
   while (accumulator >= STEP_SETTINGS.dt) {
-    stepWorld(world, [rag]);  // 8 × (rag.update(dt / 8), world.Step(dt / 8, 8, 3))
+    stepWorld(world, [rag]);  // 8 × (rag.update(dt / 8), world.Step(dt / 8, 20, 3))
     accumulator -= STEP_SETTINGS.dt;
   }
   rag.sync();                 // physics → PIXI sprites
@@ -63,8 +63,8 @@ app.ticker.add((ticker) => {
 | `RagImporter.parse(json) → RagDef` | Validates with `validate(json)` and builds an immutable definition. Throws `RagFormatError` when there is at least one error; warnings never throw. The definition copies what it needs: later changes to `json` do not affect it, and unknown and editor-only fields are dropped (except `editor.color`, for `debug`). |
 | `RagFormatError` | Exported next to `RagImporter`. Extends `Error`; `name` is `"RagFormatError"`; `errors` and `warnings` are frozen copies of the arrays `validate` returned. `message`: for an unsupported `version`, `Unsupported .rag.json version <v>; supported: <list>`; otherwise `Invalid .rag.json: <n> error(s); first: <code> at <path>`. |
 | `RagImporter.validate(json) → { errors, warnings }` | Validation without throwing: two arrays of problems `{ severity, code, message, path, target }` ([§6.4](06-file-format.md#64-validation)). |
-| `RagImporter.supportedVersions` | Frozen array of the format versions `parse` and `validate` accept: `[2]` ([§6.3](06-file-format.md#63-versioning)). |
-| `STEP_SETTINGS` | Exported next to `RagImporter`. Frozen `{ dt: 1/60, substeps: 8, velocityIterations: 8, positionIterations: 3 }`: the editor's frame step (seconds) and how each frame is split ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)). The editor's Simulate mode and clip simulation read it, so editor and host never drift. |
+| `RagImporter.supportedVersions` | Frozen array of the format versions `parse` and `validate` accept: `[3]` ([§6.3](06-file-format.md#63-versioning)). |
+| `STEP_SETTINGS` | Exported next to `RagImporter`. Frozen `{ dt: 1/60, substeps: 8, velocityIterations: 20, positionIterations: 3 }`: the editor's frame step (seconds) and how each frame is split ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)). `velocityIterations` is the smallest measured value that passes the M6 leg-jitter acceptance with 1 kg bodies (§3, [§3.3](03-physics-drive-model.md#33-body-mass)); each iteration costs about 0.05 ms per frame for 20 ragdolls, paid by every ragdoll on screen, so it is kept low (12 is the floor). The editor's Simulate mode and clip simulation read it, so editor and host never drift. |
 | `stepWorld(world, instances = [], dt = STEP_SETTINGS.dt)` | Exported next to `RagImporter`. Advances one frame exactly like the editor: `substeps` times, `update(dt / substeps)` on every instance in iteration order, then `world.Step(dt / substeps, velocityIterations, positionIterations)`. Does not call `sync()`. Destroyed instances are no-ops. Throws a `TypeError` when `world` has no `Step`, `instances` is not iterable, or `dt` is not a finite number ≥ 0. The editor itself steps through it; with the same file, spawn and inputs the host gets the same body transforms as the editor ([§12](12-open-items.md)). |
 
 **`RagDef`** (one per file; can spawn many instances)
@@ -119,7 +119,7 @@ app.ticker.add((ticker) => {
 **Build order.** One pass, in file order:
 1. Resolve `Box2D` and `PIXI`, check `world` and the options, and check `world.IsLocked()`. Every throw happens here, before anything is created.
 2. Bodies: `b2BodyDef` with `b2_dynamicBody`, `position`, `angle`, `linearDamping`, `angularDamping`, `fixedRotation`, `bullet`; `world.CreateBody`. Bodies start awake with zero velocity.
-3. Fixtures, per body in file order: the shape (circle: `b2CircleShape`, `set_m_radius`, `set_m_p(center)`; box: `b2PolygonShape.SetAsBox(width / 2, height / 2, center, angle)`; polygon: `b2PolygonShape.Set(vertices, count)`), a `b2FixtureDef` with the shape, `density`, `friction`, `restitution` and `isSensor`, then `body.CreateFixture(fixtureDef)`. Its filter gets the file's `categoryBits` and `maskBits` and `groupIndex = 0` (or the fallback value, [§7.5](#75-contact-filter-and-host-integration)) through `GetFilterData` / `SetFilterData`.
+3. Fixtures, per body in file order: the shape (circle: `b2CircleShape`, `set_m_radius`, `set_m_p(center)`; box: `b2PolygonShape.SetAsBox(width / 2, height / 2, center, angle)`; polygon: `b2PolygonShape.Set(vertices, count)`), a `b2FixtureDef` with the shape, the density `fixtureDensities(body)[i]` ([§3.3](03-physics-drive-model.md#33-body-mass): `body.mass` over the carriers' total area, 0 for non-carrier sensors), `friction`, `restitution` and `isSensor`, then `body.CreateFixture(fixtureDef)`. Its filter gets the file's `categoryBits` and `maskBits` and `groupIndex = 0` (or the fallback value, [§7.5](#75-contact-filter-and-host-integration)) through `GetFilterData` / `SetFilterData`.
 4. Joints: `b2RevoluteJointDef.Initialize(bodyA, bodyB, anchorWorld)`, then `collideConnected`, `enableLimit = limits.enabled`, `lowerAngle` / `upperAngle` (mirrored with `flipX`), `enableMotor = false`; `world.CreateJoint`, cast once (below).
 5. View: `new PIXI.Container()` with `sortableChildren = true`, added to `parent` when given; sprites per [§7.3](#73-sprites-and-rendering).
 

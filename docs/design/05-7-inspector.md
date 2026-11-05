@@ -34,7 +34,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | name, id (read-only) | |
 | linearDamping, angularDamping | 1/s, ≥ 0. |
 | fixedRotation, bullet | bool. |
-| mass | Read-only, kg, 3 significant digits: computed from the shapes and their density (`bodyMass`). |
+| mass | `body.mass`, kg, > 0, default 1, shown with 3 significant digits. Editable; with several bodies selected it shows `—` when they differ and a commit sets all of them. Shapes only distribute it ([§3.3](03-physics-drive-model.md#33-body-mass)). A commit recomputes the automatic motor torques ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)). Not animatable. |
 | shapes | List of the body's shapes (name, or id when the name is empty); clicking one selects it. With several bodies selected the row shows `—`. |
 | Set as root body | Button, runs the Set as root body action ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) and is disabled with its reason like it; shown as "Root body" when the body already is `rootBody`. |
 
@@ -46,7 +46,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | circle: center, radius | |
 | box: center, width, height, angle | |
 | polygon: vertex list | Editable x/y rows, validated convex. |
-| density, friction, restitution | Defaults 1, 0.6, 0. |
+| friction, restitution | Defaults 0.6, 0. No density: the body's mass is distributed by area ([§3.3](03-physics-drive-model.md#33-body-mass)). |
 | isSensor | bool. |
 | selfCollide | bool, default false ([§2.5](02-object-model.md#25-collision-rules)). |
 | categoryBits, maskBits | 16-bit checkbox grid. |

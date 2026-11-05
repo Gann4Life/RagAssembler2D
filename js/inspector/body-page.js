@@ -1,18 +1,5 @@
-import { bodyMass } from '../../lib/geometry.js';
 import { ROOT_UID } from '../model/model.js';
 import { MIXED, fieldRow } from './rows.js';
-
-const COMPUTED = 'computed from the shapes';
-
-function massOf(model, body) {
-  const fixtures = model.children(body, 'fixtures').map((uid) => ({ shape: model.prop(uid, 'shape'), density: model.prop(uid, 'density') }));
-  return bodyMass(fixtures).mass;
-}
-
-function sharedMass(model, uids) {
-  const masses = uids.map((uid) => massOf(model, uid));
-  return masses.every((mass) => mass === masses[0]) ? masses[0] : MIXED;
-}
 
 function shapeItem(model, uid) {
   const name = model.prop(uid, 'name');
@@ -52,7 +39,7 @@ export function bodyPage(ctx) {
         row('angularDamping'),
         row('fixedRotation'),
         row('bullet'),
-        row('mass', { control: 'readout', dataUnit: 'kg', value: sharedMass(model, uids), reason: COMPUTED }),
+        row('mass'),
       ],
     },
     {

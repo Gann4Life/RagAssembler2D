@@ -11,7 +11,7 @@
   - Typedefs `Problem` (`severity`, `code`, `message`, `path`, `target`), `ProblemTarget` (`type`, `id`), `ValidationResult`, `ValidateOptions`.
   - `W_DUPLICATE_NAME` is one warning per duplicated name within a kind (bodies, joints, shapes): `path` is the second occurrence, the message lists every colliding id, and equal names across kinds do not warn.
   - Generic checks (`E_FIELD_*`, `W_UNKNOWN_FIELD`) walk `fieldsOf(type, variant)` of `lib/schema.js`; no type, range, enum or key list is redeclared. Every other code is a hand-written rule.
-- **`lib/geometry.js`** gains `polygonProblems(vertices) → 'count' | 'degenerate' | 'notCcw' | 'notConvex' | null`: the first failing check in that order, with the §6.4 thresholds; `null` for a valid polygon. Never throws (non-arrays and non-`vec2` items give `'count'` or are left to `E_FIELD_TYPE` by the caller). `W_ANCHOR_OUTSIDE` uses `pointInShape` with a 0.001 m tolerance and `W_BODY_ZERO_MASS` uses `bodyMass`.
+- **`lib/geometry.js`** gains `polygonProblems(vertices) → 'count' | 'degenerate' | 'notCcw' | 'notConvex' | null`: the first failing check in that order, with the §6.4 thresholds; `null` for a valid polygon. Never throws (non-arrays and non-`vec2` items give `'count'` or are left to `E_FIELD_TYPE` by the caller). `W_ANCHOR_OUTSIDE` uses `pointInShape` with a 0.001 m tolerance; `W_JOINT_MASS_RATIO` reads only `body.mass`.
 - **`lib/ragimporter.js`** (#25 part): `RagImporter.validate(json)` calls `validate(json)` without options, and `RagImporter.supportedVersions` is `SUPPORTED_VERSIONS`. `parse` (#44) throws `RagFormatError` carrying `errors` when there are any.
 
 ## Agreement with editor rules

@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { RagImporter } from '../lib/ragimporter.js';
+import { RagImporter, STEP_SETTINGS } from '../lib/ragimporter.js';
 import { balanceTorqueSuggestion, motorTorqueSuggestions } from '../lib/motor.js';
 
 const require = createRequire(import.meta.url);
@@ -47,7 +47,6 @@ function fixtureOf(part) {
     id: `f_${part.id}`,
     name: part.id,
     shape,
-    density: 1,
     friction: 0.6,
     restitution: 0,
     isSensor: false,
@@ -61,7 +60,7 @@ function fixtureOf(part) {
 function lightCreature(motor) {
   return {
     format: 'ragassembler',
-    version: 2,
+    version: 3,
     meta: { name: 'creature', editorVersion: '0.9.0' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
@@ -72,6 +71,7 @@ function lightCreature(motor) {
       name: part.id,
       position: part.at,
       angle: part.angle ?? 0,
+      mass: 1,
       linearDamping: 0,
       angularDamping: 0,
       fixedRotation: false,
@@ -116,14 +116,14 @@ function groundWorld() {
   return world;
 }
 
-function frame(rag, world, substeps) {
+function frame(rag, world, substeps, iterations = STEP_SETTINGS.velocityIterations) {
   for (let i = 0; i < substeps; i++) {
     rag.update(STEP / substeps);
-    world.Step(STEP / substeps, 8, 3);
+    world.Step(STEP / substeps, iterations, STEP_SETTINGS.positionIterations);
   }
 }
 
-function peakKineticEnergy(motor, seconds, fit = false, substeps = SUBSTEPS) {
+function peakKineticEnergy(motor, seconds, fit = false, substeps = SUBSTEPS, iterations = STEP_SETTINGS.velocityIterations) {
   RagImporter.configure({ Box2D, PIXI: { Container } });
   const world = groundWorld();
   const json = lightCreature(motor);
@@ -132,7 +132,7 @@ function peakKineticEnergy(motor, seconds, fit = false, substeps = SUBSTEPS) {
   let peak = 0;
   try {
     for (let i = 0; i < seconds / STEP; i++) {
-      frame(rag, world, substeps);
+      frame(rag, world, substeps, iterations);
       if (i * STEP < seconds / 2) continue;
       let energy = 0;
       for (const body of rag.bodies.values()) {
@@ -161,8 +161,8 @@ test('a light creature held at rest by zero-gain motors stays still at the defau
 
 test('the suggested torque of the light creature matches the DESIGN §3.1 examples', () => {
   const suggestions = applySuggestedTorque(lightCreature({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }));
-  assert.equal(suggestions.get('j_finger'), 2.4);
-  assert.equal(suggestions.get('j_hip'), 53);
+  assert.equal(suggestions.get('j_finger'), 30);
+  assert.equal(suggestions.get('j_hip'), 2900);
   assert.ok([...suggestions.values()].every((value) => typeof value === 'number' && value >= 0.001));
 });
 
@@ -171,8 +171,8 @@ test('a light creature resting on the ground settles with every joint at its sug
   assert.ok(peak < 0.05, `peak kinetic energy ${peak} J`);
 });
 
-test('without substeps the suggested torques make the light creature gain energy (why the editor steps 8 substeps)', () => {
-  const peak = peakKineticEnergy({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }, 8, true, 1);
+test('without substeps, at 8 velocity iterations, the suggested torques make the light creature gain energy (why the editor steps 8 substeps)', () => {
+  const peak = peakKineticEnergy({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 }, 8, true, 1, 8);
   assert.ok(peak > 0.5, `peak kinetic energy ${peak} J`);
 });
 

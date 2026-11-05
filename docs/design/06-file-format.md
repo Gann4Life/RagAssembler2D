@@ -5,7 +5,7 @@
 ```json
 {
   "format": "ragassembler",
-  "version": 2,
+  "version": 3,
   "meta": { "name": "humanoid", "editorVersion": "0.1.0" },
   "units": { "pixelsPerMeter": 32 },
   "preview": { "gravity": [0, -10] },
@@ -29,6 +29,7 @@
       "name": "torso",
       "position": [0, 1.2],
       "angle": 0,
+      "mass": 1,
       "linearDamping": 0,
       "angularDamping": 0.1,
       "fixedRotation": false,
@@ -38,7 +39,6 @@
           "id": "f_torso",
           "name": "torso",
           "shape": { "type": "box", "center": [0, 0], "width": 0.4, "height": 0.7, "angle": 0 },
-          "density": 1,
           "friction": 0.6,
           "restitution": 0,
           "isSensor": false,
@@ -109,6 +109,7 @@
 - **`ragdoll.name`**: the ragdoll's name, `"root"` in a new document. Save writes it as `meta.name` and uses it for the suggested file name ([§5.3](05-3-header.md#53-header)).
 - **`ragdoll.channels`**: base values of the global multipliers when no clip animates them.
 - **`ragdoll.balance`**: the balance controller that keeps `rootBody` at the root `bodyAngle` ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). `enabled` (boolean) turns it on; `maxTorque` (N·m, ≥ 0), `gain` (1/s, ≥ 0), `damping` (≥ 0) and `maxSpeed` (rad/s, ≥ 0) mean what they mean on a joint motor. Consumed by RagImporter.
+- **`bodies[].mass`**: the body's mass in kg, > 0, default 1. Shapes only distribute it (center of mass, inertia); they carry no density of their own ([§3.3](03-physics-drive-model.md#33-body-mass)). Consumed by RagImporter (fixture densities) and by the torque suggestions.
 - **`sprites[].src`**: path relative to the `.rag.json` file. It is used as the texture key unless the host provides a resolver ([§7.3](07-ragimporter.md#73-sprites-and-rendering)).
 - **`fixtures[].sprite`**: optional; `null` or absent means no sprite.
 - **`tracks[].target`**: `"root"`, a joint id or a shape id.
@@ -124,7 +125,8 @@
 - `version` is an integer and increases on any breaking change.
 - The editor migrates older versions on load and always saves the latest one. Migration is an ordered chain of pure steps, one per version (N → N+1), each tested on its own; a breaking change adds its step. A file with errors after migration is rejected ([§5.3](05-3-header.md#53-header)).
 - RagImporter declares the versions it supports (`RagImporter.supportedVersions`) and **throws** on any other version, with a clear message; `validate` reports it as `E_VERSION_UNSUPPORTED` ([§6.4](#64-validation)).
-- **History.** The latest version is **2**; `supportedVersions` is `[2]`, so files saved as version 1 must be opened and saved again in the editor before a host loads them.
+- **History.** The latest version is **3**; `supportedVersions` is `[3]`, so files saved as version 1 or 2 must be opened and saved again in the editor before a host loads them.
+  - **2 → 3** (body mass, [§3.3](03-physics-drive-model.md#33-body-mass)): adds `mass: 1` to every body object (inserted after `angle`) and removes `density` from every fixture object. Migrated rigs therefore get 1 kg per body instead of their area × density mass (a change of runtime behavior, like the 1 → 2 step): the version 2 masses were never chosen by the user and their ratios (a 20 g thigh between 94 g and 126 g neighbours) are what made the solver ring ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)). The suggested torques, recomputed on Load ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)), follow the new masses. Non-object bodies or fixtures are left as they are for validation to report.
   - **1 → 2** (root `bodyAngle` channel and `ragdoll.balance`, [§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)): adds `ragdoll.balance = { enabled: true, maxTorque, gain: 10, damping: 0.5, maxSpeed: 20 }`, with `maxTorque` = `balanceTorqueSuggestion` of the document, or `80` when it is `null`. Migrated ragdolls therefore get the balance controller (a change of runtime behavior from version 1); the user turns it off in the root inspector. Nothing else changes: version 1 files have no `bodyAngle` tracks. When `ragdoll` is not an object the step adds nothing and validation reports the file.
 - Unknown fields:
   - RagImporter ignores them;
@@ -193,7 +195,8 @@ Shared by the editor (Problems panel, load, save) and RagImporter (`parse`), via
 | `W_BODY_UNLINKED` | A body not connected to `rootBody` through joints. Checked only when `rootBody` is a body id. | `/bodies/i` |
 | `W_JOINT_LOOP` | A loop joint ([§2.4](02-object-model.md#24-joints)). | `/joints/i` |
 | `W_ANCHOR_OUTSIDE` | The anchor is farther than 0.001 m from every shape of both bodies, in rest pose. | `/joints/i/anchor` |
-| `W_BODY_ZERO_MASS` | A body with fixtures and no errors in them whose total mass is 0. | `/bodies/i` |
+| `W_BODY_ZERO_MASS` | Retired in version 3: no longer emitted, since `body.mass > 0` is a range error and shapes no longer carry density ([§3.3](03-physics-drive-model.md#33-body-mass)). The code is not reused. | — |
+| `W_JOINT_MASS_RATIO` | A joint whose two bodies' `mass` differ by more than 10 × (larger / smaller), which makes the solver converge slowly and the joint chain jitter under keyed motion ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque), Velocity iterations). Only for joint edges (two different body ids); skipped when either body's `mass` has an error. The message names both bodies and quotes no values. | `/joints/i` |
 | `W_MOTOR_OVERPOWERED` | `motor.maxTorque` is more than 1000 × the joint's suggested torque ([§3.1](03-physics-drive-model.md#31-suggested-motor-torque)), which makes light bodies gain energy on contact. Skipped when the suggestion is `null`, and when the document has any error in `bodies` or in that joint (no cascades). Also checked for `ragdoll.balance.maxTorque` against the suggested balance torque ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)) while `balance.enabled` is true, with the same skips (errors in `bodies` or `ragdoll`). The message says that opening the file in RagAssembler sets the torque automatically ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)) and quotes no values. In the editor it does not occur once loaded, since Load applies the suggestions; it is for files a host validates. | `/joints/i/motor/maxTorque`, `/ragdoll/balance/maxTorque` |
 | `W_MOTOR_UNDERPOWERED` | `motor.maxTorque` is less than 0.1 × the joint's suggested torque, so the joint cannot hold the ragdoll's weight at its lever or follow its keys; or `ragdoll.balance.maxTorque` is less than 0.1 × the suggested balance torque while `balance.enabled` is true. Same skips, message and editor rule as `W_MOTOR_OVERPOWERED`. | `/joints/i/motor/maxTorque`, `/ragdoll/balance/maxTorque` |
 | `W_CLIP_EMPTY` | A clip with no tracks and no events. | `/clips/i` |

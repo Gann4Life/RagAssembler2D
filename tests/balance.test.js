@@ -12,13 +12,14 @@ function near(actual, expected, tolerance = 1e-9) {
   assert.ok(Math.abs(actual - expected) < tolerance, `${actual} != ${expected}`);
 }
 
-function boxBody(id, position, { center = [0, 0], density = 4 } = {}) {
+function boxBody(id, position, { center = [0, 0], mass = 1 } = {}) {
   return {
     id,
     name: id,
     position,
     angle: 0,
-    fixtures: [{ id: `f_${id}`, shape: { type: 'box', center, width: 0.5, height: 0.5, angle: 0 }, density }],
+    mass,
+    fixtures: [{ id: `f_${id}`, shape: { type: 'box', center, width: 0.5, height: 0.5, angle: 0 } }],
   };
 }
 
@@ -26,12 +27,24 @@ function hinge(id, bodyA, bodyB, anchor) {
   return { id, bodyA, bodyB, anchor };
 }
 
-function versionOne() {
+function versionTwo() {
   const json = ragFile();
+  json.version = 2;
+  for (const body of json.bodies) {
+    delete body.mass;
+    for (const fixture of body.fixtures) fixture.density = 4;
+  }
+  return json;
+}
+
+function versionOne() {
+  const json = versionTwo();
   json.version = 1;
   delete json.ragdoll.balance;
   return json;
 }
+
+const STEP_ONE = [MIGRATIONS[0]];
 
 function codesAt(json) {
   const { errors, warnings } = validate(json);
@@ -70,7 +83,7 @@ test('balanceTorqueSuggestion ignores unconnected bodies and gives the inertia t
 });
 
 test('balanceTorqueSuggestion is null for an unknown rootBody, zero mass or unreadable input', () => {
-  const bodies = [boxBody('b_root', [0, 0], { density: 0 })];
+  const bodies = [boxBody('b_root', [0, 0], { mass: 0 })];
   assert.equal(balanceTorqueSuggestion({ ragdoll: { rootBody: 'b_x' }, bodies, joints: [] }), null);
   assert.equal(balanceTorqueSuggestion({ ragdoll: { rootBody: 'b_root' }, bodies, joints: [] }), null);
   assert.equal(balanceTorqueSuggestion({ ragdoll: { rootBody: null }, bodies, joints: [] }), null);
@@ -81,32 +94,67 @@ test('balanceTorqueSuggestion is null for an unknown rootBody, zero mass or unre
 test('the 1 → 2 migration adds an enabled balance with the suggested torque and validates', () => {
   const json = versionOne();
   const before = structuredClone(json);
-  const result = migrate(json);
+  const result = migrate(json, STEP_ONE);
   assert.deepEqual(json, before);
   assert.equal(result.json.version, 2);
   assert.deepEqual(result.notes, ['Migrated from format version 1 to 2']);
   assert.deepEqual(result.json.ragdoll.balance, {
     enabled: true,
-    maxTorque: balanceTorqueSuggestion(json),
+    maxTorque: balanceTorqueSuggestion(ragFile()),
     gain: 10,
     damping: 0.5,
     maxSpeed: 20,
   });
   assert.deepEqual(Object.keys(result.json.ragdoll).slice(-2), ['channels', 'balance']);
-  assert.deepEqual(validate(result.json).errors, []);
 });
 
 test('the 1 → 2 migration falls back to 80 N·m and skips a non-object ragdoll', () => {
   const massless = versionOne();
   massless.ragdoll.rootBody = 'b_unknown';
-  assert.equal(migrate(massless).json.ragdoll.balance.maxTorque, 80);
+  assert.equal(migrate(massless, STEP_ONE).json.ragdoll.balance.maxTorque, 80);
   for (const ragdoll of [null, 3, []]) {
     const json = { ...versionOne(), ragdoll };
-    const result = migrate(json);
+    const result = migrate(json, STEP_ONE);
     assert.equal(result.json.version, 2);
     assert.equal(result.json.ragdoll, ragdoll);
   }
-  assert.deepEqual(MIGRATIONS.map(({ from, to }) => [from, to]), [[1, 2]]);
+  assert.deepEqual(MIGRATIONS.map(({ from, to }) => [from, to]), [[1, 2], [2, 3]]);
+});
+
+test('the 2 → 3 migration writes mass 1 after angle on every body and drops fixture density', () => {
+  const json = versionTwo();
+  json.bodies[0].mass = 7;
+  const before = structuredClone(json);
+  const result = migrate(json);
+  assert.deepEqual(json, before);
+  assert.equal(result.json.version, 3);
+  assert.deepEqual(result.notes, ['Migrated from format version 2 to 3']);
+  for (const body of result.json.bodies) {
+    assert.equal(body.mass, 1);
+    const keys = Object.keys(body);
+    assert.equal(keys[keys.indexOf('angle') + 1], 'mass');
+    for (const fixture of body.fixtures) assert.equal('density' in fixture, false);
+  }
+  assert.deepEqual(validate(result.json).errors, []);
+  assert.deepEqual(result.json, ragFile());
+});
+
+test('the 2 → 3 migration leaves non-object bodies and fixtures for validation', () => {
+  const json = versionTwo();
+  json.bodies.push(null, 4);
+  json.bodies[0].fixtures.push('x');
+  const result = migrate(json).json;
+  assert.deepEqual(result.bodies.slice(-2), [null, 4]);
+  assert.equal(result.bodies[0].fixtures.at(-1), 'x');
+  assert.equal(migrate({ ...versionTwo(), bodies: 5 }).json.bodies, 5);
+});
+
+test('a version 1 file migrates through 2 to 3 and validates', () => {
+  const result = migrate(versionOne());
+  assert.equal(result.json.version, 3);
+  assert.deepEqual(result.notes, ['Migrated from format version 1 to 2', 'Migrated from format version 2 to 3']);
+  assert.equal(result.json.ragdoll.balance.maxTorque, balanceTorqueSuggestion(ragFile()));
+  assert.deepEqual(validate(result.json).errors, []);
 });
 
 test('ragdoll.balance fields are required, typed and non-negative', () => {
@@ -175,7 +223,7 @@ test('fkPose turns rootBody about its rest center of mass and the tree follows',
 });
 
 test('fkPose turns a massless rootBody about its origin', () => {
-  const def = { ragdoll: { rootBody: 'b_root' }, bodies: [boxBody('b_root', [2, 3], { center: [1, 0], density: 0 })], joints: [] };
+  const def = { ragdoll: { rootBody: 'b_root' }, bodies: [boxBody('b_root', [2, 3], { center: [1, 0], mass: 0 })], joints: [] };
   const turned = fkPose(def, new Map(), 1).get('b_root');
   near(turned.x, 2);
   near(turned.y, 3);
@@ -222,6 +270,26 @@ test('driveBalance clamps speed and torque and wraps the error the short way', (
   near(balanceOf(fakeBody(3, 0), 0, { S: 0.5, G: 10, D: 0 }, BALANCE, 1 / 60), -25);
   near(balanceOf(fakeBody(2 * Math.PI - 0.01, 0), 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60), 3);
   near(balanceOf(fakeBody(-0.01, 0), 4 * Math.PI, { S: 1, G: 10, D: 0.5 }, BALANCE, 1 / 60), 3);
+});
+
+test('driveBalance adds the keyed rate and clamps only the correction', () => {
+  const big = { ...BALANCE, maxTorque: 1e6 };
+  near(balanceOf(fakeBody(0, 0), 0, { S: 1, G: 10, D: 0.5, rate: 2 }, big, 0.1), 0.5 * 3 / 0.1);
+  near(balanceOf(fakeBody(0, 2), 0, { S: 1, G: 10, D: 0.5, rate: 2 }, big, 0.1), 0);
+  near(balanceOf(fakeBody(0, 0), 0, { S: 1, G: 10, D: 0.5, rate: 30 }, big, 0.1), 0.5 * 45 / 0.1);
+  near(balanceOf(fakeBody(0, 0), 3, { S: 1, G: 10, D: 0.5, rate: 30 }, big, 0.1), 0.5 * 50 / 0.1);
+});
+
+test('update feeds the bodyAngle rate forward, negated with flipX', () => {
+  const clip = rootClip([{ t: 0, v: 0, interp: 'linear' }, { t: 0.5, v: 1, interp: 'linear' }]);
+  const plain = fakeInstance({ clips: [clip], root: fakeBody(0.2, 0) });
+  plain.rag.play('tilt');
+  plain.rag.update(0.1);
+  near(plain.root.torques[0][0], 0.5 * 3 / 0.1);
+  const mirrored = fakeInstance({ clips: [clip], flipX: true, root: fakeBody(-0.2, 0) });
+  mirrored.rag.play('tilt');
+  mirrored.rag.update(0.1);
+  near(mirrored.root.torques[0][0], -0.5 * 3 / 0.1);
 });
 
 test('driveBalance does nothing when S or dt is 0 or nothing has mass', () => {

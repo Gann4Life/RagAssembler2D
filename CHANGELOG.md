@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-05
+
+### Added
+- Every body has a mass (1 kg by default), editable in the Body inspector page.
+- Validation warns with `W_JOINT_MASS_RATIO` when the masses across a joint differ by more than 10:1.
+
+### Changed
+- **BREAKING:** file format version 3: fixture density is removed. Older files migrate on load with 1 kg per body; re-save them.
+- Fast keys land on time at their keyed speed: motors follow the keyframe velocity and may pass the key naturally.
+- `maxSpeed` now caps only the correction, not the keyed speed.
+- Suggested joint torques are higher.
+- Physics steps with 20 velocity iterations.
+
+### Removed
+- `W_BODY_ZERO_MASS` is no longer emitted.
+
 ## [0.17.0] - 2026-10-25
 
 ### Added

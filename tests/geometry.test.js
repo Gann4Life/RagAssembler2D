@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  bodyMass,
   bodyMassData,
   composeTransforms,
+  fixtureDensities,
   invertTransform,
   pointInShape,
   polygonCentroid,
@@ -202,20 +202,43 @@ test('shapeMass gives no mass for invalid geometry or density', () => {
   assert.equal(shapeMass({ type: 'circle', center: [0, 0], radius: 1 }, 0).mass, 0);
 });
 
-test('bodyMass weights the shape centers by mass, sensors included, and has no center without mass', () => {
-  const result = bodyMass([
-    { shape: { type: 'box', center: [0, 0], width: 1, height: 1, angle: 0 }, density: 1, isSensor: false },
-    { shape: { type: 'box', center: [3, 0], width: 1, height: 1, angle: 0 }, density: 2, isSensor: true },
-    { shape: { type: 'circle', center: [9, 9], radius: 0 }, density: 5 },
-  ]);
-  near(result.mass, 3);
-  near(result.center.x, 2);
-  near(result.center.y, 0);
-  assert.deepEqual(bodyMass([]), { mass: 0, center: null });
-  assert.deepEqual(
-    bodyMass([{ shape: { type: 'circle', center: [1, 1], radius: 1 }, density: 0 }]),
-    { mass: 0, center: null },
-  );
+test('bodyMassData matches the DESIGN §3.3 example: 3 kg over a 1 × 0.5 and a 0.5 × 0.5 box', () => {
+  const body = {
+    mass: 3,
+    fixtures: [
+      { shape: { type: 'box', center: [0, 0], width: 1, height: 0.5, angle: 0 } },
+      { shape: { type: 'box', center: [1, 0], width: 0.5, height: 0.5, angle: 0 } },
+    ],
+  };
+  const data = bodyMassData(body);
+  near(data.mass, 3);
+  near(data.center.x, 1 / 3);
+  near(data.center.y, 0);
+  near(data.inertia, 2 * 1.25 / 12 + 2 / 9 + 0.5 / 12 + 4 / 9);
+  assert.deepEqual(fixtureDensities(body), [4, 4]);
+});
+
+test('sensors carry no mass unless the body has only sensors; invalid shapes get density 0', () => {
+  const solid = { shape: { type: 'box', center: [0, 0], width: 1, height: 1, angle: 0 }, isSensor: false };
+  const sensor = { shape: { type: 'box', center: [3, 0], width: 2, height: 2, angle: 0 }, isSensor: true };
+  const broken = { shape: { type: 'circle', center: [9, 9], radius: 0 } };
+  const mixed = { mass: 2, fixtures: [solid, sensor, broken] };
+  assert.deepEqual(fixtureDensities(mixed), [2, 0, 0]);
+  assert.deepEqual(bodyMassData(mixed), { mass: 2, center: { x: 0, y: 0 }, inertia: 2 / 6 });
+  const sensors = { mass: 1, fixtures: [sensor, { ...sensor, shape: { ...sensor.shape, center: [5, 0] } }] };
+  assert.deepEqual(fixtureDensities(sensors), [0.125, 0.125]);
+  const data = bodyMassData(sensors);
+  near(data.mass, 1);
+  near(data.center.x, 4);
+  near(data.inertia, 2 * 0.125 * (4 * 8 / 12) + 1);
+});
+
+test('changing body.mass scales the inertia and keeps the center', () => {
+  const fixtures = [{ shape: { type: 'circle', center: [1, 0], radius: 0.5 } }, { shape: { type: 'box', center: [0, 0], width: 1, height: 1, angle: 0 } }];
+  const one = bodyMassData({ mass: 1, fixtures });
+  const five = bodyMassData({ mass: 5, fixtures });
+  near(five.center.x, one.center.x);
+  near(five.inertia, 5 * one.inertia);
 });
 
 test('polygonProblems: a valid convex counter-clockwise polygon gives null', () => {
@@ -302,33 +325,40 @@ test('polygonCentroid never yields -0', () => {
 
 test('bodyMassData adds the inertia about the center of mass, as Box2D computes it', () => {
   const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} != ${expected}`);
-  const circle = bodyMassData([{ shape: { type: 'circle', center: [1, 2], radius: 1 }, density: 2 }]);
+  const circle = bodyMassData({ mass: 2 * Math.PI, fixtures: [{ shape: { type: 'circle', center: [1, 2], radius: 1 } }] });
   close(circle.mass, 2 * Math.PI);
   assert.deepEqual(circle.center, { x: 1, y: 2 });
   close(circle.inertia, Math.PI);
-  const box = bodyMassData([{ shape: { type: 'box', center: [1, 0], width: 2, height: 1, angle: 0.7 }, density: 1 }]);
+  const box = bodyMassData({ mass: 2, fixtures: [{ shape: { type: 'box', center: [1, 0], width: 2, height: 1, angle: 0.7 } }] });
   close(box.mass, 2);
   close(box.inertia, 5 / 6);
   const square = [[0, -0.5], [2, -0.5], [2, 0.5], [0, 0.5]];
-  const polygon = bodyMassData([{ shape: { type: 'polygon', vertices: square }, density: 1 }]);
+  const polygon = bodyMassData({ mass: 2, fixtures: [{ shape: { type: 'polygon', vertices: square } }] });
   close(polygon.mass, 2);
   close(polygon.center.x, 1);
   close(polygon.inertia, 5 / 6);
-  const clockwise = bodyMassData([{ shape: { type: 'polygon', vertices: [...square].reverse() }, density: 1 }]);
+  const clockwise = bodyMassData({ mass: 2, fixtures: [{ shape: { type: 'polygon', vertices: [...square].reverse() } }] });
   close(clockwise.inertia, 5 / 6);
-  const pair = bodyMassData([
-    { shape: { type: 'circle', center: [-1, 0], radius: 1 }, density: 1 },
-    { shape: { type: 'circle', center: [1, 0], radius: 1 }, density: 1 },
-  ]);
+  const pair = bodyMassData({
+    mass: 2 * Math.PI,
+    fixtures: [{ shape: { type: 'circle', center: [-1, 0], radius: 1 } }, { shape: { type: 'circle', center: [1, 0], radius: 1 } }],
+  });
   close(pair.inertia, 3 * Math.PI);
   assert.deepEqual(pair.center, { x: 0, y: 0 });
 });
 
 test('bodyMassData has no center and no inertia without mass, and never throws', () => {
   const none = { mass: 0, center: null, inertia: 0 };
-  assert.deepEqual(bodyMassData([]), none);
-  assert.deepEqual(bodyMassData([{ shape: { type: 'circle', center: [0, 0], radius: 1 }, density: 0 }]), none);
-  assert.deepEqual(bodyMassData([null, { shape: { type: 'box' } }, { shape: { type: 'circle', center: [0, 0], radius: 1 }, density: -1 }]), none);
+  const unit = { shape: { type: 'circle', center: [0, 0], radius: 1 } };
+  assert.deepEqual(bodyMassData({ mass: 1, fixtures: [] }), none);
+  for (const mass of [0, -1, Number.NaN, Infinity, '1', undefined]) {
+    assert.deepEqual(bodyMassData({ mass, fixtures: [unit] }), none);
+    assert.deepEqual(fixtureDensities({ mass, fixtures: [unit] }), [0]);
+  }
+  assert.deepEqual(bodyMassData({ mass: 1, fixtures: [null, { shape: { type: 'box' } }] }), none);
+  assert.deepEqual(fixtureDensities({ mass: 1, fixtures: [null, { shape: { type: 'box' } }] }), [0, 0]);
   assert.deepEqual(bodyMassData(null), none);
   assert.deepEqual(bodyMassData(42), none);
+  assert.deepEqual(fixtureDensities(null), []);
+  assert.deepEqual(fixtureDensities({ mass: 1, fixtures: 7 }), []);
 });

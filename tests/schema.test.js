@@ -32,7 +32,7 @@ async function documentedTables() {
 
 test('schema declares the format constants', () => {
   assert.equal(FORMAT, 'ragassembler');
-  assert.equal(FORMAT_VERSION, 2);
+  assert.equal(FORMAT_VERSION, 3);
 });
 
 test('schema covers every object type and is frozen', () => {
@@ -104,7 +104,7 @@ test('fieldsOf filters shape variants and keeps canonical order', () => {
 test('defaultsOf returns the documented defaults per type', () => {
   assert.deepEqual(defaultsOf('document'), {
     format: 'ragassembler',
-    version: 2,
+    version: 3,
     meta: { name: 'root' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
@@ -126,6 +126,7 @@ test('defaultsOf returns the documented defaults per type', () => {
   assert.deepEqual(defaultsOf('body'), {
     position: [0, 0],
     angle: 0,
+    mass: 1,
     linearDamping: 0,
     angularDamping: 0,
     fixedRotation: false,
@@ -133,7 +134,6 @@ test('defaultsOf returns the documented defaults per type', () => {
     fixtures: [],
   });
   const shapeCommon = {
-    density: 1,
     friction: 0.6,
     restitution: 0,
     isSensor: false,
