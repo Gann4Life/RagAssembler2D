@@ -151,7 +151,8 @@ angle        = clipAngle + shortestDelta(clipAngle, procAngle) · weight
 strength     = opts.strength == null ? clipStrength : lerp(clipStrength, opts.strength, weight)
 ```
 
-- **`weight` (0–1)** sets how much of the pose comes from the override versus the animation, i.e. how hard or soft the override is. The host can change it every frame, and `fadeIn` / `fadeOut` options ramp it automatically.
+- **`weight` (0–1)** sets how much of the pose comes from the override versus the animation, i.e. how hard or soft the override is. The host can change it every frame, and `fadeIn` / `fadeOut` options ramp it automatically: the effective weight is `weight × fade`, where `fade` rises linearly to 1 over `fadeIn` seconds and falls to 0 over `fadeOut` seconds, both from its current level. Calling `lookAt` or `setJointAngle` again while the fade is rising keeps that ramp, so a host may call it every frame with the same `fadeIn`; calling it during a fade-out ramps back up from there. Fades add no target rate ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)).
+- The override target has no rate: the joint's rate becomes `lerp(clipRate, 0, weight)`.
 - **`strength`** is optional. It decides how hard the motor pushes while overriding, e.g. an arm that aims firmly even during `pain`. It is still multiplied by root and runtime strength ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)), so `dead` always wins.
 - With `flipX`, the aim axis is mirrored (`π − aimAxis`) and angles are negated, so the same code works for both facings.
 - Aiming a whole chain (spine → neck → head distributing the angle) and true IK are backlog. v1 aims single joints.

@@ -133,7 +133,7 @@
 - [x] #45 Motor controller and runtime multipliers
 - [x] #46 Playback: play, stop, loop and isPlaying
 - [ ] #47 Clip events without misses or duplicates
-- [ ] #48 Procedural overrides: lookAt, setJointAngle, clear and fades
+- [x] #48 Procedural overrides: lookAt, setJointAngle, clear and fades
 - [x] #49 Self-collision setup with the groupIndex fallback
 - [ ] #50 PIXI sprite creation, sync(), z order and texture resolver
 - [x] #51 Runtime debug draw
