@@ -63,7 +63,7 @@ function validFile() {
   head.sprite.asset = 's_face_normal';
   return {
     format: 'ragassembler',
-    version: 3,
+    version: 4,
     meta: { name: 'humanoid', editorVersion: '0.1.0' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
@@ -73,7 +73,7 @@ function validFile() {
       position: [0, 0],
       angle: 0,
       rootBody: 'b_torso',
-      channels: { strength: 1, gain: 1, damping: 1 },
+      channels: { strength: 1, balance: 1, gain: 1, damping: 1 },
       balance: { enabled: true, maxTorque: 26, gain: 10, damping: 0.5, maxSpeed: 20 },
     },
     sprites: [
@@ -330,7 +330,7 @@ test('inputs that are not objects give only E_FORMAT at the document', () => {
 });
 
 test('validate never throws on odd documents', () => {
-  const header = { format: 'ragassembler', version: 3 };
+  const header = { format: 'ragassembler', version: 4 };
   const odd = [
     { ...header },
     { ...header, ragdoll: null, sprites: null, bodies: 5, joints: 'x', clips: {} },
@@ -694,7 +694,7 @@ test('RagImporter.validate delegates to validate and supportedVersions is the fr
   assert.deepEqual(RagImporter.validate(null), validate(null));
   assert.equal(RagImporter.supportedVersions, SUPPORTED_VERSIONS);
   assert.ok(Object.isFrozen(SUPPORTED_VERSIONS));
-  assert.deepEqual([...SUPPORTED_VERSIONS], [3]);
+  assert.deepEqual([...SUPPORTED_VERSIONS], [4]);
   const calls = [];
   RagImporter.validate(validFile(), { hasImage: (asset) => calls.push(asset) });
   assert.deepEqual(calls, []);

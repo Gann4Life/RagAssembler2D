@@ -79,7 +79,7 @@ test('the balance torque follows rig changes and rootBody in the same undo step'
   history.undo();
   assert.equal(model.prop(ROOT_UID, 'balance.maxTorque'), before);
 });
-test('loading a version 1 file migrates it and saving writes version 3', () => {
+test('loading a version 1 file migrates it and saving writes version 4', () => {
   const doc = ragFile();
   doc.version = 1;
   delete doc.ragdoll.balance;
@@ -92,6 +92,6 @@ test('loading a version 1 file migrates it and saving writes version 3', () => {
   const saved = saveJson(editor.model, 'dev');
   assert.equal(saved.ok, true);
   const written = JSON.parse(saved.text);
-  assert.equal(written.version, 3);
+  assert.equal(written.version, 4);
   assert.deepEqual(Object.keys(written.ragdoll.balance).toSorted(), ['damping', 'enabled', 'gain', 'maxSpeed', 'maxTorque']);
 });

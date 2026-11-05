@@ -110,7 +110,7 @@ test('evaluateClip skips tracks without keys and steps sprites', () => {
 });
 
 const def = {
-  ragdoll: { channels: { strength: 0.5, gain: 1, damping: 1 } },
+  ragdoll: { channels: { strength: 0.5, balance: 0.8, gain: 1, damping: 1 } },
   joints: [
     { id: 'j1', motor: { gain: 10, damping: 0.5 } },
     { id: 'j2', motor: { gain: 4, damping: 2 } },
@@ -120,7 +120,7 @@ const def = {
 
 test('resolveChannels with no layers returns defaults', () => {
   const pose = resolveChannels(def, []);
-  assert.deepEqual(pose.root, { strength: 0.5, gain: 1, damping: 1, bodyAngle: 0, bodyAngleRate: 0 });
+  assert.deepEqual(pose.root, { strength: 0.5, balance: 0.8, gain: 1, damping: 1, bodyAngle: 0, bodyAngleRate: 0 });
   assert.deepEqual(pose.joints.get('j1'), { angle: 0, angleRate: 0, strength: 1, gain: 1, damping: 1, S: 0.5, G: 10, D: 0.5 });
   assert.equal(pose.sprites.get('s1'), 'img');
   assert.equal(pose.sprites.get('s2'), null);
@@ -136,6 +136,17 @@ test('resolveChannels applies clip values and leaves untracked channels at defau
   assert.equal(pose.joints.get('j2').angle, 0);
   assert.equal(pose.joints.get('j2').S, 1);
   assert.equal(pose.joints.get('j2').D, 2);
+  assert.equal(pose.root.balance, 0.8);
+});
+
+test('resolveChannels resolves root balance on its own; it never scales the joints', () => {
+  const clip = clipOf([tr('root', 'balance', [0, 0]), tr('root', 'strength', [0, 1], [2, 0])]);
+  const pose = resolveChannels(def, [{ clip, time: 1 }], { strength: 0.5 });
+  assert.equal(pose.root.balance, 0);
+  assert.equal(pose.root.strength, 0.5);
+  assert.equal(pose.joints.get('j1').S, 0.25);
+  const over = resolveChannels(def, [{ clip: clipOf([tr('root', 'balance', [0, 2])]), time: 0 }]);
+  assert.equal(over.root.balance, 1);
 });
 
 test('resolveChannels weight, additive blend and discrete switch', () => {

@@ -73,7 +73,7 @@ export function fakeBody(angle = 0, angularVelocity = 0, { center = [0, 0], velo
 /**
  * Builds a `RagInstance` over a fake world with two fake joints, `j_a` and `j_b`, and a fake root body `b_root`.
  * @param {object} [options] Definition data overrides.
- * @param {{ strength: number, gain: number, damping: number }} [options.channels] Root channels.
+ * @param {{ strength: number, balance: number, gain: number, damping: number }} [options.channels] Root channels.
  * @param {ReadonlyArray<object>} [options.clips] Clips as in the frozen definition data.
  * @param {boolean} [options.flipX] Mirror flag.
  * @param {number} [options.angle] Initial angle of both joints, radians.
@@ -83,7 +83,7 @@ export function fakeBody(angle = 0, angularVelocity = 0, { center = [0, 0], velo
  * @param {number} [options.restAngle] Balance reference angle, radians.
  * @returns {{ rag: RagInstance, joints: Map<string, object>, root: object }} The instance, its fake joints and root body.
  */
-export function fakeInstance({ channels = { strength: 1, gain: 1, damping: 1 }, clips = [], flipX = false, angle = 0, speed = 0, balance = BALANCE, root = fakeBody(), restAngle = 0 } = {}) {
+export function fakeInstance({ channels = { strength: 1, balance: 1, gain: 1, damping: 1 }, clips = [], flipX = false, angle = 0, speed = 0, balance = BALANCE, root = fakeBody(), restAngle = 0 } = {}) {
   const joints = new Map([['j_a', fakeJoint(angle, speed)], ['j_b', fakeJoint(angle, speed)]]);
   const data = {
     channels,

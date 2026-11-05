@@ -1,6 +1,6 @@
 {
   "format": "ragassembler",
-  "version": 3,
+  "version": 4,
   "meta": {
     "name": "sample",
     "editorVersion": "0.1.0"
@@ -25,6 +25,7 @@
     "rootBody": "b_torso",
     "channels": {
       "strength": 1,
+      "balance": 1,
       "gain": 1,
       "damping": 1
     },

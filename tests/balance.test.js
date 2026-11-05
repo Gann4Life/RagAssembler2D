@@ -27,8 +27,15 @@ function hinge(id, bodyA, bodyB, anchor) {
   return { id, bodyA, bodyB, anchor };
 }
 
-function versionTwo() {
+function versionThree() {
   const json = ragFile();
+  json.version = 3;
+  delete json.ragdoll.channels.balance;
+  return json;
+}
+
+function versionTwo() {
+  const json = versionThree();
   json.version = 2;
   for (const body of json.bodies) {
     delete body.mass;
@@ -45,6 +52,7 @@ function versionOne() {
 }
 
 const STEP_ONE = [MIGRATIONS[0]];
+const STEP_TWO = [MIGRATIONS[1]];
 
 function codesAt(json) {
   const { errors, warnings } = validate(json);
@@ -118,14 +126,14 @@ test('the 1 → 2 migration falls back to 80 N·m and skips a non-object ragdoll
     assert.equal(result.json.version, 2);
     assert.equal(result.json.ragdoll, ragdoll);
   }
-  assert.deepEqual(MIGRATIONS.map(({ from, to }) => [from, to]), [[1, 2], [2, 3]]);
+  assert.deepEqual(MIGRATIONS.map(({ from, to }) => [from, to]), [[1, 2], [2, 3], [3, 4]]);
 });
 
 test('the 2 → 3 migration writes mass 1 after angle on every body and drops fixture density', () => {
   const json = versionTwo();
   json.bodies[0].mass = 7;
   const before = structuredClone(json);
-  const result = migrate(json);
+  const result = migrate(json, STEP_TWO);
   assert.deepEqual(json, before);
   assert.equal(result.json.version, 3);
   assert.deepEqual(result.notes, ['Migrated from format version 2 to 3']);
@@ -135,26 +143,81 @@ test('the 2 → 3 migration writes mass 1 after angle on every body and drops fi
     assert.equal(keys[keys.indexOf('angle') + 1], 'mass');
     for (const fixture of body.fixtures) assert.equal('density' in fixture, false);
   }
-  assert.deepEqual(validate(result.json).errors, []);
-  assert.deepEqual(result.json, ragFile());
+  assert.deepEqual(validate(migrate(result.json).json).errors, []);
+  assert.deepEqual(result.json, versionThree());
 });
 
 test('the 2 → 3 migration leaves non-object bodies and fixtures for validation', () => {
   const json = versionTwo();
   json.bodies.push(null, 4);
   json.bodies[0].fixtures.push('x');
-  const result = migrate(json).json;
+  const result = migrate(json, STEP_TWO).json;
   assert.deepEqual(result.bodies.slice(-2), [null, 4]);
   assert.equal(result.bodies[0].fixtures.at(-1), 'x');
-  assert.equal(migrate({ ...versionTwo(), bodies: 5 }).json.bodies, 5);
+  assert.equal(migrate({ ...versionTwo(), bodies: 5 }, STEP_TWO).json.bodies, 5);
 });
 
-test('a version 1 file migrates through 2 to 3 and validates', () => {
+test('a version 1 file migrates through 2 and 3 to 4 and validates', () => {
   const result = migrate(versionOne());
-  assert.equal(result.json.version, 3);
-  assert.deepEqual(result.notes, ['Migrated from format version 1 to 2', 'Migrated from format version 2 to 3']);
+  assert.equal(result.json.version, 4);
+  assert.deepEqual(result.notes, [
+    'Migrated from format version 1 to 2',
+    'Migrated from format version 2 to 3',
+    'Migrated from format version 3 to 4',
+  ]);
+  assert.equal(result.json.ragdoll.channels.balance, 1);
   assert.equal(result.json.ragdoll.balance.maxTorque, balanceTorqueSuggestion(ragFile()));
   assert.deepEqual(validate(result.json).errors, []);
+});
+
+function rootTrack(channel, keys) {
+  return { target: 'root', channel, keys };
+}
+
+function clipWith(tracks, key = 'c') {
+  return { key, name: key, loop: false, hold: true, layer: 0, blend: 'override', length: 2, fadeIn: 0, fadeOut: 0, speed: 1, tracks, events: [] };
+}
+
+test('the 3 → 4 migration copies root strength into balance, base value and tracks, and validates', () => {
+  const json = versionThree();
+  json.ragdoll.channels.strength = 0.4;
+  const fade = [{ t: 0, v: 1, interp: 'linear' }, { t: 2, v: 0, interp: 'step' }];
+  json.clips = [
+    clipWith([{ target: 'j_neck', channel: 'angle', keys: [] }, rootTrack('strength', fade), rootTrack('gain', [])]),
+    clipWith([{ target: 'j_neck', channel: 'strength', keys: [{ t: 0, v: 0.5, interp: 'linear' }] }], 'd'),
+  ];
+  const before = structuredClone(json);
+  const result = migrate(json);
+  assert.deepEqual(json, before);
+  assert.equal(result.json.version, 4);
+  assert.deepEqual(result.notes, ['Migrated from format version 3 to 4']);
+  assert.deepEqual(Object.keys(result.json.ragdoll.channels), ['strength', 'balance', 'gain', 'damping']);
+  assert.equal(result.json.ragdoll.channels.balance, 0.4);
+  const [first, second] = result.json.clips;
+  assert.deepEqual(first.tracks.map((track) => `${track.target}.${track.channel}`), ['j_neck.angle', 'root.strength', 'root.balance', 'root.gain']);
+  assert.deepEqual(first.tracks[2].keys, fade);
+  assert.notEqual(first.tracks[2].keys, first.tracks[1].keys);
+  assert.deepEqual(second, json.clips[1]);
+  assert.deepEqual(validate(result.json).errors, []);
+});
+
+test('the 3 → 4 migration writes balance 1 without a strength base and leaves odd input for validation', () => {
+  const json = versionThree();
+  delete json.ragdoll.channels.strength;
+  assert.deepEqual(migrate(json).json.ragdoll.channels, { gain: 1, damping: 1, balance: 1 });
+  for (const channels of [null, 3, []]) {
+    const odd = versionThree();
+    odd.ragdoll.channels = channels;
+    assert.equal(migrate(odd).json.ragdoll.channels, channels);
+  }
+  assert.equal(migrate({ ...versionThree(), ragdoll: 5 }).json.ragdoll, 5);
+  assert.equal(migrate({ ...versionThree(), clips: 'x' }).json.clips, 'x');
+  const kept = versionThree();
+  kept.clips = [null, { tracks: 4 }, clipWith([rootTrack('strength', []), rootTrack('balance', [{ t: 0, v: 0, interp: 'linear' }])])];
+  const clips = migrate(kept).json.clips;
+  assert.equal(clips[0], null);
+  assert.deepEqual(clips[1], { tracks: 4 });
+  assert.deepEqual(clips[2], kept.clips[2]);
 });
 
 test('ragdoll.balance fields are required, typed and non-negative', () => {
@@ -324,7 +387,7 @@ test('update tracks the spawn angle plus bodyAngle, negated with flipX', () => {
   near(mirrored.root.torques[0][0], -1.5);
 });
 
-test('setBalance, the file switch and dead strength turn the controller off', () => {
+test('setBalance, the file switch, root balance 0 and runtime strength 0 turn the controller off', () => {
   const switched = fakeInstance({ root: fakeBody(0.5, 0) });
   switched.rag.setBalance(false);
   switched.rag.update(1 / 60);
@@ -338,7 +401,26 @@ test('setBalance, the file switch and dead strength turn the controller off', ()
   disabled.rag.setBalance(true);
   disabled.rag.update(1 / 60);
   assert.deepEqual(disabled.root.torques, []);
-  const dead = fakeInstance({ channels: { strength: 0, gain: 1, damping: 1 }, root: fakeBody(0.5, 0) });
+  const dead = fakeInstance({ channels: { strength: 1, balance: 0, gain: 1, damping: 1 }, root: fakeBody(0.5, 0) });
   dead.rag.update(1 / 60);
   assert.deepEqual(dead.root.torques, []);
+  const dropped = fakeInstance({ root: fakeBody(0.5, 0) });
+  dropped.rag.setStrength(0);
+  dropped.rag.update(1 / 60);
+  assert.deepEqual(dropped.root.torques, []);
+});
+
+test('root strength scales the joints only; root balance scales the controller only', () => {
+  const limp = fakeInstance({ channels: { strength: 0, balance: 1, gain: 1, damping: 1 }, root: fakeBody(0.01, 0) });
+  limp.rag.update(1 / 60);
+  assert.equal(limp.root.torques.length, 1);
+  near(limp.root.torques[0][0], -3);
+  for (const joint of limp.joints.values()) assert.equal(joint.maxTorque, 0);
+  const balanced = fakeInstance({ channels: { strength: 1, balance: 0, gain: 1, damping: 1 } });
+  const resolved = resolveChannels({ ragdoll: { channels: { strength: 1, balance: 0, gain: 1, damping: 1 } }, joints: [{ id: 'j', motor: {} }] }, []);
+  assert.equal(resolved.root.balance, 0);
+  assert.equal(resolved.joints.get('j').S, 1);
+  balanced.rag.update(1 / 60);
+  assert.deepEqual(balanced.root.torques, []);
+  for (const joint of balanced.joints.values()) assert.ok(joint.maxTorque > 0);
 });
