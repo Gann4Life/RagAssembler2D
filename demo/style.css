@@ -81,3 +81,30 @@ button.active { background: #2f5d46; border-color: #4a9a73; }
   border: 3px dashed #7fb2ff;
   pointer-events: none;
 }
+
+.aim {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.aim label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+select {
+  padding: 4px;
+  color: inherit;
+  background: #2b2f38;
+  border: 1px solid #444b57;
+  border-radius: 4px;
+}
+
+.hint {
+  margin: 0 0 4px;
+  color: #9aa1ad;
+  font-size: 12px;
+}
