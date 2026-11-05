@@ -1,5 +1,6 @@
 import { fieldsOf } from '../../lib/schema.js';
 import { setProps } from '../commands/props.js';
+import { setRestAngles } from '../commands/transform.js';
 import { displayUnit, fromDisplay, toDisplay } from '../units.js';
 
 /**
@@ -26,9 +27,10 @@ import { displayUnit, fromDisplay, toDisplay } from '../units.js';
  * What a committed row does.
  * @typedef {{ kind: 'props', uids: ReadonlyArray<number>, path: string, unit: string, label: string }
  * *   | { kind: 'root-body' }
+ *   | { kind: 'rest-angle', uids: ReadonlyArray<number>, label: string }
  *   | { kind: 'action', action: string, label: string }
  *   | { kind: 'select' }} InspectorEdit
- *   `props`: `setProps` of the value in the data `unit`; `root-body`: `editor.setRootBody`; `action`: `editor.actions.run` with `label`; `select`: a list
+ *   `props`: `setProps` of the value in the data `unit`; `root-body`: `editor.setRootBody`; `rest-angle`: `setRestAngles` of the joints with the value in degrees; `action`: `editor.actions.run` with `label`; `select`: a list
  *   item selects its uid. `label` is the undo step or the refused-action label.
  */
 
@@ -49,6 +51,7 @@ import { displayUnit, fromDisplay, toDisplay } from '../units.js';
  * @property {ReadonlyArray<{ value: number, label: string }>} [options] Select options: body uids and labels.
  * @property {ReadonlyArray<{ uid: number, label: string, muted: boolean, icon: string }>} [items] List items; `muted`
  *   when the label is the id; `icon` names the shape type.
+ * @property {string|null} [hint] Short help shown in the field's tooltip.
  * @property {boolean} readOnly Whether the field refuses edits.
  * @property {string|null} reason Why it is read-only; `null` when editable or during a gesture.
  * @property {boolean} animated Base or evaluated value of an animation channel.
@@ -172,6 +175,7 @@ function bound(value, dataUnit, pixelsPerMeter) {
  * @property {string} [unit] Display unit, instead of the one derived from the data unit.
  * @property {string} [reason] Makes the row read-only for this reason in every mode (derived values).
  * @property {(text: string) => string} [textFormat] Wraps a readout's formatted number, e.g. `auto (…)`.
+ * @property {string} [hint] Short help shown in the field's tooltip.
  * @property {boolean} [animated] Whether it is a channel value; default from the schema.
  * @property {boolean} [modeFree] Not made read-only by the mode or a gesture (lists that only select).
  * @property {InspectorEdit|null} [edit] Commit, instead of a props edit of the path.
@@ -223,6 +227,7 @@ export function fieldRow(ctx, path, overrides = {}) {
     edit = Object.freeze({ kind: 'props', uids: Object.freeze([...ctx.uids]), path, unit: dataUnit, label: overrides.commitLabel ?? commitLabel(path, label) });
   }
   const row = { id: path, label, control, value, text, unit, readOnly, reason, animated, edit };
+  if (overrides.hint !== undefined) row.hint = overrides.hint;
   if (spec?.min !== undefined) row.min = bound(spec.min, dataUnit, ctx.pixelsPerMeter);
   if (spec?.max !== undefined) row.max = bound(spec.max, dataUnit, ctx.pixelsPerMeter);
   if (spec?.exclusiveMin) row.exclusiveMin = true;
@@ -266,9 +271,10 @@ function propsCommand(model, edit, displayed, component, pixelsPerMeter) {
  * @param {{ component?: 0|1, pixelsPerMeter: number }} options Vec2 component, and the document scale, px/m.
  * @returns {import('../commands/history.js').Command|null} The command, or `null` when every object already
  *   holds the value.
- * @throws {Error} When the edit is not a props edit.
+ * @throws {Error} When the edit is neither a props nor a rest-angle edit.
  */
 export function editCommand(model, edit, displayValue, { component, pixelsPerMeter } = {}) {
   if (edit?.kind === 'props') return propsCommand(model, edit, displayValue, component, pixelsPerMeter);
+  if (edit?.kind === 'rest-angle') return setRestAngles(model, [...edit.uids], fromDisplay(displayValue, 'rad') + 0, edit.label);
   throw new Error(`An inspector edit of kind "${edit?.kind}" is not a command`);
 }

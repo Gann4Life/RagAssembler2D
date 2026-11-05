@@ -1,6 +1,7 @@
 import { defaultsOf } from '../../lib/schema.js';
 import { ROOT_UID } from '../model/model.js';
 import { bodyPage } from './body-page.js';
+import { jointPage } from './joint-page.js';
 import { rootPage } from './root-page.js';
 
 /**
@@ -22,7 +23,7 @@ import { rootPage } from './root-page.js';
  * Page builders by node type. Later object types add one entry each.
  * @type {Readonly<Record<string, (ctx: import('./rows.js').PageContext) => ReadonlyArray<import('./rows.js').InspectorSection>>>}
  */
-export const PAGE_BUILDERS = Object.freeze({ root: rootPage, body: bodyPage });
+export const PAGE_BUILDERS = Object.freeze({ root: rootPage, body: bodyPage, joint: jointPage });
 
 const TYPE_NAMES = Object.freeze({
   root: ['Ragdoll', 'ragdoll', 'ragdolls'],

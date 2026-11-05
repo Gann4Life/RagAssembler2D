@@ -160,7 +160,8 @@ export function rotationPivot(model, bodyUid, center) {
   return isFinitePair(anchor) ? { x: anchor[0], y: anchor[1] } : origin;
 }
 
-const PLACEMENT_FIELDS = Object.freeze(['x', 'y', 'angle']);
+const REST_EPSILON = 1e-12;
+const PLACEMENT_FIELDS =Object.freeze(['x', 'y', 'angle']);
 
 function placement(model, uid, values) {
   const parts = manipulationParts(model, { bodies: [uid], joints: [] }, { subtree: true });
@@ -231,6 +232,77 @@ function ancestorsFirst(model, uids) {
   };
   for (const uid of uids) visit(uid, new Set());
   return order;
+}
+
+/**
+ * The rest angle of a joint and what turning it needs.
+ * @typedef {object} JointRest
+ * @property {number|null} rest `bodyB.angle − bodyA.angle` in radians; `null` when a body is missing or has no finite angle.
+ * @property {number|null} child Child body uid (the body the joint is the parent joint of); `null` for a loop joint or invalid bodies.
+ * @property {boolean} reversed Whether the child is bodyA.
+ * @property {boolean} placed Whether the anchor is a finite pair.
+ */
+
+/**
+ * Reads the rest angle of a joint (`DESIGN.md` §2.4) and whether it can be turned. Pure.
+ * @param {import('../model/model.js').Model} model Document model.
+ * @param {number} jointUid Joint uid.
+ * @param {Map<number, number>} [parents] Result of `parentJoints(model)`, to reuse across calls.
+ * @returns {Readonly<JointRest>} The frozen rest angle information.
+ * @throws {Error} When `jointUid` is not a joint.
+ */
+export function jointRest(model, jointUid, parents = parentJoints(model)) {
+  if (typeOf(model, jointUid) !== 'joint') throw new Error(`Node ${jointUid} is not a joint`);
+  const a = bodyUidOf(model, model.prop(jointUid, 'bodyA'));
+  const b = bodyUidOf(model, model.prop(jointUid, 'bodyB'));
+  const angleA = a === null ? null : model.prop(a, 'angle');
+  const angleB = b === null ? null : model.prop(b, 'angle');
+  const valid = a !== null && b !== null && a !== b && isFiniteNumber(angleA) && isFiniteNumber(angleB);
+  const child = valid ? jointChildBody(model, jointUid, parents) : null;
+  return Object.freeze({
+    rest: valid ? angleB - angleA + 0 : null,
+    child,
+    reversed: child !== null && child === a,
+    placed: isFinitePair(model.prop(jointUid, 'anchor')),
+  });
+}
+
+/**
+ * Builds a command that turns the child body subtree of each joint about its anchor, as Select's rotation ring
+ * does without ALT, until the joint's rest angle is `angle`; the turn is the opposite way for a reversed joint.
+ * Joints are placed one after the other in one transaction through `placeBodies`.
+ * @param {import('../model/model.js').Model} model Document model, read to skip joints already at `angle`.
+ * @param {number[]} jointUids Joint uids.
+ * @param {number} angle Rest angle, radians.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command|null} The command, or `null` when every joint already has the rest angle.
+ * @throws {RangeError} When `angle` is not a finite number.
+ * @throws {Error} When `run` finds a joint without a child body, without a placed anchor or without valid bodies; nothing is mutated then.
+ */
+export function setRestAngles(model, jointUids, angle, label = 'Edit rest angle') {
+  if (!isFiniteNumber(angle)) throw new RangeError('Rest angle must be a finite number');
+  const differs = (current, uid) => {
+    const { rest } = jointRest(current, uid);
+    return rest === null || Math.abs(rest - angle) > REST_EPSILON;
+  };
+  if (!jointUids.some((uid) => differs(model, uid))) return null;
+  return Object.freeze({
+    label,
+    run(tx) {
+      const { model: current } = tx;
+      for (const uid of jointUids) {
+        const info = jointRest(current, uid);
+        if (info.child === null || !info.placed || info.rest === null) throw new Error(`Joint ${uid} has no child body or placed anchor`);
+      }
+      for (const uid of jointUids) {
+        if (!differs(current, uid)) continue;
+        const { child, reversed } = jointRest(current, uid);
+        const [a, b] = [bodyUidOf(current, current.prop(uid, 'bodyA')), bodyUidOf(current, current.prop(uid, 'bodyB'))];
+        const target = reversed ? current.prop(b, 'angle') - angle : current.prop(a, 'angle') + angle;
+        placeBodies([child], { angle: target }, label).run(tx);
+      }
+    },
+  });
 }
 
 /**
