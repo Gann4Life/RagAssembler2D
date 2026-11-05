@@ -54,3 +54,59 @@ export function jointAngleRows(model, clip) {
       });
     });
 }
+
+const SAME_TIME = 1e-6;
+
+/**
+ * One summary key: every key of the rows sharing a time.
+ * @typedef {object} SummaryKey
+ * @property {number} t Time of the earliest key of the group (s).
+ * @property {number[]} keys Key uids at that time, in row order.
+ * @property {number} selected How many of them are selected.
+ * @property {'none'|'some'|'all'} state Selection state of the group.
+ */
+
+/**
+ * Selection state of a group of keys.
+ * @param {ReadonlyArray<number>} keys Key uids of the group.
+ * @param {ReadonlyArray<number>} selected Selected uids.
+ * @returns {{ selected: number, state: 'none'|'some'|'all' }} Selected count and state; `none` for an empty group.
+ */
+export function selectionState(keys, selected) {
+  const count = keys.filter((uid) => selected.includes(uid)).length;
+  return { selected: count, state: count === 0 ? 'none' : count === keys.length ? 'all' : 'some' };
+}
+
+/**
+ * Groups the keys of the rows by time; times closer than 1e-6 s (the `moveKeys` same-time tolerance) share a group.
+ * @param {ReadonlyArray<AngleRow>} rows Timeline rows.
+ * @param {ReadonlyArray<number>} selected Selected uids.
+ * @returns {SummaryKey[]} Groups in time order; empty without keys.
+ */
+export function summaryKeys(rows, selected) {
+  const all = rows.flatMap((row) => row.keys).sort((a, b) => a.t - b.t);
+  const groups = [];
+  for (const key of all) {
+    const last = groups[groups.length - 1];
+    if (last !== undefined && key.t - last.t < SAME_TIME) last.keys.push(key.uid);
+    else groups.push({ t: key.t, keys: [key.uid] });
+  }
+  return groups.map((group) => Object.freeze({ ...group, ...selectionState(group.keys, selected) }));
+}
+
+/**
+ * Selection after a click on a key or a summary key, with the modifiers read at the press: CTRL removes the
+ * targets (and wins over SHIFT), SHIFT adds them or removes them when all are selected, no modifier selects only
+ * the targets unless all are already selected, which keeps the selection.
+ * @param {ReadonlyArray<number>} current Selected uids.
+ * @param {ReadonlyArray<number>} targets Key uids under the click.
+ * @param {{ shift?: boolean, ctrl?: boolean }} modifiers Modifier keys; Cmd counts as CTRL.
+ * @returns {number[]} The new selection.
+ */
+export function clickSelection(current, targets, { shift = false, ctrl = false } = {}) {
+  const hit = new Set(targets);
+  const all = targets.every((uid) => current.includes(uid));
+  if (ctrl || (shift && all)) return current.filter((uid) => !hit.has(uid));
+  if (shift) return [...current, ...targets.filter((uid) => !current.includes(uid))];
+  return all ? [...current] : [...targets];
+}
