@@ -25,26 +25,40 @@ poseTestJson(json) → object                       exported by js/physics/pose-
   always writes meta with the real version)
 
 PoseSessionOptions { root: Transform (ragdoll position and angle, world), bodyId: string, point: Vec2 (world, m),
-                     start: Map<bodyId, Transform> | null (root-local start pose; null = rest pose) }
+                     start: Map<bodyId, Transform> | null (root-local start pose; null = rest pose),
+                     rotate: { joint: string | null } | null (Shift press: rotate about that joint's anchor, or the
+                             grabbed body's center of mass when joint is null; null = pull) }
 createPoseSession(Box2D, json, options) → PoseSession
   RagImporter.parse(poseTestJson(json)) first: a RagFormatError propagates and nothing native exists yet.
   Then: b2World with gravity (0, 0) (vector destroyed after the constructor), def.spawn(world, { x, y, angle } = root,
   flipX false, no parent), every body of start moved there with SetTransform, SetLinearDamping(POSE.linearDamping) and SetAngularDamping(POSE.angularDamping) on every
   instance body, one static ground body without fixtures, a b2MouseJoint ground → rag.body by bodyId with
   target = point, maxForce = POSE.forcePerKg × GetMass(), frequencyHz, dampingRatio; the grabbed body SetAwake(true).
-  An unknown bodyId or a native failure after the world exists destroys what was built and throws.
+  With rotate, no mouse joint: the pivot (world, fixed) is the revolute joint's world anchor on the grabbed body's
+  side, or grabbed.GetWorldCenter() when rotate.joint is null; a b2MotorJoint ground → grabbed with linearOffset and
+  angularOffset = the grabbed body's start position and angle, maxForce = POSE.forcePerKg × M and maxTorque =
+  POSE.forcePerKg × J (M = total mass, J = inertia of every body about the pivot, both at the start),
+  correctionFactor POSE.correction.
+  An unknown bodyId or rotate.joint, or a native failure after the world exists, destroys what was built and throws.
 PoseSession {
-  drag(point: Vec2): void          mouse joint SetTarget through one scratch b2Vec2
+  drag(point: Vec2): void          pull: mouse joint SetTarget through one scratch b2Vec2; rotate: rotation +=
+                                   turnAbout(pivot, previous pointer, point), then SetLinearOffset (start origin
+                                   turned about the pivot) and SetAngularOffset (start angle + rotation)
   advance(seconds): void           accumulates; world.Step(POSE.step, 8, 3) per whole step, at most POSE.maxSteps per call,
                                    the remainder above that dropped
   pose() → Map<bodyId, Transform>  root-local (inverse of options.root composed with each body's world transform)
-  grab() → { anchor: Vec2, target: Vec2 }   world; anchor = the grabbed point on the body (mouse joint GetAnchorB)
-  destroy(): void                  idempotent; DestroyJoint(mouse joint), rag.destroy(), DestroyBody(ground),
+  grab() → { anchor: Vec2, target: Vec2, pivot: Vec2 | null }   world; anchor = the grabbed point on the body (mouse
+                                   joint GetAnchorB; rotate: GetWorldPoint of the press point), pivot null when pulling
+  destroy(): void                  idempotent; DestroyJoint(mouse or motor joint), rag.destroy(), DestroyBody(ground),
                                    RagImporter.releaseWorld(world) once #49 provides it, Box2D.destroy(scratch),
                                    Box2D.destroy(world); later calls on the session throw Error
 }
 POSE (frozen) { step: 1/60 s, maxSteps: 4, linearDamping: 10, angularDamping: 10,
-                forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7 }   s, s⁻¹, N/kg, Hz, unitless
+                forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7, correction: 0.3 }   s, s⁻¹, N/kg, Hz, unitless
+
+turnAbout(pivot: Vec2, from: Vec2, to: Vec2) → number   exported by js/physics/pose-session.js; pure
+  shortest signed angle (radians, (−π, π]) the pointer turns around pivot from `from` to `to`; 0 when either point
+  is within 1 mm of the pivot
 ```
 
 Edit and Animate get the same session; only `start` differs. Joint motors are off, so every joint is a free hinge within its limits, and no holds or extra joints exist besides the mouse joint. The session never calls `rag.update()`, so animation motors never drive the joints ([`DESIGN.md` §7.2](../design/07-ragimporter.md#72-spawn-and-flipx)). It allocates nothing per step or drag ([`DESIGN.md` §7.4](../design/07-ragimporter.md#74-native-memory)).
@@ -58,16 +72,17 @@ Edit and Animate get the same session; only `start` differs. Joint motors are of
 ## `poseTool()`
 
 - `cursor` `'default'`, `hover` `true`.
-- **pointerDown** (left, Edit mode, `ctx.physics` not `null`, `ctx.modes.can('edit.rest')`): the first `shape` uid of `ctx.hitTest(e.screen)` gives the body uid (its parent) and file id. None: nothing. Otherwise `ctx.physics.startPose(toJson(ctx.model), { root, bodyId, point: e.world })` (`toJson(ctx.model, ctx.editorVersion())` from #27); on a throw the press is refused (cursor `not-allowed` until the release, no session). In Animate mode (`edit.animation` with an open clip) the press pauses playback, starts from the keyed pose at the playhead (`animatePose` of `js/model/animate-preview.js`) translated onto the displayed grabbed body (`start`), and a release after a drag keys through `setJointAngleKey` / `setRootBodyAngleKey` (`js/commands/keys.js`, unsnapped) and hands the released pose to `ctx.playback.hold` ([`DESIGN.md` §5.5](../design/05-5-tools.md#55-tools)).
+- **activate**, and an idle hover entering a shape while a press can start: `ctx.status(POSE_HINT)` ("Pose tool: drag pulls a body, Shift+drag rotates it about its joint").
+- **pointerDown** (left without Ctrl or Alt, Edit mode, `ctx.physics` not `null`, `ctx.modes.can('edit.rest')`): the first `shape` uid of `ctx.hitTest(e.screen)` gives the body uid (its parent) and file id. None: nothing. Otherwise `ctx.physics.startPose(toJson(ctx.model), { root, bodyId, point: e.world, start, rotate })`, `rotate` `null` without Shift, else `{ joint }` with the file id of the body's parent joint in `jointTree(ctx.model).parent` (`null` when it has none); Shift is read only here, the same in both modes (`toJson(ctx.model, ctx.editorVersion())` from #27); on a throw the press is refused (cursor `not-allowed` until the release, no session). In Animate mode (`edit.animation` with an open clip) the press pauses playback, starts from the keyed pose at the playhead (`animatePose` of `js/model/animate-preview.js`) translated onto the displayed grabbed body (`start`), and a release after a drag keys through `setJointAngleKey` / `setRootBodyAngleKey` (`js/commands/keys.js`, unsnapped) and hands the released pose to `ctx.playback.hold` ([`DESIGN.md` §5.5](../design/05-5-tools.md#55-tools)).
 - **pointerMove** during a session: `session.drag(e.world)`, `invalidateOverlay()`. Idle: cursor `grab` over a shape hit, else `null`.
 - **tick(seconds)** during a session: `session.advance(seconds)`, then `ctx.setPose` with `session.pose()` mapped from body ids to uids through `model.uidOf`, then `invalidateOverlay()`.
 - **pointerUp**, **cancel()** and **deactivate()**: `session.destroy()`, `ctx.setPose(null)`, cursor back. `cancel()` returns `true` only when a session or a refused press was in progress. The registry's Esc, tool switch, mode change, reset, closed gesture and throwing handler paths all reach `cancel()`.
-- **drawOverlay(g)**: during a session, a 1 px line in `COLORS.gizmo` from `grab().anchor` to `grab().target` and a `GIZMO_SIZE.pivot` dot at the target, in screen space.
+- **drawOverlay(g)**: during a session, a 1 px line in `COLORS.gizmo` from `grab().anchor` (rotating: `grab().pivot`) to `grab().target` and a `GIZMO_SIZE.pivot` dot at the target (rotating: at the pivot), in screen space.
 - Never executes a command and never touches the selection: the press gesture stays empty and records no undo step.
 
 ## Tests
 
 - `tests/model-io.test.js`: `toJson` of a model built by commands has the file shape, file ids and references, collection order and no uids; `validate` finds no errors in it; the model is unchanged.
-- `tests/liquidfun-pose-session.test.js` (vendored liquidfun.js, PIXI stub as in `tests/liquidfun-spawn.test.js`): `poseTestJson` output and input untouched; `pose()` equals the rest pose right after start with a rotated root; bodies not attached to the grabbed one do not move over 2 s without a drag; a drag moves the grabbed body toward the target and its chain follows; joint angles stay within limits and every motor is disabled; two overlapping unjointed bodies do not push apart; damping is applied; `advance` step counting (remainder carried, `maxSteps` cap); a parse error throws `RagFormatError` with no world created; `destroy` is idempotent and leaves `GetBodyCount` 0 before the world is destroyed; no heap growth over 500 start, drag, advance, destroy cycles.
-- `tests/pose-tool.test.js` (fake `physics` and fake session): press on a shape starts with the body id, root and world point; press on empty space, a joint, the root, a right press, `physics` `null` and Animate mode start nothing; move drags; tick advances and sets a uid-keyed pose; release, Esc, mode change, tool switch and a throwing handler destroy the session once and clear the pose; a throwing `startPose` gives `not-allowed`; model, selection and history are unchanged after every case.
+- `tests/liquidfun-pose-session.test.js` (vendored liquidfun.js, PIXI stub as in `tests/liquidfun-spawn.test.js`): `poseTestJson` output and input untouched; `pose()` equals the rest pose right after start with a rotated root; bodies not attached to the grabbed one do not move over 2 s without a drag; a drag moves the grabbed body toward the target and its chain follows; joint angles stay within limits and every motor is disabled; two overlapping unjointed bodies do not push apart; damping is applied; `advance` step counting (remainder carried, `maxSteps` cap); a parse error throws `RagFormatError` with no world created; `turnAbout` mapping (signed turn, wrap across ±π, dead zone at the pivot); a Shift rotation of a limb turns it about its parent joint anchor while the parent stays in place, a rotation of `rootBody` turns it about its center of mass, and the motor joint replaces the mouse joint; `destroy` is idempotent and leaves `GetBodyCount` 0 before the world is destroyed; no heap growth over 500 start, drag, advance, destroy cycles.
+- `tests/pose-tool.test.js` (fake `physics` and fake session): press on a shape starts with the body id, root and world point; a Shift press passes `rotate` with the parent joint id, or `null` for `rootBody`, in Edit and Animate; Ctrl and Alt presses start nothing; the hint shows on activate; the rotate overlay; press on empty space, a joint, the root, a right press, `physics` `null` and Animate mode start nothing; move drags; tick advances and sets a uid-keyed pose; release, Esc, mode change, tool switch and a throwing handler destroy the session once and clear the pose; a throwing `startPose` gives `not-allowed`; model, selection and history are unchanged after every case.
 - Registry and editor tests: `tick` forwarding, `setPose` no-op while unbound, Pose registered and `tool:pose` enabled in Edit mode with `D`.
