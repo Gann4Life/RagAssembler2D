@@ -461,7 +461,14 @@ export function createTimeline(element_, editor, player) {
     scrubPointer = null;
     if (ruler.hasPointerCapture?.(event.pointerId)) ruler.releasePointerCapture(event.pointerId);
   };
+  const playOnSpace = (event) => {
+    if (event.key !== ' ' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return false;
+    event.preventDefault();
+    if (!event.repeat) togglePlay();
+    return true;
+  };
   const onKeyDown = (event) => {
+    if (playOnSpace(event)) return;
     if (!canScrub()) return;
     const length = clipLength();
     const targets = { ArrowLeft: modes.playhead - SNAP_STEP, ArrowRight: modes.playhead + SNAP_STEP, Home: 0, End: length };
@@ -523,6 +530,7 @@ export function createTimeline(element_, editor, player) {
     previewDrag(keyDrag.delta);
   };
   const onLanesKeyDown = (event) => {
+    if (playOnSpace(event)) return;
     if (event.key !== 'Delete' && event.key !== 'Backspace') return;
     if (deleteKeysReason() !== null) return;
     removeKeys();
