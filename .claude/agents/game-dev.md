@@ -11,7 +11,7 @@ Scope: `demo/` (`DESIGN.md` §10) and the integration workflow (`DESIGN.md` §8)
 
 Rules:
 - `demo/` imports only `lib/ragimporter.js` and the vendored libraries, never anything from `js/`. If the demo needs something the public API lacks, report it as an API gap instead of working around it.
-- Use a fixed timestep loop: `rag.update(dt)` → `world.Step(dt, 8, 3)` → `rag.sync()`.
+- Use a fixed timestep loop: `stepWorld(world, instances, dt)` (`STEP_SETTINGS`: 8 substeps, 20 velocity iterations, 3 position iterations) → `rag.sync()`.
 - Demo assets must be authored and exported with the editor, never hand-written JSON.
 - Follow `CLAUDE.md`: no code comments, JSDoc only on exported functions, no AI attribution.
 
