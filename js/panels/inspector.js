@@ -195,9 +195,10 @@ export function createInspector(element, editor) {
     const handle = attachTooltip(input, () => {
       const current = state.row;
       const name = component === undefined ? fieldName(current) : `${fieldName(current)} ${component === 0 ? 'x' : 'y'}`;
-      if (current.readOnly && current.reason) return `${name} (${current.reason})`;
+      const hint = current.hint ? `. ${current.hint}` : '';
+      if (current.readOnly && current.reason) return `${name} (${current.reason})${hint}`;
       if (state.invalid) return `${name} (${rangeText(current)})`;
-      return current.hint ? `${name}. ${current.hint}` : name;
+      return `${name}${hint}`;
     }, { placement: 'below' });
     tooltips.push(handle);
     update(row);

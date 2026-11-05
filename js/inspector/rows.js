@@ -263,6 +263,12 @@ const KEY_STATE_TEXT = Object.freeze({ empty: 'not animated', outlined: 'no key 
 const ANIMATE_ONLY = 'only in Animate mode';
 const SEVERAL = 'select one joint';
 const NOT_ANIMATED = 'click ◇ to animate this channel';
+const CHANNEL_HINTS = Object.freeze({
+  strength: 'How firmly the motors hold the pose: 100 % firm, lower values sag under the body weight, 0 % limp. On the ragdoll it scales every joint',
+  balance: 'How firmly the root body is held upright toward its keyed angle: 0 % lets it fall freely',
+  gain: 'How hard the motor corrects toward the keyed angle',
+  damping: 'How much the motor resists motion: low swings and bounces, high moves smoothly',
+});
 const GESTURE = 'finish the current gesture first';
 
 function keyStateOf(model, clip, targets, channel, time) {
@@ -284,9 +290,10 @@ function keyStateOf(model, clip, targets, channel, time) {
  */
 export function channelRow(ctx, { id, label, channel }) {
   const { model, uids } = ctx;
+  const hint = CHANNEL_HINTS[channel];
   if (ctx.animate === null || model.get(ctx.animate.clip)?.type !== 'clip') {
     const key ={ state: 'empty', disabled: true, reason: ANIMATE_ONLY, label: `Key ${channel}`, value: null, edit: null };
-    return fieldRow(ctx, id, { label, key });
+    return fieldRow(ctx, id, { label, hint, key });
   }
   const { clip, time, editable } = ctx.animate;
   const values = uids.map((target) => channelValueAt(model, clip, target, channel, time));
@@ -309,6 +316,7 @@ export function channelRow(ctx, { id, label, channel }) {
   };
   return fieldRow(ctx, id, {
     label,
+    hint,
     control: 'number',
     dataUnit: 'mult',
     value,
