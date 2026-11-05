@@ -28,6 +28,9 @@ function fakePhysics({ startThrows = false } = {}) {
           if (session.throwOn === 'drag') throw new Error('drag');
           session.log.push(['drag', point]);
         },
+        setRotate(rotate) {
+          session.log.push(['rotate', rotate]);
+        },
         advance(seconds) {
           if (session.throwOn === 'advance') throw new Error('advance');
           session.log.push(['advance', seconds]);
@@ -181,8 +184,13 @@ test('presses that start nothing: empty space, a joint, the root, a right press,
     },
     (env) => {
       env.view.hits = [env.shapes[0]];
-      send(env.tools, 'down', 10, 10, { shift: true });
-      send(env.tools, 'up', 10, 10, { shift: true });
+      send(env.tools, 'down', 10, 10, { ctrl: true });
+      send(env.tools, 'up', 10, 10, { ctrl: true });
+    },
+    (env) => {
+      env.view.hits = [env.shapes[0]];
+      send(env.tools, 'down', 10, 10, { alt: true, shift: true });
+      send(env.tools, 'up', 10, 10, { alt: true, shift: true });
     },
   ];
   for (const run of cases) {
@@ -258,7 +266,7 @@ test('Animate: the press starts from the keyed pose, moved so that the grabbed p
   });
   assert.equal(env.view.poses.length, 1, 'the keyed pose shows at the press');
   assert.ok(env.view.poses[0] instanceof Map);
-  assert.deepEqual(Object.keys(env.physics.starts[0].options).sort(), ['bodyId', 'point', 'root', 'start']);
+  assert.deepEqual(Object.keys(env.physics.starts[0].options).sort(), ['bodyId', 'point', 'root', 'rotate', 'start']);
   env.actions.run('escape');
   assert.equal(env.view.poses.at(-1), null);
   assert.deepEqual(env.playback.holds, []);
@@ -596,10 +604,137 @@ test('Edit and Animate start the same session: same option set, no mode-specific
   send(animate.tools, 'down', 260, 190);
   const editOptions = edit.physics.starts[0].options;
   const animateOptions = animate.physics.starts[0].options;
-  assert.deepEqual(Object.keys(editOptions).sort(), ['bodyId', 'point', 'root', 'start']);
+  assert.deepEqual(Object.keys(editOptions).sort(), ['bodyId', 'point', 'root', 'rotate', 'start']);
   assert.deepEqual(Object.keys(animateOptions).sort(), Object.keys(editOptions).sort());
   assert.equal(editOptions.start, null);
   assert.ok(animateOptions.start instanceof Map);
   send(edit.tools, 'up', 260, 190);
   send(animate.tools, 'up', 260, 190);
+});
+
+test('a Shift press rotates about the parent joint, or about the center of mass for a body without one', () => {
+  const env = environment();
+  const ids = env.bodies.map((uid) => env.model.prop(uid, 'id'));
+  env.history.execute(setProps([ROOT_UID], { rootBody: ids[0] }));
+  env.view.hits = [env.shapes[1]];
+  send(env.tools, 'down', 260, 190, { shift: true });
+  assert.deepEqual(env.physics.starts[0].options.rotate, { joint: env.model.prop(env.joint, 'id') });
+  assert.equal(env.physics.starts[0].options.bodyId, ids[1]);
+  send(env.tools, 'move', 280, 190, { shift: true });
+  assert.deepEqual(env.physics.sessions[0].log.map(([kind]) => kind), ['drag'], 'Shift held: no switch');
+  send(env.tools, 'up', 280, 190);
+  env.view.hits = [env.shapes[0]];
+  send(env.tools, 'down', 260, 190, { shift: true });
+  assert.deepEqual(env.physics.starts[1].options.rotate, { joint: null });
+  send(env.tools, 'up', 260, 190);
+  env.view.hits = [env.shapes[0]];
+  send(env.tools, 'down', 260, 190);
+  assert.equal(env.physics.starts[2].options.rotate, null);
+  send(env.tools, 'up', 260, 190);
+  assert.equal(env.history.inGesture, false);
+  assert.deepEqual(env.selection.objects, [env.bodies[1]]);
+});
+
+test('Animate: a Shift press passes the same rotation and its release keys like a pull, in one undo step', () => {
+  const env = animateEnvironment({ playhead: 0.5, turn: 0.3 });
+  send(env.tools, 'down', 260, 190, { shift: true });
+  const { options } = env.physics.starts[0];
+  assert.deepEqual(options.rotate, { joint: env.model.prop(env.joint, 'id') });
+  assert.ok(options.start instanceof Map);
+  send(env.tools, 'move', 270, 190, { shift: true });
+  env.tools.tick(1 / 60);
+  send(env.tools, 'up', 270, 190, { shift: true });
+  const tracks = angleKeys(env);
+  assert.equal(tracks.length, 1);
+  assert.ok(Math.abs(tracks[0].keys[0][1] - 0.3) < 1e-9);
+  assert.equal(env.history.state.undoLabel, 'Pose');
+  env.history.undo();
+  assert.equal(env.snapshot().json, env.before.json);
+});
+
+test('the hint names Shift+drag when Pose is chosen and when the pointer enters a shape', () => {
+  const env = environment();
+  const hint = 'Pose tool: drag pulls a body, Shift+drag rotates it about its joint';
+  assert.equal(env.statuses.all.at(-1), hint);
+  const count = () => env.statuses.all.filter((text) => text === hint).length;
+  const shown = count();
+  env.view.hits = [env.shapes[0]];
+  send(env.tools, 'move', 10, 10, { buttons: 0 });
+  assert.equal(count(), shown + 1);
+  send(env.tools, 'move', 12, 10, { buttons: 0 });
+  assert.equal(count(), shown + 1, 'not repeated while over a shape');
+  env.view.hits = [];
+  send(env.tools, 'move', 100, 10, { buttons: 0 });
+  env.view.hits = [env.shapes[1]];
+  send(env.tools, 'move', 260, 190, { buttons: 0 });
+  assert.equal(count(), shown + 2);
+});
+
+test('the rotation overlay joins the pivot to the pointer with a dot at the pivot', () => {
+  const env = environment();
+  env.view.hits = [env.shapes[1]];
+  send(env.tools, 'down', 260, 190, { shift: true });
+  env.physics.sessions[0].grab = () => ({ anchor: { x: 0, y: 0 }, target: { x: 1, y: 1 }, pivot: { x: 0.5, y: 0 } });
+  const calls = [];
+  const g = new Proxy({}, { get: (target, key) => (key === 'clear' ? () => calls.splice(0) : (...args) => calls.push([key, ...args])) });
+  env.tools.drawOverlay(g);
+  const pivot = env.camera.worldToScreen({ x: 0.5, y: 0 });
+  const to = env.camera.worldToScreen({ x: 1, y: 1 });
+  assert.deepEqual(calls, [
+    ['moveTo', pivot.x, pivot.y],
+    ['lineTo', to.x, to.y],
+    ['stroke', { width: LINE_WIDTH.outline, color: COLORS.gizmo }],
+    ['circle', pivot.x, pivot.y, GIZMO_SIZE.pivot],
+    ['fill', COLORS.gizmo],
+  ]);
+  send(env.tools, 'up', 260, 190);
+});
+
+test('Shift is live: pressing it mid-drag switches to rotation about the parent joint, releasing it back to a pull', () => {
+  const env = environment();
+  const ids = env.bodies.map((uid) => env.model.prop(uid, 'id'));
+  env.history.execute(setProps([ROOT_UID], { rootBody: ids[0] }));
+  env.view.hits = [env.shapes[1]];
+  send(env.tools, 'down', 260, 190);
+  assert.equal(env.physics.starts[0].options.rotate, null);
+  const session = env.physics.sessions[0];
+  send(env.tools, 'move', 270, 190, { shift: true });
+  send(env.tools, 'move', 270, 200, { shift: true });
+  send(env.tools, 'move', 270, 200, { shift: false });
+  send(env.tools, 'move', 275, 200, { ctrl: true });
+  const point = (x, y) => env.camera.screenToWorld({ x, y });
+  assert.deepEqual(session.log, [
+    ['rotate', { joint: env.model.prop(env.joint, 'id') }],
+    ['drag', point(270, 190)],
+    ['drag', point(270, 200)],
+    ['rotate', null],
+    ['drag', point(270, 200)],
+    ['drag', point(275, 200)],
+  ]);
+  send(env.tools, 'up', 275, 200);
+  env.view.hits = [env.shapes[0]];
+  send(env.tools, 'down', 260, 190);
+  send(env.tools, 'move', 270, 190, { shift: true });
+  assert.deepEqual(env.physics.sessions[1].log[0], ['rotate', { joint: null }]);
+  send(env.tools, 'up', 270, 190);
+  assert.equal(env.physics.starts.length, 2, 'one gesture, one session');
+  assert.equal(env.history.inGesture, false);
+});
+
+test('Animate: a drag that switches Shift on and off writes its keys once on release, in one undo step', () => {
+  const env = animateEnvironment({ playhead: 0.5, turn: 0.3 });
+  send(env.tools, 'down', 260, 190);
+  send(env.tools, 'move', 270, 190, { shift: true });
+  send(env.tools, 'move', 280, 190, { shift: false });
+  send(env.tools, 'move', 285, 190, { shift: true });
+  env.tools.tick(1 / 60);
+  const before = env.history.state.undoLabel;
+  assert.notEqual(before, 'Pose', 'nothing keyed before the release');
+  send(env.tools, 'up', 285, 190, { shift: true });
+  const tracks = angleKeys(env);
+  assert.equal(tracks.length, 1);
+  assert.equal(tracks[0].keys.length, 1);
+  assert.equal(env.history.state.undoLabel, 'Pose');
+  env.history.undo();
+  assert.equal(env.snapshot().json, env.before.json);
 });

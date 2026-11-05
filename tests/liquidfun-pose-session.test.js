@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { RagImporter, RagFormatError } from '../lib/ragimporter.js';
 import { RagDef } from '../lib/def.js';
 import { bodyMassData, transformPoint } from '../lib/geometry.js';
-import { POSE, createPoseSession, poseTestJson } from '../js/physics/pose-session.js';
+import { POSE, createPoseSession, poseTestJson, turnAbout } from '../js/physics/pose-session.js';
 import { ragFile } from './helpers/rag-file.js';
 
 const require = createRequire(import.meta.url);
@@ -103,7 +103,7 @@ function start(json, bodyId, point = restWorld(json, bodyId)) {
 test('POSE holds the spec constants and is frozen', () => {
   assert.deepEqual(
     { ...POSE },
-    { step: 1 / 60, maxSteps: 4, linearDamping: 10, angularDamping: 10, forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7 },
+    { step: 1 / 60, maxSteps: 4, linearDamping: 10, angularDamping: 10, forcePerKg: 1000, frequencyHz: 5, dampingRatio: 0.7, correction: 0.3 },
   );
   assert.equal(Object.isFrozen(POSE), true);
 });
@@ -398,4 +398,198 @@ test('rootBody moves freely: a dragged limb pulls it along and a grabbed rootBod
   } finally {
     moved.destroy();
   }
+});
+test('turnAbout gives the signed turn around the pivot, wraps across ±π and ignores points at the pivot', () => {
+  const pivot = { x: 1, y: 1 };
+  near(turnAbout(pivot, { x: 2, y: 1 }, { x: 1, y: 3 }), Math.PI / 2, 'quarter turn');
+  near(turnAbout(pivot, { x: 1, y: 3 }, { x: 2, y: 1 }), -Math.PI / 2, 'clockwise');
+  const at = (degrees) => ({ x: 1 + Math.cos((degrees * Math.PI) / 180), y: 1 + Math.sin((degrees * Math.PI) / 180) });
+  near(turnAbout(pivot, at(170), at(-170)), (20 * Math.PI) / 180, 'across +π');
+  near(turnAbout(pivot, at(-170), at(170)), (-20 * Math.PI) / 180, 'across −π');
+  assert.equal(turnAbout(pivot, { x: 1.0005, y: 1 }, { x: 1, y: 2 }), 0);
+  assert.equal(turnAbout(pivot, { x: 2, y: 1 }, { x: 1, y: 1.0009 }), 0);
+});
+
+function withForearm() {
+  const json = ragFile();
+  json.bodies.push({
+    ...structuredClone(json.bodies[3]),
+    id: 'b_fore',
+    name: 'fore',
+    position: [-0.6, 0.4],
+    fixtures: [{ ...structuredClone(json.bodies[3].fixtures[0]), id: 'f_fore', name: 'fore' }],
+  });
+  json.joints.push({ ...structuredClone(json.joints[2]), id: 'j_elbow', name: 'elbow', bodyA: 'b_arm2', bodyB: 'b_fore', anchor: [-0.35, 0.4] });
+  return json;
+}
+
+function rotateBy(session, pivot, press, degrees, frames = 60) {
+  const radius = Math.hypot(press.x - pivot.x, press.y - pivot.y);
+  const from = Math.atan2(press.y - pivot.y, press.x - pivot.x);
+  for (let i = 1; i <= frames; i++) {
+    const angle = from + ((degrees * Math.PI) / 180) * (i / frames);
+    session.drag({ x: pivot.x + radius * Math.cos(angle), y: pivot.y + radius * Math.sin(angle) });
+    session.advance(POSE.step);
+  }
+  run(session, 1);
+}
+
+function centerOf(json, pose, id) {
+  return transformPoint(pose.get(id), bodyMassData(json.bodies.find((body) => body.id === id)).center);
+}
+
+test('Shift rotation of a limb turns it about its parent joint anchor; the parent stays and the child follows', () => {
+  const json = withForearm();
+  const pivotLocal = { x: 0, y: 0.4 };
+  const pivot = transformPoint(ROOT, pivotLocal);
+  const press = transformPoint(ROOT, { x: -0.3, y: 0.4 });
+  capturingSpawn((spawned) => {
+    const session = create(Box2D, json, { root: ROOT, bodyId: 'b_arm2', point: press, rotate: { joint: 'j_shoulder2' } });
+    try {
+      const world = spawned[0].bodies.get('b_arm2').GetWorld();
+      assert.equal(world.GetJointCount(), json.joints.length + 1);
+      const before = session.pose();
+      const foreBefore = centerOf(json, before, 'b_fore');
+      near(session.grab().pivot.x, pivot.x, 'pivot x');
+      near(session.grab().pivot.y, pivot.y, 'pivot y');
+      rotateBy(session, pivot, press, 60);
+      const after = session.pose();
+      const turned = after.get('b_arm2').angle - before.get('b_arm2').angle;
+      near(turned, Math.PI / 3, 'limb turns by the pointer turn', (3 * Math.PI) / 180);
+      const anchor = transformPoint(after.get('b_arm2'), { x: 0.2, y: 0 });
+      assert.ok(Math.hypot(anchor.x - pivotLocal.x, anchor.y - pivotLocal.y) < 0.01, 'the limb turns about the anchor');
+      const torso = after.get('b_torso');
+      const torsoBefore = before.get('b_torso');
+      assert.ok(Math.hypot(torso.x - torsoBefore.x, torso.y - torsoBefore.y) < 0.02, 'the parent stays in place');
+      assert.ok(Math.abs(torso.angle - torsoBefore.angle) < (2 * Math.PI) / 180, 'the parent does not turn');
+      const foreAfter = centerOf(json, after, 'b_fore');
+      const elbow = transformPoint(after.get('b_fore'), { x: 0.25, y: 0 });
+      const elbowTarget = transformPoint(after.get('b_arm2'), { x: -0.15, y: 0 });
+      assert.ok(Math.hypot(elbow.x - elbowTarget.x, elbow.y - elbowTarget.y) < 0.01, 'the child stays on its joint');
+      assert.ok(Math.hypot(foreAfter.x - foreBefore.x, foreAfter.y - foreBefore.y) > 0.2, 'the child follows');
+      for (const joint of spawned[0].joints.values()) assert.equal(joint.IsMotorEnabled(), 0);
+    } finally {
+      session.destroy();
+    }
+  });
+});
+
+test('Shift rotation of rootBody turns it about its center of mass, continuously past 180 degrees', () => {
+  const json = ragFile();
+  const before = start(json, 'b_torso');
+  const center = transformPoint(ROOT, centerOf(json, before.pose(), 'b_torso'));
+  before.destroy();
+  const press = transformPoint(ROOT, { x: 0.3, y: 0.45 });
+  const session = create(Box2D, json, { root: ROOT, bodyId: 'b_torso', point: press, rotate: { joint: null } });
+  try {
+    const grab = session.grab();
+    near(grab.pivot.x, center.x, 'pivot x');
+    near(grab.pivot.y, center.y, 'pivot y');
+    const startAngle = session.pose().get('b_torso').angle;
+    rotateBy(session, center, press, 200, 120);
+    const after = session.pose();
+    near(after.get('b_torso').angle - startAngle, (200 * Math.PI) / 180, 'root turns by the pointer turn', (3 * Math.PI) / 180);
+    const moved = transformPoint(ROOT, centerOf(json, after, 'b_torso'));
+    assert.ok(Math.hypot(moved.x - center.x, moved.y - center.y) < 0.01, 'the center of mass stays');
+  } finally {
+    session.destroy();
+  }
+});
+
+test('a rotation with an unknown joint throws after releasing everything it built', () => {
+  start(ragFile(), 'b_torso').destroy();
+  const before = heapProbe();
+  assert.throws(
+    () => create(Box2D, ragFile(), { root: ROOT, bodyId: 'b_arm', point: { x: 5, y: 7 }, rotate: { joint: 'j_nope' } }),
+    /unknown joint "j_nope"/,
+  );
+  assert.equal(heapProbe(), before);
+});
+
+test('no heap growth over 300 rotation cycles', () => {
+  const json = ragFile();
+  const press = restWorld(json, 'b_arm');
+  const cycle = (i) => {
+    const session = create(Box2D, json, { root: ROOT, bodyId: 'b_arm', point: press, rotate: { joint: i % 2 ? 'j_shoulder' : null } });
+    session.drag({ x: press.x + 0.1, y: press.y + (i % 5) * 0.1 });
+    session.advance(POSE.step * 2);
+    session.pose();
+    session.grab();
+    session.destroy();
+  };
+  cycle(0);
+  cycle(1);
+  const before = heapProbe();
+  for (let i = 2; i <= 300; i++) cycle(i);
+  assert.equal(heapProbe(), before);
+});
+
+test('setRotate switches a running test from pull to rotation and back, from the current state', () => {
+  const json = withForearm();
+  const press = transformPoint(ROOT, { x: -0.3, y: 0.4 });
+  capturingSpawn((spawned) => {
+    const session = create(Box2D, json, { root: ROOT, bodyId: 'b_arm2', point: press });
+    try {
+      const world = spawned[0].bodies.get('b_arm2').GetWorld();
+      const pulled = { x: press.x, y: press.y + 0.1 };
+      session.drag(pulled);
+      run(session, 0.5);
+      const grabbedBefore = session.grab().anchor;
+      const atSwitch = session.pose();
+      const pivotLocal = transformPoint(atSwitch.get('b_arm2'), { x: 0.2, y: 0 });
+      const pivot = transformPoint(ROOT, pivotLocal);
+      session.setRotate({ joint: 'j_shoulder2' });
+      assert.equal(world.GetJointCount(), json.joints.length + 1);
+      near(session.grab().pivot.x, pivot.x, 'pivot x', 1e-4);
+      near(session.grab().pivot.y, pivot.y, 'pivot y', 1e-4);
+      near(session.grab().anchor.x, grabbedBefore.x, 'grab point kept x', 1e-6);
+      near(session.grab().anchor.y, grabbedBefore.y, 'grab point kept y', 1e-6);
+      rotateBy(session, pivot, pulled, 45);
+      const turned = session.pose().get('b_arm2').angle - atSwitch.get('b_arm2').angle;
+      near(turned, Math.PI / 4, 'turns from the angle at the switch', (3 * Math.PI) / 180);
+      const anchor = transformPoint(session.pose().get('b_arm2'), { x: 0.2, y: 0 });
+      assert.ok(Math.hypot(anchor.x - pivotLocal.x, anchor.y - pivotLocal.y) < 0.01, 'about the anchor at the switch');
+      const grabbed = session.grab().anchor;
+      session.setRotate(null);
+      assert.equal(world.GetJointCount(), json.joints.length + 1);
+      assert.equal(session.grab().pivot, null);
+      near(session.grab().anchor.x, grabbed.x, 'pull anchored at the grab point x', 1e-5);
+      near(session.grab().anchor.y, grabbed.y, 'pull anchored at the grab point y', 1e-5);
+      const target = { x: grabbed.x + 0.5, y: grabbed.y - 0.5 };
+      session.drag(target);
+      run(session, 2);
+      const reached = session.grab().anchor;
+      assert.ok(Math.hypot(reached.x - target.x, reached.y - target.y) < 0.1, 'the pull drags again');
+      session.setRotate(null);
+      assert.equal(world.GetJointCount(), json.joints.length + 1);
+      assert.throws(() => session.setRotate({ joint: 'j_nope' }), /unknown joint/);
+      assert.equal(session.grab().pivot, null, 'a refused switch keeps the pull');
+      session.drag(target);
+      session.advance(POSE.step);
+    } finally {
+      session.destroy();
+    }
+    assert.throws(() => session.setRotate(null), Error);
+  });
+});
+
+test('no heap growth over 200 tests with repeated pull and rotation switches', () => {
+  const json = ragFile();
+  const press = restWorld(json, 'b_arm');
+  const cycle = (i) => {
+    const session = start(json, 'b_arm', press);
+    for (let k = 0; k < 4; k++) {
+      session.setRotate(k % 2 === 0 ? { joint: i % 2 ? 'j_shoulder' : null } : null);
+      session.drag({ x: press.x + 0.1 * k, y: press.y + (i % 5) * 0.1 });
+      session.advance(POSE.step);
+      session.grab();
+    }
+    session.pose();
+    session.destroy();
+  };
+  cycle(0);
+  cycle(1);
+  const before = heapProbe();
+  for (let i = 2; i <= 200; i++) cycle(i);
+  assert.equal(heapProbe(), before);
 });

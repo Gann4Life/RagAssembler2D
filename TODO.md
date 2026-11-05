@@ -120,7 +120,7 @@
 - [ ] #213 Authored follow-through after fast keys
 - [x] #217 Clicking empty space in the Timeline key lanes clears the key selection
 - [x] #218 Strength, gain and damping tracks with + Track and track deletion
-- [ ] #220 Pose tool: Shift+drag rotates the body about its parent joint
+- [x] #220 Pose tool: Shift+drag rotates the body about its parent joint
 
 ## Phase 3 – Round-trip verification
 - [ ] #40 Valid round-trip fixture set

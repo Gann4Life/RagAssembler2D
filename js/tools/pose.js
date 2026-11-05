@@ -11,6 +11,14 @@ import { DRAG_THRESHOLD, defineTool } from './tool.js';
 const PRIMARY = 0;
 const PREVIEW_VERSION = 'preview';
 const KEY_THRESHOLD = (0.1 * Math.PI) / 180;
+const POSE_HINT = 'Pose tool: drag pulls a body, Shift+drag rotates it about its joint';
+
+function rotation(model, bodyUid) {
+  const joint = jointTree(model).parent.get(bodyUid);
+  if (joint === undefined) return { joint: null };
+  const id = model.prop(joint, 'id');
+  return { joint: typeof id === 'string' ? id : null };
+}
 
 function rootTransform(json) {
   const position = Array.isArray(json.ragdoll?.position) ? json.ragdoll.position : [0, 0];
@@ -73,7 +81,9 @@ function jointKeys(model, def, pressed, result) {
 
 /**
  * Builds the Pose tool: a left press on a shape starts a physics test through `ctx.physics`, pulling the shape's
- * body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`. In Edit mode the
+ * body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`. While Shift is held
+ * (read live: pressing or releasing it mid-drag switches) the body rotates instead, through physics, about its parent joint anchor (its center of mass when it has no
+ * parent joint), the same in both modes; activating the tool shows that hint with `ctx.status`. In Edit mode the
  * test starts from the rest pose and the result is discarded on release. In Animate mode it is an intent edit: it starts
  * from the keyed pose (the FK pose of the clip at the playhead), translated so that the grabbed point stays where it is
  * on the displayed body (`ctx.displayedPose`), shown at once, `rootBody` free like every body, no gravity and no
@@ -92,6 +102,8 @@ export function poseTool() {
   let animate = null;
   let refused = false;
   let hoverCursor = null;
+  let grabbedUid = null;
+  let rotating = false;
 
   function animating() {
     return ctx.modes.can('edit.animation') && ctx.modes.clip !== null;
@@ -161,13 +173,16 @@ export function poseTool() {
     ctx.playback.hold(result);
   }
 
-  function startPose(json, body, e, keying) {
+  function startPose(json, bodyUid, e, keying) {
     session = ctx.physics.startPose(json, {
       root: rootTransform(json),
-      bodyId: body.props.id,
+      bodyId: ctx.model.get(bodyUid).props.id,
       point: { x: e.world.x, y: e.world.y },
       start: keying === null ? null : byId(ctx.model, keying.from),
+      rotate: e.shift ? rotation(ctx.model, bodyUid) : null,
     });
+    grabbedUid = bodyUid;
+    rotating = Boolean(e.shift);
   }
 
   return defineTool({
@@ -178,17 +193,17 @@ export function poseTool() {
       animate = null;
       refused = false;
       hoverCursor = null;
+      ctx.status(POSE_HINT);
     },
     deactivate() {
       end();
     },
     pointerDown(e) {
-      if (e.button !== PRIMARY || e.shift || e.ctrl || e.alt) return;
+      if (e.button !== PRIMARY || e.ctrl || e.alt) return;
       if (session !== null || refused || !canStart()) return;
       const shape = shapeAt(e.screen);
       if (shape === null) return;
       const bodyUid = ctx.model.get(shape).parent;
-      const body = ctx.model.get(bodyUid);
       let keying = null;
       try {
         const json = toJson(ctx.model, ctx.editorVersion());
@@ -201,7 +216,7 @@ export function poseTool() {
           const from = intentStart(animatePose(ctx.model, clip, time), displayed, bodyUid, press);
           keying = { clip, time, from, screen: e.screen, dragged: false };
         }
-        startPose(json, body, e, keying);
+        startPose(json, bodyUid, e, keying);
       } catch {
         session = null;
         refused = true;
@@ -220,12 +235,18 @@ export function poseTool() {
         if (animate !== null && !animate.dragged) {
           animate.dragged = Math.hypot(e.screen.x - animate.screen.x, e.screen.y - animate.screen.y) >= DRAG_THRESHOLD;
         }
+        if (Boolean(e.shift) !== rotating) {
+          rotating = Boolean(e.shift);
+          session.setRotate(rotating ? rotation(ctx.model, grabbedUid) : null);
+        }
         session.drag({ x: e.world.x, y: e.world.y });
         ctx.invalidateOverlay();
         return;
       }
       if (refused) return;
-      setHoverCursor(canStart() && shapeAt(e.screen) !== null ? 'grab' : null);
+      const over = canStart() && shapeAt(e.screen) !== null;
+      if (over && hoverCursor !== 'grab') ctx.status(POSE_HINT);
+      setHoverCursor(over ? 'grab' : null);
     },
     pointerUp(e) {
       if (e.button !== PRIMARY) return;
@@ -246,13 +267,14 @@ export function poseTool() {
     },
     drawOverlay(g) {
       if (session === null) return;
-      const { anchor, target } = session.grab();
-      const from = ctx.camera.worldToScreen(anchor);
+      const { anchor, target, pivot = null } = session.grab();
+      const from = ctx.camera.worldToScreen(pivot ?? anchor);
       const to = ctx.camera.worldToScreen(target);
+      const dot = pivot === null ? to : from;
       g.moveTo(from.x, from.y);
       g.lineTo(to.x, to.y);
       g.stroke({ width: LINE_WIDTH.outline, color: COLORS.gizmo });
-      g.circle(to.x, to.y, GIZMO_SIZE.pivot);
+      g.circle(dot.x, dot.y, GIZMO_SIZE.pivot);
       g.fill(COLORS.gizmo);
     },
   });
