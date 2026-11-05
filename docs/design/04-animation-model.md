@@ -25,7 +25,8 @@ A clip contains **tracks** (one per `target + channel`) and **events**.
 | joint | `strength` | multiplier 0–1 | `1` |
 | joint | `gain` | multiplier 0–1 | `1` |
 | joint | `damping` | multiplier 0–1 | `1` |
-| root | `strength` | global multiplier 0–1 | `ragdoll.channels.strength` (default 1) |
+| root | `strength` | global multiplier 0–1 of every joint motor | `ragdoll.channels.strength` (default 1) |
+| root | `balance` | multiplier 0–1, strength of the balance controller | `ragdoll.channels.balance` (default 1) |
 | root | `gain` | global multiplier 0–1 | `ragdoll.channels.gain` (default 1) |
 | root | `damping` | global multiplier 0–1 | `ragdoll.channels.damping` (default 1) |
 | root | `bodyAngle` | radians, world orientation of `rootBody` relative to its rest orientation in the root frame | `0` (rest orientation) |
@@ -79,7 +80,7 @@ Each channel of each target is resolved independently, every step:
    `w` is the clip's effective weight: fade progress × runtime weight.
 3. Apply **procedural overrides** ([§4.8](#48-procedural-joint-control)) on top of all layers.
 4. Clamp multiplier channels to 0–1.
-5. Apply the root multipliers to every joint ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)) and to the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). **The root never replaces joint values, it only scales them.** Root `bodyAngle` is not a multiplier: it feeds only the balance controller and FK. Procedural overrides never touch it.
+5. Apply the root multipliers: `strength`, `gain` and `damping` to every joint ([§3](03-physics-drive-model.md#3-physics-drive-model-springs-via-motors)); `balance`, `gain` and `damping` to the balance controller ([§3.2](03-physics-drive-model.md#32-balance-controller-rootbody-orientation)). **The root never replaces joint values, it only scales them.** Root `bodyAngle` is not a multiplier: it feeds only the balance controller and FK. Procedural overrides never touch it.
 
 **Crossfade on the same layer.** When a clip enters a layer that already has an active clip, both are evaluated against the same `below`:
 
@@ -106,7 +107,7 @@ When the crossfade ends, the outgoing clip is removed. A clip entering an empty 
 | `walk` | 0 | override | loop | `angle` on hips, knees, shoulders |
 | `alive` | 99 | override | loop | `root.strength = 1` (single key); head shape `sprite = face_normal` |
 | `pain` | 100 | override | non-loop, `hold = false`, 0.8 s, `fadeIn` 0.1, `fadeOut` 0.3 | `angle` on spine/arms (curl in), joint `strength = 0.3` on those joints; head `sprite = face_pain` |
-| `dead` | 200 | override | non-loop, `hold = true`, 5 s | `root.strength`: 1 → 0, linear; head `sprite = face_dead` at `t = 0` |
+| `dead` | 200 | override | non-loop, `hold = true`, 5 s | `root.strength`: 1 → 0, linear; `root.balance = 0` (single key); head `sprite = face_dead` at `t = 0` |
 
 Evaluated by hand with the rules above:
 - **Walking and hit:**
@@ -115,11 +116,11 @@ Evaluated by hand with the rules above:
   - The face switches to `face_pain` once the 0.1 s fade-in passes half.
   - After 0.8 s, `pain` fades out over 0.3 s and the face returns to `face_normal`.
 - **Killed at time T:**
-  - The face shows `face_dead` immediately.
+  - The face shows `face_dead` immediately, and the balance is off: `rootBody` is no longer turned toward its `bodyAngle`, so the body falls as its joints let it.
   - At T + 2.5 s, `root.strength = 0.5`, so every joint runs at half torque (pain joints at 0.15).
   - At T + 5 s everything is at 0: a limp ragdoll that still respects its limits. `dead` holds.
 - **Head looking at the cursor while alive** ([§4.8](#48-procedural-joint-control)): the procedural target replaces the neck angle by its weight. When killed, the look-at still sets the target, but `root.strength` takes the neck's torque to 0, so a dead character stops looking without any extra code.
-- **Revive:** `stop('dead', { fadeOut: 1 })` brings `root.strength` back to `alive`'s 1 over one second. The face returns to `face_normal` at the middle of the fade.
+- **Revive:** `stop('dead', { fadeOut: 1 })` brings `root.strength` back to `alive`'s 1 and `root.balance` back to its base 1 over one second. The face returns to `face_normal` at the middle of the fade.
 - **Why `alive` exists:** with default base channels it equals "no clip". It makes the conscious state explicit, and it matters when the ragdoll's base `strength` is below 1 (e.g. an NPC that spawns unconscious with base 0).
 
 ## 4.7 Events
