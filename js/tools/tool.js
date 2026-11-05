@@ -71,16 +71,21 @@
  * @property {import('../../lib/geometry.js').Vec2} point Grabbed point, world meters.
  * @property {Map<string, import('../../lib/geometry.js').Transform>|null} [start] Root-local transforms by body id
  *   the test starts from at rest, e.g. the keyed pose in Animate mode; the rest pose when omitted or `null`.
+ * @property {{ joint: (string|null) }|null} [rotate] Rotates the grabbed body instead of pulling it: about the anchor
+ *   of the joint with file id `joint`, or about the body's center of mass when `joint` is `null`; a pull when omitted
+ *   or `null`.
  */
 
 /**
  * One running pose test, owned by the tool that started it until `destroy`.
  * @typedef {object} PoseSession
- * @property {(point: import('../../lib/geometry.js').Vec2) => void} drag Moves the pull target, world meters.
+ * @property {(point: import('../../lib/geometry.js').Vec2) => void} drag Moves the pointer, world meters: the pull
+ *   target, or the point whose turn around the pivot sets the rotation.
  * @property {(seconds: number) => void} advance Runs the fixed steps due after `seconds` more.
  * @property {() => Map<string, import('../../lib/geometry.js').Transform>} pose Body id → root-local transform.
- * @property {() => { anchor: import('../../lib/geometry.js').Vec2, target: import('../../lib/geometry.js').Vec2 }} grab
- *   Grabbed point on the body and pull target, world meters.
+ * @property {() => { anchor: import('../../lib/geometry.js').Vec2, target: import('../../lib/geometry.js').Vec2,
+ *   pivot: (import('../../lib/geometry.js').Vec2|null) }} grab Grabbed point on the body, pointer and rotation pivot
+ *   (`null` when pulling), world meters.
  * @property {() => void} destroy Releases every native object; idempotent. Other calls throw afterwards.
  */
 
