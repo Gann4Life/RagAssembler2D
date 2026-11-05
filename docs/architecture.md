@@ -23,7 +23,7 @@
 
 RagImporter reaches liquidfun.js only through the `Box2D` namespace (no global `b2*` names) and PIXI.js through `PIXI`; either can be injected with `RagImporter.configure({ Box2D, PIXI })` **(planned)** ([`DESIGN.md` §7](design/07-ragimporter.md#7-ragimporter)). Both libraries are pinned in `vendor/` ([Vendored libraries](development.md#vendored-libraries)). Every runtime module that creates or destroys LiquidFun objects follows the native memory rules ([`DESIGN.md` §7.4](design/07-ragimporter.md#74-native-memory)): the heap is fixed and cannot grow.
 
-`demo/` is a separate host page **(planned)**. It imports only `lib/ragimporter.js` and the vendored libraries.
+`demo/` is a separate host page. It imports only `lib/ragimporter.js` and the vendored libraries.
 
 ## Dependency rules
 

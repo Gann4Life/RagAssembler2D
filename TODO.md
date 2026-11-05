@@ -161,7 +161,7 @@
 - [ ] #57 Author the demo humanoid with idle and walk clips in the editor
 - [x] #58 Demo scene with ground and one ragdoll instance
 - [x] #59 Demo controls: walk, idle and strength
-- [ ] #60 Demo controls: look at cursor, aim arm, impulse and drag
+- [x] #60 Demo controls: look at cursor, aim arm, impulse and drag
 - [ ] #61 Demo event log
 - [ ] #180 Demo humanoid: sprites, faces, events, aimAxis and alive/pain/dead clips
 - [ ] #181 Demo scene: walls, second flipX instance and world reuse
