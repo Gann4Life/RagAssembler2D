@@ -1,6 +1,8 @@
 import { fieldsOf } from '../../lib/schema.js';
 import { setProps } from '../commands/props.js';
 import { setRestAngles } from '../commands/transform.js';
+import { setChannelKey } from '../commands/keys.js';
+import { channelValueAt, findTrack, keyAt } from '../model/clip-channels.js';
 import { displayUnit, fromDisplay, toDisplay } from '../units.js';
 
 /**
@@ -11,7 +13,8 @@ import { displayUnit, fromDisplay, toDisplay } from '../units.js';
  * @property {ReadonlyArray<number>} uids Objects shown, in selection order.
  * @property {boolean} editable `modes.can('edit.rest')` and no gesture open.
  * @property {string|null} reason Mode reason of `edit.rest`; `null` in Edit mode and during a gesture.
- * @property {{ clip: number, time: number }|null} animate Open clip and playhead (s) in Animate mode, else `null`.
+ * @property {{ clip: number, time: number, editable: boolean }|null} animate Open clip, playhead (s) and whether
+ *   animation edits are allowed (`edit.animation`, no gesture) in Animate mode, else `null`.
  * @property {number} pixelsPerMeter Document scale, px/m, finite and > 0.
  */
 
@@ -29,9 +32,22 @@ import { displayUnit, fromDisplay, toDisplay } from '../units.js';
  * *   | { kind: 'root-body' }
  *   | { kind: 'rest-angle', uids: ReadonlyArray<number>, label: string }
  *   | { kind: 'action', action: string, label: string }
+ *   | { kind: 'channel-key', clip: number, target: number, channel: string, time: number, label: string }
  *   | { kind: 'select' }} InspectorEdit
- *   `props`: `setProps` of the value in the data `unit`; `root-body`: `editor.setRootBody`; `rest-angle`: `setRestAngles` of the joints with the value in degrees; `action`: `editor.actions.run` with `label`; `select`: a list
- *   item selects its uid. `label` is the undo step or the refused-action label.
+ *   `props`: `setProps` of the value in the data `unit`; `root-body`: `editor.setRootBody`; `rest-angle`: `setRestAngles` of the joints with the value in degrees; `action`: `editor.actions.run` with `label`; `channel-key`:
+ *   `setChannelKey` of the value in % at `time`; `select`: a list item selects its uid. `label` is the undo step or
+ *   the refused-action label.
+ */
+
+/**
+ * Key button ◇ of a channel row.
+ * @typedef {object} InspectorKey
+ * @property {'empty'|'outlined'|'filled'} state No track; a track without a key at the playhead; a key at the playhead.
+ * @property {boolean} disabled Whether a click is refused.
+ * @property {string|null} reason Why it is disabled.
+ * @property {string} label Tooltip and accessible name, e.g. `Key strength at 0.40 s (not animated)`.
+ * @property {number|null} value Value a click keys, in the channel unit (0-1); `null` when disabled.
+ * @property {InspectorEdit|null} edit The `channel-key` edit of a click; `null` when disabled.
  */
 
 /**
@@ -56,6 +72,7 @@ import { displayUnit, fromDisplay, toDisplay } from '../units.js';
  * @property {string|null} reason Why it is read-only; `null` when editable or during a gesture.
  * @property {boolean} animated Base or evaluated value of an animation channel.
  * @property {InspectorEdit|null} edit What a commit does; `null` when the field can never be edited.
+ * @property {InspectorKey} [key] Key button ◇ of a multiplier channel row.
  */
 
 /**
@@ -181,6 +198,9 @@ function bound(value, dataUnit, pixelsPerMeter) {
  * @property {InspectorEdit|null} [edit] Commit, instead of a props edit of the path.
  * @property {ReadonlyArray<{ value: number, label: string }>} [options] Select options.
  * @property {ReadonlyArray<{ uid: number, label: string, muted: boolean, icon: string }>} [items] List items.
+ * @property {number} [min] Lower bound in data units, instead of the schema one.
+ * @property {number} [max] Upper bound in data units, instead of the schema one.
+ * @property {InspectorKey} [key] Key button ◇ of the row.
  */
 
 /**
@@ -228,12 +248,96 @@ export function fieldRow(ctx, path, overrides = {}) {
   }
   const row = { id: path, label, control, value, text, unit, readOnly, reason, animated, edit };
   if (overrides.hint !== undefined) row.hint = overrides.hint;
-  if (spec?.min !== undefined) row.min = bound(spec.min, dataUnit, ctx.pixelsPerMeter);
-  if (spec?.max !== undefined) row.max = bound(spec.max, dataUnit, ctx.pixelsPerMeter);
+  const min = overrides.min ?? spec?.min;
+  const max = overrides.max ?? spec?.max;
+  if (min !== undefined) row.min = bound(min, dataUnit, ctx.pixelsPerMeter);
+  if (max !== undefined) row.max = bound(max, dataUnit, ctx.pixelsPerMeter);
   if (spec?.exclusiveMin) row.exclusiveMin = true;
+  if (overrides.key) row.key = Object.freeze({ ...overrides.key });
   if (overrides.options) row.options = Object.freeze(overrides.options.map((option) => Object.freeze({ ...option })));
   if (overrides.items) row.items = Object.freeze(overrides.items.map((item) => Object.freeze({ ...item })));
   return Object.freeze(row);
+}
+
+const KEY_STATE_TEXT = Object.freeze({ empty: 'not animated', outlined: 'no key here', filled: 'keyed' });
+const ANIMATE_ONLY = 'only in Animate mode';
+const SEVERAL = 'select one joint';
+const NOT_ANIMATED = 'click ◇ to animate this channel';
+const GESTURE = 'finish the current gesture first';
+
+function keyStateOf(model, clip, targets, channel, time) {
+  const tracks = targets.map((target) => findTrack(model, clip, target, channel));
+  if (tracks.some((track) => track === null)) return tracks.every((track) => track === null) ? 'empty' : 'outlined';
+  return tracks.every((track) => keyAt(model, track, time) !== null) ? 'filled' : 'outlined';
+}
+
+/**
+ * Row of a multiplier channel (`strength`, `gain`, `damping`) of the root or of joints, with its key button ◇
+ * (`DESIGN.md` §5.7, Animation). Outside Animate it is the schema field `id` (the root's base value) with ◇ disabled
+ * "only in Animate mode". In Animate it shows the open clip's own value at the playhead (the neutral value without a
+ * track) as a % field: editable and keyed at the playhead when the channel has a track, else read-only "click ◇ to
+ * animate this channel"; with several targets read-only and ◇ disabled "select one joint". Pure.
+ * @param {PageContext} ctx Page context; `uids` are the targets (the root, or joints).
+ * @param {{ id: string, label: string, channel: 'strength'|'gain'|'damping' }} options Row id (the schema path for
+ *   the root), label and channel.
+ * @returns {Readonly<InspectorRow>} The frozen row with `key`.
+ */
+export function channelRow(ctx, { id, label, channel }) {
+  const { model, uids } = ctx;
+  if (ctx.animate === null || model.get(ctx.animate.clip)?.type !== 'clip') {
+    const key ={ state: 'empty', disabled: true, reason: ANIMATE_ONLY, label: `Key ${channel}`, value: null, edit: null };
+    return fieldRow(ctx, id, { label, key });
+  }
+  const { clip, time, editable } = ctx.animate;
+  const values = uids.map((target) => channelValueAt(model, clip, target, channel, time));
+  const value = values.every((item) => Object.is(item, values[0])) ? values[0] : MIXED;
+  const state = keyStateOf(model, clip, uids, channel, time);
+  const several = uids.length > 1;
+  let reason = null;
+  if (several) reason = SEVERAL;
+  else if (findTrack(model, clip, uids[0], channel) === null) reason = NOT_ANIMATED;
+  else if (!editable) reason = GESTURE;
+  const keyReason = several ? SEVERAL : editable ? null : GESTURE;
+  const edit = several ? null : Object.freeze({ kind: 'channel-key', clip, target: uids[0], channel, time, label: `Key ${channel}` });
+  const key = {
+    state,
+    disabled: keyReason !== null,
+    reason: keyReason,
+    label: `Key ${channel} at ${time.toFixed(2)} s (${KEY_STATE_TEXT[state]})`,
+    value: keyReason === null ? value : null,
+    edit: keyReason === null ? edit : null,
+  };
+  return fieldRow(ctx, id, {
+    label,
+    control: 'number',
+    dataUnit: 'mult',
+    value,
+    min: 0,
+    max: 1,
+    animated: true,
+    key,
+    edit: reason === null ? edit : null,
+    ...(reason === null ? { modeFree: true } : { reason }),
+  });
+}
+
+/**
+ * The command of a key button ◇ click: `setChannelKey` of the key's value at the edit's time.
+ * @param {import('../model/model.js').Model} model Document model.
+ * @param {InspectorKey} key Key button of the row.
+ * @returns {import('../commands/history.js').Command|null} The command, or `null` when the button is disabled or the
+ *   key at that time already holds the value.
+ */
+export function keyCommand(model, key) {
+  if (key.disabled || key.edit === null || typeof key.value !== 'number') return null;
+  return channelKeyCommand(model, key.edit, key.value);
+}
+
+function channelKeyCommand(model, edit, value) {
+  const track = findTrack(model, edit.clip, edit.target, edit.channel);
+  const existing = track === null ? null : keyAt(model, track, edit.time);
+  if (existing !== null && Object.is(model.prop(existing, 'v'), value)) return null;
+  return setChannelKey(edit.clip, edit.target, edit.channel, edit.time, value, edit.label, { snap: false });
 }
 
 function compositeCommand(label, commands) {
@@ -276,5 +380,6 @@ function propsCommand(model, edit, displayed, component, pixelsPerMeter) {
 export function editCommand(model, edit, displayValue, { component, pixelsPerMeter } = {}) {
   if (edit?.kind === 'props') return propsCommand(model, edit, displayValue, component, pixelsPerMeter);
   if (edit?.kind === 'rest-angle') return setRestAngles(model, [...edit.uids], fromDisplay(displayValue, 'rad') + 0, edit.label);
+  if (edit?.kind === 'channel-key') return channelKeyCommand(model, edit, fromDisplay(displayValue, 'mult') + 0);
   throw new Error(`An inspector edit of kind "${edit?.kind}" is not a command`);
 }

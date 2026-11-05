@@ -128,7 +128,9 @@ export function inspectorPage({ model, selection, modes, history }) {
     uids: Object.freeze([...uids]),
     editable: modes.can('edit.rest') && !gesture,
     reason: gesture ? null : modes.reason('edit.rest'),
-    animate: modes.mode === 'animate' && modes.clip !== null ? Object.freeze({ clip: modes.clip, time: modes.playhead }) : null,
+    animate: modes.mode === 'animate' && modes.clip !== null
+      ? Object.freeze({ clip: modes.clip, time: modes.playhead, editable: modes.can('edit.animation') && !gesture })
+      : null,
     pixelsPerMeter,
   });
   return page({ kind: 'object', type, uids, title, sections: build(ctx), pixelsPerMeter }, modes.mode);
