@@ -480,9 +480,13 @@ export function createTimeline(element_, editor, player) {
     return [...lanes.querySelectorAll('.timeline-key.selected')];
   }
 
+  function draggedDiamonds() {
+    return [...selectedDiamonds(), ...lanes.querySelectorAll('.timeline-summary-key[data-state="all"]')];
+  }
+
   function previewDrag(delta) {
     const length = clipLength();
-    for (const diamond of selectedDiamonds()) {
+    for (const diamond of draggedDiamonds()) {
       const t = snapTime(Number(diamond.dataset.time) + delta, length);
       diamond.style.left = `${fractionOfTime(t, length) * 100}%`;
     }
