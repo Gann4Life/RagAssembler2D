@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-05
+
+### Added
+- Pose tool: hold Shift while dragging to rotate the grabbed body about its parent joint (or the root body about its center of mass) through physics. Press or release Shift at any time during the drag to switch between pulling and rotating; the status line shows the hint.
+
 ## [0.23.0] - 2026-11-05
 
 ### Added
