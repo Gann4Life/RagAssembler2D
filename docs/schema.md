@@ -26,7 +26,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | Path | Type | Default | Range | Unit | Flags |
 |---|---|---|---|---|---|
 | `format` | string | `"ragassembler"` | constant | — | R |
-| `version` | integer | `FORMAT_VERSION` (3) | supported versions | — | R |
+| `version` | integer | `FORMAT_VERSION` (4) | supported versions | — | R |
 | `meta.name` | string | `"root"` (Save writes `ragdoll.name`) | — | — | E, R |
 | `meta.editorVersion` | string | set by Save (running editor version) | — | — | E, R |
 | `units.pixelsPerMeter` | number | `32` | >0 | px/m | |
@@ -49,6 +49,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 | `angle` | number | `0` | — | rad | E, R |
 | `rootBody` | ref:body or `null` | `null` | an existing body | — | |
 | `channels.strength` | number | `1` | 0–1 | mult | A |
+| `channels.balance` | number | `1` | 0–1 | mult | A |
 | `channels.gain` | number | `1` | 0–1 | mult | A |
 | `channels.damping` | number | `1` | 0–1 | mult | A |
 | `balance.enabled` | boolean | `true` | — | — | |
@@ -59,7 +60,7 @@ One schema per object type of the `.rag.json` format ([`DESIGN.md` §6](design/0
 
 New documents and the 1 → 2 migration both write `balance.enabled = true` ([`DESIGN.md` §6.3](design/06-file-format.md#63-versioning)). The root `bodyAngle` channel ◆ has no field here: the inspector shows its evaluated value at the playhead in Animate mode.
 
-The root inspector also shows `units.pixelsPerMeter` and `preview.gravity` from the document. `position` and `angle` are locked: no editor command writes them, and loaded values are kept ([`DESIGN.md` §2.1](design/02-object-model.md#21-root-the-ragdoll-itself)).
+`units.pixelsPerMeter` and `preview.gravity` are shown on the inspector's Document page (nothing selected), not on the Ragdoll page ([`DESIGN.md` §5.7](design/05-7-inspector.md#57-inspector--properties-panel)). The 3 → 4 migration writes `channels.balance` from `channels.strength` ([`DESIGN.md` §6.3](design/06-file-format.md#63-versioning)). `position` and `angle` are locked: no editor command writes them, and loaded values are kept ([`DESIGN.md` §2.1](design/02-object-model.md#21-root-the-ragdoll-itself)).
 
 ## spriteAsset (`sprites[]`)
 
@@ -200,7 +201,7 @@ The schema default `new_clip` is `autoClipKey("New Clip")` with no taken keys; t
 
 | Target | Channel | Kind | Key value | Unit | Default when not animated |
 |---|---|---|---|---|---|
-| root | `strength`, `gain`, `damping` | multiplier | number 0–1 | mult | `ragdoll.channels.<channel>` |
+| root | `strength`, `balance`, `gain`, `damping` | multiplier | number 0–1 | mult | `ragdoll.channels.<channel>` |
 | root | `bodyAngle` | angle | number | rad | `0` |
 | joint | `angle` | angle | number | rad | `0` |
 | joint | `strength`, `gain`, `damping` | multiplier | number 0–1 | mult | `1` |

@@ -1,8 +1,7 @@
 import { LIMIT_TOLERANCE, clampToLimits } from '../../lib/evaluate.js';
 import { ROOT_UID } from '../model/model.js';
+import { SAME_TIME, channelsOf, findTrack, keyAt } from '../model/clip-channels.js';
 import { snapTime } from '../timeline-time.js';
-
-const SAME_TIME = 1e-6;
 
 function requireType(model, uid, type) {
   if (model.get(uid)?.type !== type) throw new Error(`Node ${uid} is not a ${type}`);
@@ -189,7 +188,7 @@ export function clampKeysToLimits(label = 'Clamp keys to limits') {
  * @throws {TypeError} When `run` finds `time` or `angle` not finite; nothing is mutated then.
  */
 export function setJointAngleKey(clip, joint, time, angle, label = 'Key joint angle', { snap = true } = {}) {
-  return angleKeyCommand(clip, joint, 'joint', 'angle', time, angle, label, snap);
+  return keyCommand(clip, joint, 'joint', 'angle', time, angle, label, snap);
 }
 
 /**
@@ -205,45 +204,111 @@ export function setJointAngleKey(clip, joint, time, angle, label = 'Key joint an
  * @throws {TypeError} When `run` finds `time` or `angle` not finite; nothing is mutated then.
  */
 export function setRootBodyAngleKey(clip, time, angle, label = 'Key body angle', { snap = true } = {}) {
-  return angleKeyCommand(clip, ROOT_UID, 'root', 'bodyAngle', time, angle, label, snap);
+  return keyCommand(clip, ROOT_UID, 'root', 'bodyAngle', time, angle, label, snap);
+}
+
+/**
+ * Builds a command that sets the key of any channel of a target in a clip, with the rules of `setJointAngleKey`: the
+ * track is created when missing, a key already at the (snapped) time gets the value and keeps its `interp`, else a
+ * `linear` key is inserted in time order. `run` returns the key uid.
+ * @param {number} clip Uid of the clip.
+ * @param {number} target Uid of the root, a joint or a shape.
+ * @param {string} channel Channel valid for the target.
+ * @param {number} time Time in seconds.
+ * @param {number|string|null} value Key value in the channel unit: radians for angles, 0-1 for multipliers, an asset id
+ *   or `null` for `sprite`.
+ * @param {string} [label] Undo step label; default `Key <channel>`.
+ * @param {{ snap?: boolean }} [options] As in `setJointAngleKey`.
+ * @returns {import('./history.js').Command} The command.
+ * @throws {Error} When `run` finds `clip` not a clip or a channel not valid for the target; nothing is mutated then.
+ * @throws {TypeError} When `run` finds `time` not finite or a value of the wrong kind; nothing is mutated then.
+ * @throws {RangeError} When `run` finds a multiplier outside 0-1; nothing is mutated then.
+ */
+export function setChannelKey(clip, target, channel, time, value, label = `Key ${channel}`, { snap = true } = {}) {
+  return keyCommand(clip, target, null, channel, time, value, label, snap);
+}
+
+/**
+ * Builds a command that inserts a `linear` key in a track at a time snapped to 1/30 s and clamped to the clip. When a
+ * key of the track already sits at that time it changes nothing and returns that key. `run` returns the key uid.
+ * @param {number} track Uid of the track.
+ * @param {number} time Time in seconds.
+ * @param {number|string|null} value Key value in the channel unit, as in `setChannelKey`.
+ * @param {string} [label] Undo step label.
+ * @returns {import('./history.js').Command} The command.
+ * @throws {Error} When `run` finds `track` not a track; nothing is mutated then.
+ * @throws {TypeError} When `run` finds `time` not finite or a value of the wrong kind; nothing is mutated then.
+ * @throws {RangeError} When `run` finds a multiplier outside 0-1; nothing is mutated then.
+ */
+export function insertKey(track, time, value, label = 'Insert key') {
+  return Object.freeze({
+    label,
+    run(tx) {
+      const { model } = tx;
+      requireType(model, track, 'track');
+      if (!Number.isFinite(time)) throw new TypeError('Key time must be a finite number');
+      const v = checkedValue(kindOf(model.prop(track, 'channel')), value);
+      const t = snapTime(time, model.prop(model.get(track).parent, 'length'));
+      const existing = keyAt(model, track, t);
+      if (existing !== null) return existing;
+      return addKey(tx, track, t, v);
+    },
+  });
+}
+
+function kindOf(channel) {
+  if (channel === 'angle' || channel === 'bodyAngle') return 'angle';
+  if (channel === 'sprite') return 'discrete';
+  return 'multiplier';
+}
+
+function checkedValue(kind, value) {
+  if (kind === 'discrete') {
+    if (value !== null && typeof value !== 'string') throw new TypeError('A sprite key value must be an asset id or null');
+    return value;
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new TypeError('Key time and value must be finite numbers');
+  if (kind === 'multiplier' && (value < 0 || value > 1)) throw new RangeError('A multiplier key value must be within 0-1');
+  return value + 0;
 }
 
 function clampTime(time, length) {
   return Math.min(Math.max(time, 0), Number.isFinite(length) && length > 0 ? length : 0) + 0;
 }
 
-function angleKeyCommand(clip, node, type, channel, time, angle, label, snap) {
+function addKey(tx, track, t, v) {
+  const keys = tx.model.children(track, 'keys');
+  const next = keys.findIndex((uid) => tx.model.prop(uid, 't') > t);
+  return tx.add(track, 'keys', next === -1 ? undefined : next, { type: 'key', props: { t, v, interp: 'linear' } });
+}
+
+function keyCommand(clip, node, type, channel, time, value, label, snap) {
   return Object.freeze({
     label,
     run(tx) {
       const { model } = tx;
       requireType(model, clip, 'clip');
-      requireType(model, node, type);
-      if (!Number.isFinite(time) || !Number.isFinite(angle)) throw new TypeError('Key time and angle must be finite numbers');
+      if (type !== null) requireType(model, node, type);
+      else if (!channelsOf(model, node).includes(channel)) throw new Error(`Channel "${channel}" is not valid for node ${node}`);
+      if (!Number.isFinite(time)) throw new TypeError('Key time and value must be finite numbers');
+      const v = checkedValue(kindOf(channel), value);
       const length = model.prop(clip, 'length');
       const t = snap ? snapTime(time, length) : clampTime(time, length);
-      const target = model.prop(node, 'id');
-      const v = angle + 0;
-      const track = model
-        .children(clip, 'tracks')
-        .find((uid) => model.prop(uid, 'target') === target && model.prop(uid, 'channel') === channel);
-      const key = { type: 'key', props: { t, v, interp: 'linear' } };
-      if (track === undefined) {
+      const track = findTrack(model, clip, node, channel);
+      if (track === null) {
         const created = tx.add(clip, 'tracks', undefined, {
           type: 'track',
-          props: { target, channel },
-          children: { keys: [key] },
+          props: { target: model.prop(node, 'id'), channel },
+          children: { keys: [{ type: 'key', props: { t, v, interp: 'linear' } }] },
         });
         return model.children(created, 'keys')[0];
       }
-      const keys = model.children(track, 'keys');
-      const existing = keys.find((uid) => Math.abs(model.prop(uid, 't') - t) < SAME_TIME);
-      if (existing !== undefined) {
-        tx.set(existing, 'v', v);
+      const existing = keyAt(model, track, t);
+      if (existing !== null) {
+        if (!Object.is(model.prop(existing, 'v'), v)) tx.set(existing, 'v', v);
         return existing;
       }
-      const next = keys.findIndex((uid) => model.prop(uid, 't') > t);
-      return tx.add(track, 'keys', next === -1 ? undefined : next, key);
+      return addKey(tx, track, t, v);
     },
   });
 }

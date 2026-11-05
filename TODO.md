@@ -100,7 +100,7 @@
 - [x] #36 FK preview of the evaluated pose in Animate mode
 - [ ] #37 Preview stack for evaluating several clips together
 - [x] #38 Pose tool in Animate mode (result becomes the FK pose at the playhead)
-- [ ] #39 Autokey, Key selected (K) and inspector key buttons
+- [ ] #39 Key selected button and K hotkey
 - [ ] #93 Show the mode and clip summary in the folded Timeline bar
 - [x] #125 Select: rotation in Animate mode keys the parent joint angle at the playhead
 - [ ] #171 Evaluator: layers, additive blending, crossfades and procedural hook
@@ -119,7 +119,7 @@
 - [x] #203 Timeline summary row: select and edit all keys at a time
 - [ ] #213 Authored follow-through after fast keys
 - [x] #217 Clicking empty space in the Timeline key lanes clears the key selection
-- [ ] #218 Strength, gain and damping tracks with + Track and track deletion
+- [x] #218 Strength, gain and damping tracks with + Track and track deletion
 - [ ] #220 Pose tool: Shift+drag rotates the body about its parent joint
 
 ## Phase 3 – Round-trip verification

@@ -1,6 +1,7 @@
 import { parentJoints } from '../model/queries.js';
+import { resolvedChannelsAt } from '../model/clip-channels.js';
 import { jointRest } from '../commands/transform.js';
-import { MIXED, fieldRow } from './rows.js';
+import { MIXED, channelRow, fieldRow } from './rows.js';
 
 const AUTO = 'set automatically from the rig';
 const BODIES_READ_ONLY = 'not editable in the inspector yet';
@@ -8,6 +9,7 @@ const NO_CHILD = 'the joint has no child body';
 const NO_ANCHOR = 'the joint has no placed anchor';
 const REST_TOLERANCE = 1e-9;
 const MAX_SPEED_HINT = 'Caps the correction speed only; keyed motion is never slowed by it.';
+const ANGLE_REASON = 'key angles with Pose or Key selected';
 
 function bodyLabel(model, id) {
   const uid = typeof id === 'string' ? model.uidOf(id) : null;
@@ -36,8 +38,9 @@ function restOf(model, uids) {
 /**
  * Sections of the Joint page (`DESIGN.md` §5.7): JOINT (name, id, type, bodyA and bodyB read-only, anchor, derived
  * rest angle, `collideConnected`), LIMITS, MOTOR (`maxTorque` read-only "auto (… N·m)", gain, damping, `maxSpeed`
- * with its hint) and AIM (`aimAxis`). The rest angle commits as a `rest-angle` edit and is read-only, with its
- * reason, when a joint has no child body or no placed anchor. Pure.
+ * with its hint), AIM (`aimAxis`) and, in Animate only, ANIMATION (the evaluated `angle` at the playhead, read-only,
+ * and the `strength`, `gain` and `damping` channel rows with their key buttons ◇). The rest angle commits as a
+ * `rest-angle` edit and is read-only, with its reason, when a joint has no child body or no placed anchor. Pure.
  * @param {import('./rows.js').PageContext} ctx Page context; `uids` are joints.
  * @returns {ReadonlyArray<import('./rows.js').InspectorSection>} Frozen sections.
  */
@@ -90,5 +93,21 @@ export function jointPage(ctx) {
     },
     { id: 'aim', label: 'Aim', rows: [row('aimAxis', { label: 'Aim axis' })] },
   ];
+  if (ctx.animate !== null) {
+    const resolved = resolvedChannelsAt(model, ctx.animate.clip, ctx.animate.time);
+    const angles = uids.map((uid) => resolved?.joints.get(model.prop(uid, 'id'))?.angle ?? 0);
+    const angle = angles.every((value) => Math.abs(value - angles[0]) <= REST_TOLERANCE) ? angles[0] : MIXED;
+    const channel = (name, label) => channelRow(ctx, { id: `channels.${name}`, label, channel: name });
+    sections.push({
+      id: 'animation',
+      label: 'Animation',
+      rows: [
+        row('channels.angle', { label: 'Angle', control: 'number', dataUnit: 'rad', value: angle, animated: true, reason: ANGLE_REASON, edit: null }),
+        channel('strength', 'Strength'),
+        channel('gain', 'Gain'),
+        channel('damping', 'Damping'),
+      ],
+    });
+  }
   return Object.freeze(sections.map((section) => Object.freeze({ ...section, rows: Object.freeze(section.rows) })));
 }

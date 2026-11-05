@@ -40,7 +40,7 @@ function fixture(id, index, shape) {
 export function rigDocument(name, rootBody, parts) {
   return {
     format: 'ragassembler',
-    version: 3,
+    version: 4,
     meta: { name, editorVersion: '0.0.0' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
@@ -50,7 +50,7 @@ export function rigDocument(name, rootBody, parts) {
       position: [0, 0],
       angle: 0,
       rootBody: `b_${rootBody}`,
-      channels: { strength: 1, gain: 1, damping: 1 },
+      channels: { strength: 1, balance: 1, gain: 1, damping: 1 },
       balance: { ...BALANCE },
     },
     sprites: [],

@@ -1,10 +1,13 @@
 import { ROOT_UID } from '../model/model.js';
 import { setProps } from '../commands/props.js';
 import { createClip } from '../commands/create.js';
-import { deleteKeys, moveKeys, setClipLength } from '../commands/keys.js';
+import { deleteKeys, insertKey, moveKeys, setClipLength } from '../commands/keys.js';
+import { addTrack, deleteTrack } from '../commands/tracks.js';
 import { deleteClip } from '../commands/delete.js';
-import { clickSelection, jointAngleRows, selectionState, summaryKeys } from '../timeline-rows.js';
+import { keyAt, trackValueAt } from '../model/clip-channels.js';
+import { channelLabel, clickSelection, keyValueText, selectionState, summaryKeys, trackGroups, trackMenu } from '../timeline-rows.js';
 import { SNAP_STEP, fractionOfTime, rulerTicks, snapTime, timeAtOffset } from '../timeline-time.js';
+import { openMenu } from '../menu.js';
 
 const REST_POSE = '';
 const RULER_LABEL = 'Playhead';
@@ -12,6 +15,7 @@ const ONION_TITLE = 'Onion skins: ghosts of the nearest key times in Animate';
 const DELETE_KEYS_TITLE = 'Delete keys (Del)';
 const GHOSTS_SETTING = 'display.ghosts';
 const SUMMARY_LABEL = 'Summary';
+const ANIMATE_ONLY = 'only in Animate mode';
 
 /**
  * @typedef {object} Timeline
@@ -43,8 +47,10 @@ function formatSeconds(value) {
 /**
  * Mounts the Timeline panel into a dock panel element, replacing its content: a header with the clip selector,
  * New and Delete buttons, the length field, the loop toggle, the cycle control and the Onion skins toggle (the
- * `onion-skins` action, pressed while `display.ghosts` is on), then a ruler with the playhead. Clip edits run
- * as commands through `editor.history`; opening a clip and moving the playhead go through `editor.modes`.
+ * `onion-skins` action, pressed while `display.ghosts` is on) and the "+ Track ▾" menu, then a ruler with the
+ * playhead, the Summary row and the track groups (collapsible header rows, sub-tracks with a Delete track button,
+ * double-click to insert a key). Clip, track and key edits run as commands through `editor.history`; opening a clip
+ * and moving the playhead go through `editor.modes`. Collapsed groups are session UI state of the panel.
  * @param {HTMLElement} element_ Panel element given by the dock.
  * @param {import('../editor.js').Editor} editor Editor core.
  * @param {import('../timeline-player.js').TimelinePlayer} player Playback driver behind the Play/Pause button.
@@ -89,8 +95,12 @@ export function createTimeline(element_, editor, player) {
   onionButton.title = ONION_TITLE;
   const deleteKeysButton = button(doc, 'Delete keys');
   deleteKeysButton.setAttribute('aria-label', 'Delete keys');
+  const trackButton = button(doc, '+ Track ▾');
+  trackButton.setAttribute('aria-label', 'Add track');
+  trackButton.setAttribute('aria-haspopup', 'menu');
+  trackButton.setAttribute('aria-expanded', 'false');
   header.append(
-    playButton, select, renameButton, newButton, deleteButton, deleteKeysButton, lengthLabel, loopLabel, cycleGroup, onionButton,
+    playButton, select, renameButton, newButton, deleteButton, deleteKeysButton, lengthLabel, loopLabel, cycleGroup, onionButton, trackButton,
   );
 
   const body = element(doc, 'div', 'timeline-body');
@@ -120,6 +130,10 @@ export function createTimeline(element_, editor, player) {
   let scrubPointer = null;
   let keyDrag = null;
   let nameField = null;
+  let trackMenuHandle = null;
+  const collapsed = new Set();
+  let seenClip = null;
+  let seenTracks = new Set();
 
   const canOpen = () => modes.can('clip.open') && !history.inGesture;
   const canEditClip = () => modes.clip !== null && modes.can('edit.animation') && !history.inGesture;
@@ -224,6 +238,13 @@ export function createTimeline(element_, editor, player) {
     const keysReason = deleteKeysReason();
     deleteKeysButton.setAttribute('aria-disabled', String(keysReason !== null));
     deleteKeysButton.title = keysReason === null ? DELETE_KEYS_TITLE : `${DELETE_KEYS_TITLE}: ${keysReason}`;
+    setReason(trackButton, addTrackReason());
+    const trackEditReason = trackReason();
+    for (const node of labels.querySelectorAll('.timeline-track-delete')) {
+      node.setAttribute('aria-disabled', String(trackEditReason !== null));
+      const title = `Delete track (${node.dataset.count} keys)`;
+      node.title = trackEditReason === null ? title : `${title}: ${trackEditReason}`;
+    }
     const editable = canEditClip();
     lengthInput.disabled = !open;
     lengthInput.readOnly = !editable;
@@ -259,30 +280,75 @@ export function createTimeline(element_, editor, player) {
     return lane;
   }
 
-  function renderRows(rows, length) {
-    const open = modes.clip !== null;
-    labels.replaceChildren(
-      ...(open ? [element(doc, 'div', 'timeline-row-label', SUMMARY_LABEL)] : []),
-      ...rows.map((row) => element(doc, 'div', 'timeline-row-label', `${row.label} · angle`)),
-    );
-    lanes.replaceChildren(
-      ...(open ? [summaryLane(rows, length)] : []),
-      ...rows.map((row) => {
-        const lane = element(doc, 'div', 'timeline-lane');
-        lane.append(
-          ...row.keys.map((key) => {
-            const diamond = element(doc, 'span', 'timeline-key');
-            diamond.dataset.key = String(key.uid);
-            diamond.dataset.time = String(key.t);
-            diamond.style.left = `${fractionOfTime(key.t, length) * 100}%`;
-            diamond.title = `${formatSeconds(key.t)} s`;
-            diamond.classList.toggle('selected', selection.timeline.includes(key.uid));
-            return diamond;
-          }),
-        );
-        return lane;
+  function groupHeader(group) {
+    const label = element(doc, 'div', 'timeline-row-label timeline-group-label');
+    const expanded = !collapsed.has(group.target);
+    const toggle = element(doc, 'button', 'timeline-collapse', expanded ? '▾' : '▸');
+    toggle.type = 'button';
+    toggle.dataset.target = String(group.target);
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} ${group.label}`);
+    toggle.title = toggle.getAttribute('aria-label');
+    label.append(toggle, element(doc, 'span', 'timeline-label-text', group.label));
+    return label;
+  }
+
+  function trackLabel(group, row) {
+    const label = element(doc, 'div', 'timeline-row-label timeline-track-label');
+    const remove = element(doc, 'button', 'timeline-track-delete', '🗑');
+    remove.type = 'button';
+    remove.dataset.track = String(row.track);
+    remove.dataset.count = String(row.keys.length);
+    remove.setAttribute('aria-label', `Delete ${row.label} track of ${group.label}`);
+    label.append(element(doc, 'span', 'timeline-label-text', row.label), remove);
+    return label;
+  }
+
+  function trackLane(row, length) {
+    const lane = element(doc, 'div', 'timeline-lane');
+    lane.dataset.track = String(row.track);
+    lane.append(
+      ...row.keys.map((key) => {
+        const diamond = element(doc, 'span', 'timeline-key');
+        diamond.dataset.key = String(key.uid);
+        diamond.dataset.time = String(key.t);
+        diamond.style.left = `${fractionOfTime(key.t, length) * 100}%`;
+        diamond.title = `${formatSeconds(key.t)} s: ${keyValueText(model, row.channel, key.v)}`;
+        diamond.classList.toggle('selected', selection.timeline.includes(key.uid));
+        return diamond;
       }),
     );
+    return lane;
+  }
+
+  function renderRows(groups, length) {
+    const open = modes.clip !== null;
+    const tracks = groups.flatMap((group) => group.tracks);
+    const labelRows = open ? [element(doc, 'div', 'timeline-row-label', SUMMARY_LABEL)] : [];
+    const laneRows = open ? [summaryLane(tracks, length)] : [];
+    for (const group of groups) {
+      labelRows.push(groupHeader(group));
+      laneRows.push(element(doc, 'div', 'timeline-lane timeline-group-lane'));
+      if (collapsed.has(group.target)) continue;
+      for (const row of group.tracks) {
+        labelRows.push(trackLabel(group, row));
+        laneRows.push(trackLane(row, length));
+      }
+    }
+    labels.replaceChildren(...labelRows);
+    lanes.replaceChildren(...laneRows);
+  }
+
+  function expandAddedTracks(groups) {
+    const current = new Set();
+    for (const group of groups) {
+      for (const row of group.tracks) {
+        current.add(row.track);
+        if (modes.clip === seenClip && !seenTracks.has(row.track)) collapsed.delete(group.target);
+      }
+    }
+    seenClip = modes.clip;
+    seenTracks = current;
   }
 
   function renderKeySelection() {
@@ -295,18 +361,24 @@ export function createTimeline(element_, editor, player) {
   function render() {
     const clips = model.children(ROOT_UID, 'clips');
     const open = modes.clip;
-    const rows = jointAngleRows(model, open);
+    const groups = trackGroups(model, open);
+    expandAddedTracks(groups);
     const next = JSON.stringify([
       clips.map((uid) => [uid, clipLabel(model, uid)]),
       open,
       open === null ? 0 : model.prop(open, 'length'),
-      rows.map((row) => [row.joint, row.label, row.keys.map((key) => [key.uid, key.t])]),
+      groups.map((group) => [
+        group.target,
+        group.label,
+        collapsed.has(group.target),
+        group.tracks.map((row) => [row.track, row.channel, row.keys.map((key) => [key.uid, key.t, key.v])]),
+      ]),
     ]);
     if (next !== signature) {
       signature = next;
       renderOptions();
       renderTicks(clipLength());
-      renderRows(rows, clipLength());
+      renderRows(groups, clipLength());
     }
     renderControls();
     renderPlayhead();
@@ -329,6 +401,90 @@ export function createTimeline(element_, editor, player) {
     if (modes.clip === null) return 'open a clip';
     if (selection.timeline.length === 0) return 'select a key';
     return null;
+  }
+
+  function trackReason() {
+    if (modes.clip === null) return 'open a clip';
+    if (!modes.can('edit.animation')) return ANIMATE_ONLY;
+    if (history.inGesture || keyDrag !== null) return 'finish the current gesture first';
+    return null;
+  }
+
+  function addTrackReason() {
+    return trackReason() ?? trackMenu(model, modes.clip, selection.objects).reason;
+  }
+
+  function openTrackMenu() {
+    if (trackButton.getAttribute('aria-expanded') === 'true') {
+      trackMenuHandle?.close();
+      trackMenuHandle = null;
+      return;
+    }
+    const reason = addTrackReason();
+    if (reason !== null) {
+      editor.status(`Add track: ${reason}`);
+      return;
+    }
+    const clip = modes.clip;
+    const menu = trackMenu(model, clip, selection.objects);
+    const items = menu.channels.map((channel) => ({ id: channel, label: channelLabel(channel), kind: 'item' }));
+    trackMenuHandle = openMenu(trackButton, items, {
+      align: 'left',
+      onSelect: (item) => {
+        trackMenuHandle = null;
+        if (addTrackReason() !== null || modes.clip !== clip) return;
+        collapsed.delete(menu.target);
+        history.execute(addTrack(clip, menu.target, item.id));
+      },
+    });
+  }
+
+  function onLabelsClick(event) {
+    const toggle = event.target.closest?.('.timeline-collapse');
+    if (toggle) {
+      const target = Number(toggle.dataset.target);
+      if (collapsed.has(target)) collapsed.delete(target);
+      else collapsed.add(target);
+      render();
+      labels.querySelector(`.timeline-collapse[data-target="${target}"]`)?.focus();
+      return;
+    }
+    const remove = event.target.closest?.('.timeline-track-delete');
+    if (!remove) return;
+    const reason = trackReason();
+    if (reason !== null) {
+      editor.status(`Delete track: ${reason}`);
+      return;
+    }
+    const track = Number(remove.dataset.track);
+    if (model.get(track)?.type === 'track') history.execute(deleteTrack(track));
+  }
+
+  function onLanesDoubleClick(event) {
+    if (event.target.closest?.('.timeline-key, .timeline-summary-key')) return;
+    const lane = event.target.closest?.('.timeline-lane[data-track]');
+    if (!lane) return;
+    const track = Number(lane.dataset.track);
+    if (model.get(track)?.type !== 'track') return;
+    const reason = trackReason();
+    if (reason !== null) {
+      editor.status(`Insert key: ${reason}`);
+      return;
+    }
+    const rect = lane.getBoundingClientRect();
+    const time = timeAtOffset(event.clientX - rect.left, rect.width, clipLength());
+    const existing = keyAt(model, track, time);
+    if (existing !== null) {
+      selection.set([existing]);
+      return;
+    }
+    const value = trackValueAt(model, track, time);
+    if (value === undefined) return;
+    try {
+      selection.set([history.execute(insertKey(track, time, value))]);
+    } catch (error) {
+      editor.status(`Insert key: ${error?.message ?? error}`);
+    }
   }
 
   function removeKeys() {
@@ -572,6 +728,9 @@ export function createTimeline(element_, editor, player) {
   newButton.addEventListener('click', addClip);
   deleteButton.addEventListener('click', removeClip);
   deleteKeysButton.addEventListener('click', removeKeys);
+  trackButton.addEventListener('click', openTrackMenu);
+  labels.addEventListener('click', onLabelsClick);
+  lanes.addEventListener('dblclick', onLanesDoubleClick);
   lengthInput.addEventListener('change', commitLength);
   lengthInput.addEventListener('keydown', onLengthKey);
   loopInput.addEventListener('change', commitLoop);
@@ -606,6 +765,7 @@ export function createTimeline(element_, editor, player) {
 
   return {
     destroy() {
+      trackMenuHandle?.close();
       for (const off of unsubscribe) off();
       element_.classList.remove('timeline-panel');
       element_.replaceChildren();

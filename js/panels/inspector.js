@@ -1,5 +1,5 @@
 import { inspectorPage } from '../inspector/page.js';
-import { MIXED, editCommand } from '../inspector/rows.js';
+import { MIXED, editCommand, keyCommand } from '../inspector/rows.js';
 import { actionTitle } from '../header.js';
 import { HOTKEYS } from '../hotkeys.js';
 import { attachTooltip } from '../tooltip.js';
@@ -195,9 +195,10 @@ export function createInspector(element, editor) {
     const handle = attachTooltip(input, () => {
       const current = state.row;
       const name = component === undefined ? fieldName(current) : `${fieldName(current)} ${component === 0 ? 'x' : 'y'}`;
-      if (current.readOnly && current.reason) return `${name} (${current.reason})`;
+      const hint = current.hint ? `. ${current.hint}` : '';
+      if (current.readOnly && current.reason) return `${name} (${current.reason})${hint}`;
       if (state.invalid) return `${name} (${rangeText(current)})`;
-      return current.hint ? `${name}. ${current.hint}` : name;
+      return `${name}${hint}`;
     }, { placement: 'below' });
     tooltips.push(handle);
     update(row);
@@ -423,11 +424,61 @@ export function createInspector(element, editor) {
     const unit = doc.createElement('span');
     unit.className = 'inspector-unit';
     unit.textContent = row.unit;
-    const key = doc.createElement('span');
-    key.className = 'inspector-key';
-    key.setAttribute('aria-hidden', 'true');
-    line.append(label, cell, unit, key);
-    return { line, field };
+    if (row.key === undefined) {
+      const key = doc.createElement('span');
+      key.className = 'inspector-key';
+      key.setAttribute('aria-hidden', 'true');
+      line.append(label, cell, unit, key);
+      return { line, field };
+    }
+    const key = keyButton(row);
+    line.append(label, cell, unit, key.element);
+    return {
+      line,
+      field: {
+        update: (current) => {
+          field.update(current);
+          key.update(current);
+        },
+      },
+    };
+  }
+
+  function keyButton(row) {
+    const button = doc.createElement('button');
+    button.type = 'button';
+    button.className = 'inspector-key-button';
+    button.dataset.row = row.id;
+    button.dataset.key = 'true';
+    const state = { row };
+    const update = (current) => {
+      state.row = current;
+      const { key } = current;
+      button.textContent = key.state === 'filled' ? '◆' : '◇';
+      button.dataset.state = key.state;
+      button.setAttribute('aria-label', key.label);
+      button.setAttribute('aria-disabled', String(key.disabled));
+      handle.update();
+    };
+    button.addEventListener('click', () => {
+      const { key } = state.row;
+      if (key.disabled) {
+        if (key.reason) editor.status(`${key.label}: ${key.reason}`);
+        return;
+      }
+      guarded(() => {
+        const command = keyCommand(model, key);
+        if (command !== null) history.execute(command);
+      }, key.edit?.label ?? key.label);
+      schedule();
+    });
+    const handle = attachTooltip(button, () => {
+      const { key } = state.row;
+      return key.disabled && key.reason ? `${key.label} (${key.reason})` : key.label;
+    }, { placement: 'below' });
+    tooltips.push(handle);
+    update(row);
+    return { element: button, update };
   }
 
   function focusTarget() {
@@ -438,6 +489,7 @@ export function createInspector(element, editor) {
       row: active.dataset.row,
       component: active.dataset.component ?? null,
       uid: active.dataset.uid ?? null,
+      key: active.dataset.key === 'true',
       draft: state && active.value !== state.displayed ? active.value : null,
     };
   }
@@ -479,6 +531,7 @@ export function createInspector(element, editor) {
     let selector = `[data-row="${view.CSS.escape(focus.row)}"]`;
     if (focus.component !== null) selector += `[data-component="${focus.component}"]`;
     if (focus.uid !== null) selector += `[data-uid="${view.CSS.escape(focus.uid)}"]`;
+    selector += focus.key ? '[data-key]' : ':not([data-key])';
     const target = content.querySelector(selector);
     if (!target) return;
     target.focus({ preventScroll: true });

@@ -60,11 +60,11 @@ function fixtureOf(part) {
 function lightCreature(motor) {
   return {
     format: 'ragassembler',
-    version: 3,
+    version: 4,
     meta: { name: 'creature', editorVersion: '0.9.0' },
     units: { pixelsPerMeter: 32 },
     preview: { gravity: [0, -10] },
-    ragdoll: { id: 'root', name: 'creature', position: [0, 0], angle: 0, rootBody: 'b_trunk', channels: { strength: 1, gain: 1, damping: 1 }, balance: { enabled: false, maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 } },
+    ragdoll: { id: 'root', name: 'creature', position: [0, 0], angle: 0, rootBody: 'b_trunk', channels: { strength: 1, balance: 1, gain: 1, damping: 1 }, balance: { enabled: false, maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 } },
     sprites: [],
     bodies: PARTS.map((part) => ({
       id: `b_${part.id}`,

@@ -5,7 +5,7 @@ import { ROOT_UID } from '../js/model/model.js';
 import { createClip, createJoint, createShapeBody } from '../js/commands/create.js';
 import { deleteKeys, moveKeys, setJointAngleKey } from '../js/commands/keys.js';
 import { setProps } from '../js/commands/props.js';
-import { jointAngleRows } from '../js/timeline-rows.js';
+import { trackGroups } from '../js/timeline-rows.js';
 import { SNAP_STEP } from '../js/timeline-time.js';
 
 function near(actual, expected) {
@@ -22,7 +22,7 @@ function environment(times = [0.2, 0.5, 0.8]) {
   const joint = history.execute(createJoint({ bodyA: bodies[0], bodyB: bodies[1], anchor: { x: 0.5, y: 0 } }));
   const clip = history.execute(createClip());
   for (const [index, time] of times.entries()) history.execute(setJointAngleKey(clip, joint, time, index));
-  const keys = () => jointAngleRows(model, clip)[0].keys;
+  const keys = () => trackGroups(model, clip)[0].tracks[0].keys;
   return { ...editor, joint, clip, keys };
 }
 
@@ -84,7 +84,7 @@ test('deleteKeys removes keys, keeps an empty track and undoes', () => {
   assert.equal(keys().length, 2);
   history.execute(deleteKeys(keys().map((key) => key.uid)));
   assert.equal(model.children(clip, 'tracks').length, 1);
-  assert.equal(jointAngleRows(model, clip)[0].keys.length, 0);
+  assert.equal(trackGroups(model, clip)[0].tracks[0].keys.length, 0);
   history.undo();
   assert.equal(keys().length, 2);
   history.undo();

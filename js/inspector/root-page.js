@@ -1,11 +1,10 @@
-import { resolveChannels } from '../../lib/evaluate.js';
 import { ROOT_UID } from '../model/model.js';
-import { toJson } from '../model/io.js';
-import { fieldRow } from './rows.js';
+import { resolvedChannelsAt } from '../model/clip-channels.js';
+import { channelRow, fieldRow } from './rows.js';
 
-const PREVIEW_VERSION = 'inspector';
 const LOCKED = 'the root transform is locked';
 const AUTO = 'set automatically from the rig';
+const ANGLE_REASON = 'key angles with Pose or Key selected';
 
 function labelOf(model, uid) {
   const name = model.prop(uid, 'name');
@@ -18,66 +17,49 @@ function rootBodyUid(model) {
   return uid !== null && model.get(uid)?.type === 'body' ? uid : null;
 }
 
-const playheadCaches = new WeakMap();
-
-function cacheOf(model) {
-  let cache = playheadCaches.get(model);
-  if (!cache) {
-    cache = { revision: null, clip: null, time: null, channels: null };
-    playheadCaches.set(model, cache);
-  }
-  return cache;
+function freeze(sections) {
+  return Object.freeze(sections.map((section) => Object.freeze({ ...section, rows: Object.freeze(section.rows) })));
 }
 
-function evaluateChannels(model, { clip, time }) {
-  try {
-    const def = toJson(model, PREVIEW_VERSION);
-    const clipDef = def.clips[model.children(ROOT_UID, 'clips').indexOf(clip)];
-    return resolveChannels(def, clipDef ? [{ clip: clipDef, time }] : []).root ?? {};
-  } catch {
-    return null;
-  }
-}
-
-function playheadChannels(model, animate) {
-  const cache = cacheOf(model);
-  if (cache.revision !== model.revision || cache.clip !== animate.clip || cache.time !== animate.time) {
-    cache.revision = model.revision;
-    cache.clip = animate.clip;
-    cache.time = animate.time;
-    cache.channels = evaluateChannels(model, animate);
-  }
-  return cache.channels;
+function documentSections(ctx) {
+  return freeze([
+    {
+      id: 'document',
+      label: 'Document',
+      rows: [fieldRow(ctx, 'units.pixelsPerMeter', { label: 'Pixels per meter' }), fieldRow(ctx, 'preview.gravity', { label: 'Preview gravity' })],
+    },
+  ]);
 }
 
 /**
- * Sections of the Ragdoll (root) page (`DESIGN.md` §5.7): RAGDOLL (name, id, locked position and angle), DOCUMENT
- * (`rootBody` dropdown, `pixelsPerMeter`, preview gravity), DRIVE (strength, gain and damping multipliers, plus the
- * root body angle in Animate, evaluated at the playhead) and BALANCE (`maxTorque` read-only "auto"). Pure.
- * @param {import('./rows.js').PageContext} ctx Page context; `uids` is `[ROOT_UID]`.
+ * Sections of the Document page (`ctx.type` `document`: nothing selected) or of the Ragdoll (root) page
+ * (`DESIGN.md` §5.7). Document: DOCUMENT (`pixelsPerMeter`, preview gravity). Ragdoll: RAGDOLL (name, id, locked
+ * position and angle, `rootBody` dropdown), DRIVE (strength, balance, gain and damping multipliers with their key
+ * buttons ◇: base values outside Animate, the open clip's values at the playhead in Animate, plus the evaluated root
+ * body angle, read-only) and BALANCE CONTROLLER (`maxTorque` read-only "auto"). Pure.
+ * @param {import('./rows.js').PageContext} ctx Page context; `uids` is `[ROOT_UID]`, `type` is `root` or `document`.
  * @returns {ReadonlyArray<import('./rows.js').InspectorSection>} Frozen sections.
  */
 export function rootPage(ctx) {
+  if (ctx.type === 'document') return documentSections(ctx);
   const { model } = ctx;
   const row = (path, overrides) => fieldRow(ctx, path, overrides);
-  const playhead = ctx.animate === null ? null : playheadChannels(model, ctx.animate);
-  const channel = (name, label) =>
-    row(`channels.${name}`, { label, ...(playhead?.[name] === undefined ? {} : { value: playhead[name] }) });
-  const drive = [channel('strength', 'Strength'), channel('gain', 'Gain'), channel('damping', 'Damping')];
-  if (playhead?.bodyAngle !== undefined) {
-    drive.push(row('bodyAngle', { label: 'Body angle', control: 'number', dataUnit: 'rad', value: playhead.bodyAngle, animated: true, edit: null }));
+  const resolved = ctx.animate === null ? null : resolvedChannelsAt(model, ctx.animate.clip, ctx.animate.time);
+  const channel = (name, label) => channelRow(ctx, { id: `channels.${name}`, label, channel: name });
+  const drive = [channel('strength', 'Strength'), channel('balance', 'Balance'), channel('gain', 'Gain'), channel('damping', 'Damping')];
+  if (resolved?.root?.bodyAngle !== undefined) {
+    drive.push(row('bodyAngle', { label: 'Body angle', control: 'number', dataUnit: 'rad', value: resolved.root.bodyAngle, animated: true, reason: ANGLE_REASON, edit: null }));
   }
   const balance = (name, label, overrides = {}) => row(`balance.${name}`, { label, commitLabel: `Edit balance ${label.toLowerCase()}`, ...overrides });
   const sections = [
     {
       id: 'ragdoll',
       label: 'Ragdoll',
-      rows: [row('name'), row('id'), row('position', { reason: LOCKED }), row('angle', { reason: LOCKED })],
-    },
-    {
-      id: 'document',
-      label: 'Document',
       rows: [
+        row('name'),
+        row('id'),
+        row('position', { reason: LOCKED }),
+        row('angle', { reason: LOCKED }),
         row('rootBody', {
           label: 'Root body',
           control: 'select',
@@ -85,14 +67,12 @@ export function rootPage(ctx) {
           options: model.children(ROOT_UID, 'bodies').map((uid) => ({ value: uid, label: labelOf(model, uid) })),
           edit: Object.freeze({ kind: 'root-body' }),
         }),
-        row('units.pixelsPerMeter', { label: 'Pixels per meter' }),
-        row('preview.gravity', { label: 'Preview gravity' }),
       ],
     },
     { id: 'drive', label: 'Drive', rows: drive },
     {
       id: 'balance',
-      label: 'Balance',
+      label: 'Balance controller',
       rows: [
         balance('enabled', 'Enabled'),
         balance('maxTorque', 'Max torque', { control: 'readout', unit: '', reason: AUTO, textFormat: (text) => `auto (${text} N·m)` }),
@@ -102,5 +82,5 @@ export function rootPage(ctx) {
       ],
     },
   ];
-  return Object.freeze(sections.map((section) => Object.freeze({ ...section, rows: Object.freeze(section.rows) })));
+  return freeze(sections);
 }

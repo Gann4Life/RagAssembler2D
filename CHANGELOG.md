@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-05
+
+### Added
+- Timeline track groups per joint (Root first) with collapse, a + Track menu, a delete track button and double-click to insert a key; strength, balance, gain and damping tracks.
+- Key buttons next to Strength, Balance, Gain and Damping in the Inspector (Ragdoll and Joint pages); editing an animated field keys it at the playhead.
+- Root Balance channel to release the root body independently of joint strength.
+- Document page for an empty selection (pixels per meter, preview gravity); selecting the root shows the Ragdoll page.
+
+### Changed
+- **BREAKING:** file format version 4 adds `ragdoll.channels.balance` and root `balance` tracks; older files migrate on load (balance copies strength), so re-save them.
+- Strength below 100 % now acts as a softening spring relative to the load each joint carries, so fading strength makes a ragdoll sag and go limp gradually.
+- Inspector tooltips explain the drive channels.
+
 ## [0.20.1] - 2026-11-05
 
 ### Fixed

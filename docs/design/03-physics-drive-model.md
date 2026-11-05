@@ -12,13 +12,14 @@ error    = target − jointAngle
 
 correction     = clamp(G · error − D · (jointSpeed − rate), −motor.maxSpeed, motor.maxSpeed)
 motorSpeed     = rate + correction
-maxMotorTorque = S · motor.maxTorque
+maxMotorTorque = S · motor.maxTorque                                    S = 1
+               = min(S · motor.maxTorque, k_S / G · |motorSpeed − jointSpeed|)   S < 1 (§3.4)
 enableMotor    = S > 0
 ```
 
 - `motor.maxTorque` (N·m), `motor.gain` (1/s), `motor.damping` (unitless) and `motor.maxSpeed` (rad/s) are per-joint **base values** set in the inspector. `motor.maxSpeed` limits the **correction** only (how fast the motor chases an error: a far procedural target, a revive, a push); the keyed `rate` always passes, so a key is never slowed below the speed it was authored with. Torque, contacts and limits still bound the achieved speed.
 - The channels `strength`, `gain` and `damping` (joint and root) are **multipliers in 0–1, default 1**.
-- `S = 0` → the joint is fully limp, but **limits are still enforced**.
+- `S = 0` → the joint is fully limp, but **limits are still enforced**. Between 0 and 1 the joint is a spring that yields under load ([§3.4](#34-strength-going-limp)).
 - `jointAngle` and `jointSpeed` are `GetJointAngle()` and `GetJointSpeed()` of the `b2RevoluteJoint` (rad, rad/s, relative to the reference angle, so 0 at rest). The outputs go to `SetMotorSpeed`, `SetMaxMotorTorque` and `EnableMotor`. These methods exist only on the `b2RevoluteJoint` wrapper ([§7.2](07-ragimporter.md#72-spawn-and-flipx)). This loop allocates nothing on the Emscripten heap ([§7.4](07-ragimporter.md#74-native-memory)).
 - **Velocity feed-forward (keyframe intent, #209).** The motor is told the keyed speed (`rate`) and only corrects the error on top of it. If the motor reaches its speed, the error obeys `d(error)/dt = −G / (1 + D) · error`: it decays with time constant `(1 + D) / G` (0.15 s at the defaults) and a steady ramp is tracked with no lag at all. A joint keyed to move 97° in 0.1 s is therefore driven at about 17 rad/s from the first step of that segment and arrives at the keyed time with that speed, so a strike lands as an impact; slow segments (cushioning returns, holds) move at their own keyed speed, unchanged. Damping acts on `jointSpeed − rate`, so it resists leaving the keyed motion, not the motion itself; with `rate = 0` (a hold, no clip) the law is exactly the former PD, so holding, pushes and settling are unchanged.
   - `t` is the clip time **after** the step's advance, the time the step ends at, so the step moves the joint toward where it must be when the step is over. There is no look-ahead: the former `lead` (sampling `(1 + D) / G − dt` ahead to hide the lag) is removed, since feed-forward removes the lag itself and the look-ahead blurred fast segments.
@@ -79,19 +80,21 @@ target   = root bodyAngle resolved at the step's clip time t as in §3 (rad, rel
 rate     = its target rate as in §3 (rad/s; negated with flipX)
 θ*       = θ₀ + target                     θ₀ = rootBody's world angle right after spawn
 error    = wrapToPi(θ* − rootBody.GetAngle())
-S        = rootStrength × runtimeStrength
+S        = rootBalance  × runtimeStrength
 G        = rootGain     × runtimeGain     × balance.gain
 D        = rootDamping  × runtimeDamping  × balance.damping
 
 ω*       = rate + clamp(G · error − D · (ω − rate), −balance.maxSpeed, balance.maxSpeed)
-torque   = clamp(I · (ω* − ω) / dt, −S · balance.maxTorque, S · balance.maxTorque)
+limit    = S · balance.maxTorque; below S = 1 at most k_S / G · |ω* − ω| with balance.load (§3.4)
+torque   = clamp(I · (ω* − ω) / dt, −limit, limit)
 α        = torque / I
 apply    = balance.enabled and the instance's balance switch is on and S > 0 and dt > 0 and I > 0
            → for each body b of R: b.ApplyTorque(I_b · α, true) and
              b.ApplyForce(m_b · α · (−r_b.y, r_b.x), c_b, true)
 ```
 
-- `balance.gain` (1/s), `balance.damping` (unitless), `balance.maxSpeed` (rad/s) and `balance.maxTorque` (N·m) are ragdoll-level base values (`ragdoll.balance`, [§6.2](06-file-format.md#62-field-reference)) with the same meaning as a joint's motor values: the controller is a motor between `rootBody` and the world frame. Root `strength`, `gain` and `damping` and the runtime multipliers scale it as they scale every joint, so `dead` (root `strength` → 0) also releases the balance. There are no joint-level multipliers here.
+- `balance.gain` (1/s), `balance.damping` (unitless), `balance.maxSpeed` (rad/s) and `balance.maxTorque` (N·m) are ragdoll-level base values (`ragdoll.balance`, [§6.2](06-file-format.md#62-field-reference)) with the same meaning as a joint's motor values: the controller is a motor between `rootBody` and the world frame. Root `gain` and `damping` and the runtime multipliers scale it as they scale every joint.
+- **Its strength is the root `balance` channel, not root `strength` (#218).** Root `strength` scales the joint motors only, so the two release independently: a death keys `balance` to 0 at its start (`rootBody` falls freely, no turning by the invisible hand) while `strength` fades the joints from 1 to 0 ([§4.6](04-animation-model.md#46-canonical-example)). The runtime `setStrength` still scales both, so a host can drop a whole ragdoll with one call. There are no joint-level multipliers here.
 - `m_b` and `I_b` (inertia about the body's own center of mass) come from `bodyMassData` at `parse` and never change; no native inertia getter is used (`b2Body.GetInertia` is about the body origin). `c_b`, `v_b` and `ω_b` are read every step (`GetWorldCenter`, `GetLinearVelocity`, `GetAngularVelocity`).
 - The torque is spread as the wrench that turns `R` rigidly about `C` at `α`: a torque and a force per body whose forces sum to zero. The joints therefore carry no load from the controller, and the controller's damping uses the angular velocity of the whole ragdoll, not of `rootBody` alone. Applying the whole torque to `rootBody` (the earlier rule) made a light `rootBody` spin past its joints, which then fought it: trembling, tipping and abrupt turns.
 - The error is wrapped to (−π, π], so a ragdoll that tumbled while limp turns back the short way when it revives. A keyed full turn still works as long as the body follows its target within half a turn.
@@ -130,3 +133,22 @@ inertia    = ρ · Σ polar moment of each carrier about the center (Box2D's per
 - **Choosing masses.** The solver converges faster when the bodies on either side of a joint have comparable masses (§3.1, Velocity iterations); with the 1 kg default a walking biped stays below the M6 jitter threshold at the default 20 iterations. `W_JOINT_MASS_RATIO` ([§6.4](06-file-format.md#64-validation)) warns above a 10:1 ratio across a joint; ratios below it are allowed but not jitter-free at 20 iterations (3 kg feet against 1 kg legs measured 1.12 rad/s, above the 1 rad/s threshold), so keep neighbouring masses as close as the design allows.
 - Suggested torques follow the masses: a `body.mass` commit is a rig change for the automatic motor torque ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)).
 - Example: `body.mass = 3`, a 1 × 0.5 m box at (0, 0) and a 0.5 × 0.5 m box at (1, 0), no sensors. `A = 0.75`, `ρ = 4`, shape masses 2 and 1 kg, center `(1/3, 0)`. Inertia `2 · (1² + 0.5²) / 12 + 2 · (1/3)² + 1 · (0.5² + 0.5²) / 12 + 1 · (2/3)² ≈ 0.2083 + 0.2222 + 0.0417 + 0.4444 = 0.9167 kg·m²`.
+
+## 3.4 Strength (going limp)
+A velocity motor holds its target with any torque up to its limit, and the suggested torques of §3.1 carry about ten times the static load, so scaling only the limit (`S · maxTorque`) changed nothing visible until `S` was almost 0, then dropped the ragdoll at once. Below `S = 1` the motor (and the balance, §3.2) is therefore also limited to a spring whose stiffness follows `S`, so animating `strength` from 1 to 0 reads as a gradual going-limp (#218):
+
+```
+f(S)   = (S / (1 − S))²                    0 at S = 0, 1 at S = 0.5, ∞ at S = 1
+k_S    = 3.5 · f(S) · load                 N·m/rad
+limit  = min(S · maxTorque, k_S / G · |motorSpeed − jointSpeed|)     S < 1 and G > 0
+       = S · maxTorque                                                S = 1 or G = 0
+```
+
+- Holding still, `motorSpeed − jointSpeed = G · error`, so the limit is `k_S · |error|`: the joint gives way until its spring carries the load. At `S = 1` nothing changes (the #209 punch metrics, leg jitter, firmness and hold tests are unaffected).
+- **`load`** (N·m) is the gravity load at `g = 10 m/s²`, computed once at `parse` from the rest pose (`lib/def.js`, from `bodyMassData`), so the same `S` gives a similar sag whatever the rig's masses and size:
+  - **supported** bodies are those whose lowest non-sensor point lies within 5% of the rig's height of the lowest point of all bodies (the feet of a standing rig);
+  - **joint:** cut the joint as in §3.1; for each side `s`, `M_s · |C_s − anchor|` (mass and center of mass of the side). The load is the largest of these over the sides without a supported body, or over both sides when both or neither have one; times `g`. A hanging arm takes its own weight, a knee of a standing leg the body above it;
+  - **balance:** `M · g · max |c_b − C|` over the bodies connected to `rootBody` (`M`, `C`: their mass and center of mass).
+- An upright stack buckles when its spring stiffness falls below about its `load`, so a standing ragdoll folds near `f(S) = 1 / 3.5`, `S ≈ 0.35`, and sags visibly between that point and about 0.7. The balance softens with the same law, its `S` being root `balance` × runtime strength (§3.2), so a low root `balance` lets `rootBody` tip.
+- **Measured** (headless, editor stepping, preview ground, suggested torques, root `strength` and `balance` held at the same `S` (re-measured with the `balance` channel: unchanged), pelvis drop after 2 s; `tests/liquidfun-limp.test.js`): a crouching humanoid test rig 0.004 m at `S = 0.5`, 0.022 at 0.4, 0.097 at 0.3, 0.37 at 0.25 and 1.3 (fallen) at 0; a robot rig 0.18 at 0.5, 0.007 at 0.6, 0.44 (fallen) at 0.4. A straight-legged rig standing on knees at their limit needs almost no torque and folds only once it buckles (`S ≤ 0.25`). A strength key from 1 to 0 over 2 s sags the crouching humanoid from about 1.2 s (`S ≈ 0.4`) and drops it before the clip ends.
+- The constant 3.5 and the curve are tuned, not derived; the load is a rest-pose estimate, so rigs whose actual load is a small fraction of it (light upper body, straight legs) sag less at a given `S`.
