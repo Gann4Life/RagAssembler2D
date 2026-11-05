@@ -6,6 +6,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
 │ Preview stack: [✓ alive] [ pain] [ dead] ...     Procedural: [ Look at cursor] weight ──○──          zoom ──○──   │
 ├──────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────┤
 │                          │ 0.0     0.2     0.4     0.6     0.8     1.0     ▼ playhead                             │
+│ Summary                  │ ◇───────◇───────◇───────◇───────◇                                                     │
 │ ▾ root                   │                                                                                       │
 │     strength             │ ◆───────────────────────────────◆                                                     │
 │ ▾ knee_l                 │                                                                                       │
@@ -28,7 +29,14 @@ Default location ([§5.2](05-2-panels.md#52-panels)): bottom, full width. Modele
   - Deleting a track removes its keys.
 - **Keys:**
   - Shown as diamonds, styled by interpolation.
-  - Click selects, SHIFT / box select multi-selects, and dragging moves them (snapped).
+  - **Click modifiers**, read at the press, as in the Hierarchy ([§5.6](05-6-hierarchy-assets-problems.md#56-hierarchy-assets-and-problems-panels)): none selects only the key, unless it is already selected (the selection stays); SHIFT adds it, or removes it when it is already selected; CTRL removes it (CTRL wins when both are held; Cmd acts as CTRL on macOS). Box select multi-selects (not built yet).
+  - Dragging a selected key moves all selected keys by the same snapped offset as one undo step "Move keys" (`moveKeys`): the group stays inside the clip, and a key landing on the time of an unselected key of its track replaces it. A press that leaves the key unselected (SHIFT or CTRL removing it) starts no drag.
+  - **Summary row:** the first key lane, labeled "Summary", above the root group, shown while a clip is open. It draws one summary key (◇) at every time where any key drawn in the lanes below sits, collapsed groups included; events are not keys and are not summarized. Keys whose times differ by less than 1e-6 s (the commands' same-time tolerance) share one summary key; keys written by the Timeline are snapped to the snap step, so in practice that is exact equality after snapping. It is derived on every render, so it follows key add, move and delete, undo and redo.
+    - A summary key stands for its keys: it is outlined when none of them is selected, half filled when some are, filled in the selection color when all are. Its tooltip reads "*t* s: *n* key(s), *s* selected".
+    - Click modifiers apply to its keys as a group, with the key rules above: none selects only its keys, unless all are already selected (the selection stays); SHIFT adds them, or removes them when all are already selected; CTRL removes them.
+    - Dragging a fully selected summary key moves the whole selection exactly like a key drag (same snapping, clip clamp, replacement rule and single "Move keys" step); a press that leaves it not fully selected starts no drag. Box select, once built, selects the keys of the boxed summary keys.
+    - Delete keys (button, Del, Backspace) acts on the selected keys whatever selected them, as one undo step. The summary row adds no hotkey and no control of its own; it takes the key lanes' focus like a key.
+    - One summary row for the clip; per-group summary rows are not specified.
   - Copy, Paste (at the playhead) and Delete keys buttons in the Timeline header act on the selected keys; Ctrl+C, Ctrl+V and Del are their hotkeys while the keys hold the selection focus. Built so far: Delete keys, as the Timeline button (tooltip "Delete keys (Del)", disabled with the reason when no keys are selected, no clip is open, or the mode is not Animate) and through Del or Backspace while the key lanes have focus, always as one undo step; the Copy and Paste buttons and the clipboard are not built yet ([§12](12-open-items.md#12-open-items--to-verify)).
   - Double-clicking an empty spot in a track inserts a key with the evaluated value.
   - Dropping an asset from the Assets panel onto a sprite track inserts a key with that image.
