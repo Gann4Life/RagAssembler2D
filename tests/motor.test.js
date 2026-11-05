@@ -9,12 +9,45 @@ function near(actual, expected) {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
 }
 
+const stiffness = (S, load) => 3.5 * (S / (1 - S)) ** 2 * load;
+
 test('driveMotor applies the PD formula when the target rate is 0', () => {
   const joint = fakeJoint(0.2, 1.5);
-  driveMotor(joint, { angle: 0.5, S: 0.5, G: 10, D: 0.5 }, MOTOR);
+  driveMotor(joint, { angle: 0.5, S: 1, G: 10, D: 0.5 }, MOTOR);
   near(joint.motorSpeed, 10 * 0.3 - 0.5 * 1.5);
-  near(joint.maxTorque, 40);
+  near(joint.maxTorque, 80);
   assert.equal(joint.enabled, true);
+});
+
+test('below S = 1 the torque limit is a spring: k_S / G times the motor speed error, at most S · maxTorque (§3.4)', () => {
+  const joint = fakeJoint(0.2, 1.5);
+  driveMotor(joint, { angle: 0.5, S: 0.5, G: 10, D: 0.5 }, MOTOR);
+  const speed = 10 * 0.3 - 0.5 * 1.5;
+  near(joint.motorSpeed, speed);
+  near(joint.maxTorque, (stiffness(0.5, MOTOR.load) / 10) * (speed - 1.5));
+  assert.equal(joint.enabled, true);
+  const far = fakeJoint(0, 0);
+  driveMotor(far, { angle: 10, S: 0.5, G: 10, D: 0.5 }, MOTOR);
+  near(far.maxTorque, 40);
+  const still = fakeJoint(0.5, 0);
+  driveMotor(still, { angle: 0.5, S: 0.9, G: 10, D: 0.5 }, MOTOR);
+  near(still.maxTorque, 0);
+  const noGain = fakeJoint(0.2, 0);
+  driveMotor(noGain, { angle: 0.5, S: 0.5, G: 0, D: 0.5 }, MOTOR);
+  near(noGain.maxTorque, 40);
+});
+
+test('the strength spring stiffens monotonically with S and is unbounded at S = 1', () => {
+  let previous = 0;
+  for (const S of [0.1, 0.25, 0.5, 0.75, 0.9, 0.99]) {
+    const joint = fakeJoint(0, 0);
+    driveMotor(joint, { angle: 0.01, S, G: 10, D: 0.5 }, MOTOR);
+    assert.ok(joint.maxTorque > previous, `S ${S}: ${joint.maxTorque} N·m`);
+    previous = joint.maxTorque;
+  }
+  const full = fakeJoint(0, 0);
+  driveMotor(full, { angle: 0.01, S: 1, G: 10, D: 0.5 }, MOTOR);
+  near(full.maxTorque, 80);
 });
 
 test('driveMotor adds the keyed rate and damps the speed relative to it', () => {
@@ -80,15 +113,16 @@ test('runtime multipliers scale S, G and D', () => {
   rag.setDamping(0.25);
   rag.update(1 / 60);
   const a = joints.get('j_a');
-  near(a.maxTorque, 40);
-  near(a.motorSpeed, 5 * -0.1 - 0.125 * 0.2);
+  const speed = 5 * -0.1 - 0.125 * 0.2;
+  near(a.motorSpeed, speed);
+  near(a.maxTorque, (stiffness(0.5, MOTOR.load) / 5) * Math.abs(speed - 0.2));
 });
 
 test('root channels and runtime multipliers combine', () => {
-  const { rag, joints } = fakeInstance({ channels: { strength: 0.5, gain: 1, damping: 1 } });
+  const { rag, joints } = fakeInstance({ channels: { strength: 0.5, gain: 1, damping: 1 }, angle: 10 });
   rag.setStrength(0.5);
   rag.update(0);
-  near(joints.get('j_a').maxTorque, 20);
+  near(joints.get('j_a').maxTorque, (stiffness(0.25, MOTOR.load) / 10) * 20);
 });
 
 test('runtime strength 0 leaves the ragdoll limp', () => {

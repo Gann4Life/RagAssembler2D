@@ -1,7 +1,7 @@
 import { RagInstance } from '../../lib/instance.js';
 
-/** Base motor values of joint `j_a`; `j_b` uses gain 4 and maxTorque 10. */
-export const MOTOR = Object.freeze({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20 });
+/** Base motor values of joint `j_a` (gravity load 20 N·m); `j_b` uses gain 4 and maxTorque 10. */
+export const MOTOR = Object.freeze({ maxTorque: 80, gain: 10, damping: 0.5, maxSpeed: 20, load: 20 });
 
 /**
  * Fake `b2RevoluteJoint` that records the motor writes.
@@ -24,13 +24,14 @@ export function fakeJoint(angle = 0, speed = 0) {
   };
 }
 
-/** Base balance values of the fake instance; its only balance part is `b_root`, 1 kg and 0.5 kg·m². */
+/** Base balance values of the fake instance (gravity load 5 N·m); its only balance part is `b_root`, 1 kg and 0.5 kg·m². */
 export const BALANCE = Object.freeze({
   enabled: true,
   maxTorque: 50,
   gain: 10,
   damping: 0.5,
   maxSpeed: 20,
+  load: 5,
   parts: Object.freeze([Object.freeze({ id: 'b_root', mass: 1, inertia: 0.5 })]),
 });
 

@@ -243,7 +243,8 @@ test('driveBalance applies the §3.2 velocity servo with the inertia of the conn
   near(body.forces[0][0], 0);
   near(body.forces[0][1], 0);
   const half = fakeBody(0.01, 0);
-  near(balanceOf(half, 0, { S: 0.5, G: 10, D: 0.5 }, BALANCE, 1 / 60), -3);
+  const halfStiffness = 3.5 * (0.5 / 0.5) ** 2 * BALANCE.load;
+  near(balanceOf(half, 0, { S: 0.5, G: 10, D: 0.5 }, BALANCE, 1 / 60), -(halfStiffness / 10) * 0.1);
   const damped = fakeBody(0, 0.4);
   near(balanceOf(damped, 0, { S: 1, G: 10, D: 0.5 }, BALANCE, 0.1), 0.5 * (-0.2 - 0.4) / 0.1);
 });
