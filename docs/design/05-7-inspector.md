@@ -85,7 +85,7 @@ Default location ([§5.2](05-2-panels.md#52-panels)): right bottom. The inspecto
 | Property | Notes |
 |---|---|
 | time | Snapped to the timeline step unless snap is off. |
-| value | Degrees for `angle`, % for multipliers, an asset dropdown for `sprite`. |
+| value | Degrees for `angle` and `bodyAngle`, % for multipliers (0–100 %; other values are invalid and revert), an asset dropdown for `sprite`. Editable in Animate mode only. With several keys selected it follows the shared-values rule; when they mix value kinds (angle, multiplier, sprite) it shows `—` read-only with the reason "keys of different kinds". A commit is one undo step "Edit key value". |
 | interp | linear / step / ease (`step` only for `sprite`). |
 
 **Event** (selected in the timeline)
