@@ -520,7 +520,7 @@ export function createTimeline(element_, editor, player) {
     const targets = diamond.dataset.keys === undefined ? [Number(diamond.dataset.key)] : JSON.parse(diamond.dataset.keys);
     const next = clickSelection(selection.timeline, targets, { shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey });
     selection.set(next);
-    lanes.focus();
+    lanes.focus({ preventScroll: true });
     event.preventDefault();
     if (!canEditClip() || !targets.every((uid) => next.includes(uid))) return;
     const keys = [...selection.timeline];
