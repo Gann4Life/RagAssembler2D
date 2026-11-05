@@ -28,6 +28,9 @@ function fakePhysics({ startThrows = false } = {}) {
           if (session.throwOn === 'drag') throw new Error('drag');
           session.log.push(['drag', point]);
         },
+        setRotate(rotate) {
+          session.log.push(['rotate', rotate]);
+        },
         advance(seconds) {
           if (session.throwOn === 'advance') throw new Error('advance');
           session.log.push(['advance', seconds]);
@@ -617,8 +620,8 @@ test('a Shift press rotates about the parent joint, or about the center of mass 
   send(env.tools, 'down', 260, 190, { shift: true });
   assert.deepEqual(env.physics.starts[0].options.rotate, { joint: env.model.prop(env.joint, 'id') });
   assert.equal(env.physics.starts[0].options.bodyId, ids[1]);
-  send(env.tools, 'move', 280, 190, { shift: false });
-  assert.equal(env.physics.sessions[0].log.length, 1, 'releasing Shift mid-drag keeps the rotation and drags');
+  send(env.tools, 'move', 280, 190, { shift: true });
+  assert.deepEqual(env.physics.sessions[0].log.map(([kind]) => kind), ['drag'], 'Shift held: no switch');
   send(env.tools, 'up', 280, 190);
   env.view.hits = [env.shapes[0]];
   send(env.tools, 'down', 260, 190, { shift: true });
@@ -685,4 +688,53 @@ test('the rotation overlay joins the pivot to the pointer with a dot at the pivo
     ['fill', COLORS.gizmo],
   ]);
   send(env.tools, 'up', 260, 190);
+});
+
+test('Shift is live: pressing it mid-drag switches to rotation about the parent joint, releasing it back to a pull', () => {
+  const env = environment();
+  const ids = env.bodies.map((uid) => env.model.prop(uid, 'id'));
+  env.history.execute(setProps([ROOT_UID], { rootBody: ids[0] }));
+  env.view.hits = [env.shapes[1]];
+  send(env.tools, 'down', 260, 190);
+  assert.equal(env.physics.starts[0].options.rotate, null);
+  const session = env.physics.sessions[0];
+  send(env.tools, 'move', 270, 190, { shift: true });
+  send(env.tools, 'move', 270, 200, { shift: true });
+  send(env.tools, 'move', 270, 200, { shift: false });
+  send(env.tools, 'move', 275, 200, { ctrl: true });
+  const point = (x, y) => env.camera.screenToWorld({ x, y });
+  assert.deepEqual(session.log, [
+    ['rotate', { joint: env.model.prop(env.joint, 'id') }],
+    ['drag', point(270, 190)],
+    ['drag', point(270, 200)],
+    ['rotate', null],
+    ['drag', point(270, 200)],
+    ['drag', point(275, 200)],
+  ]);
+  send(env.tools, 'up', 275, 200);
+  env.view.hits = [env.shapes[0]];
+  send(env.tools, 'down', 260, 190);
+  send(env.tools, 'move', 270, 190, { shift: true });
+  assert.deepEqual(env.physics.sessions[1].log[0], ['rotate', { joint: null }]);
+  send(env.tools, 'up', 270, 190);
+  assert.equal(env.physics.starts.length, 2, 'one gesture, one session');
+  assert.equal(env.history.inGesture, false);
+});
+
+test('Animate: a drag that switches Shift on and off writes its keys once on release, in one undo step', () => {
+  const env = animateEnvironment({ playhead: 0.5, turn: 0.3 });
+  send(env.tools, 'down', 260, 190);
+  send(env.tools, 'move', 270, 190, { shift: true });
+  send(env.tools, 'move', 280, 190, { shift: false });
+  send(env.tools, 'move', 285, 190, { shift: true });
+  env.tools.tick(1 / 60);
+  const before = env.history.state.undoLabel;
+  assert.notEqual(before, 'Pose', 'nothing keyed before the release');
+  send(env.tools, 'up', 285, 190, { shift: true });
+  const tracks = angleKeys(env);
+  assert.equal(tracks.length, 1);
+  assert.equal(tracks[0].keys.length, 1);
+  assert.equal(env.history.state.undoLabel, 'Pose');
+  env.history.undo();
+  assert.equal(env.snapshot().json, env.before.json);
 });

@@ -81,6 +81,9 @@
  * @typedef {object} PoseSession
  * @property {(point: import('../../lib/geometry.js').Vec2) => void} drag Moves the pointer, world meters: the pull
  *   target, or the point whose turn around the pivot sets the rotation.
+ * @property {(rotate: ({ joint: (string|null) }|null)) => void} setRotate Switches between pull (`null`) and rotation,
+ *   as `PoseSessionOptions.rotate`, from the current state: the pivot and start angle are taken now, and a pull is
+ *   anchored at the current grab point. Throws on an unknown joint id, leaving the mode unchanged.
  * @property {(seconds: number) => void} advance Runs the fixed steps due after `seconds` more.
  * @property {() => Map<string, import('../../lib/geometry.js').Transform>} pose Body id → root-local transform.
  * @property {() => { anchor: import('../../lib/geometry.js').Vec2, target: import('../../lib/geometry.js').Vec2,

@@ -81,8 +81,8 @@ function jointKeys(model, def, pressed, result) {
 
 /**
  * Builds the Pose tool: a left press on a shape starts a physics test through `ctx.physics`, pulling the shape's
- * body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`. Shift held at the
- * press rotates the body instead, through physics, about its parent joint anchor (its center of mass when it has no
+ * body toward the pointer while the button is held; the simulated pose is shown with `ctx.setPose`. While Shift is held
+ * (read live: pressing or releasing it mid-drag switches) the body rotates instead, through physics, about its parent joint anchor (its center of mass when it has no
  * parent joint), the same in both modes; activating the tool shows that hint with `ctx.status`. In Edit mode the
  * test starts from the rest pose and the result is discarded on release. In Animate mode it is an intent edit: it starts
  * from the keyed pose (the FK pose of the clip at the playhead), translated so that the grabbed point stays where it is
@@ -102,6 +102,8 @@ export function poseTool() {
   let animate = null;
   let refused = false;
   let hoverCursor = null;
+  let grabbedUid = null;
+  let rotating = false;
 
   function animating() {
     return ctx.modes.can('edit.animation') && ctx.modes.clip !== null;
@@ -179,6 +181,8 @@ export function poseTool() {
       start: keying === null ? null : byId(ctx.model, keying.from),
       rotate: e.shift ? rotation(ctx.model, bodyUid) : null,
     });
+    grabbedUid = bodyUid;
+    rotating = Boolean(e.shift);
   }
 
   return defineTool({
@@ -230,6 +234,10 @@ export function poseTool() {
       if (session !== null) {
         if (animate !== null && !animate.dragged) {
           animate.dragged = Math.hypot(e.screen.x - animate.screen.x, e.screen.y - animate.screen.y) >= DRAG_THRESHOLD;
+        }
+        if (Boolean(e.shift) !== rotating) {
+          rotating = Boolean(e.shift);
+          session.setRotate(rotating ? rotation(ctx.model, grabbedUid) : null);
         }
         session.drag({ x: e.world.x, y: e.world.y });
         ctx.invalidateOverlay();

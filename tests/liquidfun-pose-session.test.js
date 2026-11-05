@@ -523,3 +523,73 @@ test('no heap growth over 300 rotation cycles', () => {
   for (let i = 2; i <= 300; i++) cycle(i);
   assert.equal(heapProbe(), before);
 });
+
+test('setRotate switches a running test from pull to rotation and back, from the current state', () => {
+  const json = withForearm();
+  const press = transformPoint(ROOT, { x: -0.3, y: 0.4 });
+  capturingSpawn((spawned) => {
+    const session = create(Box2D, json, { root: ROOT, bodyId: 'b_arm2', point: press });
+    try {
+      const world = spawned[0].bodies.get('b_arm2').GetWorld();
+      const pulled = { x: press.x, y: press.y + 0.1 };
+      session.drag(pulled);
+      run(session, 0.5);
+      const grabbedBefore = session.grab().anchor;
+      const atSwitch = session.pose();
+      const pivotLocal = transformPoint(atSwitch.get('b_arm2'), { x: 0.2, y: 0 });
+      const pivot = transformPoint(ROOT, pivotLocal);
+      session.setRotate({ joint: 'j_shoulder2' });
+      assert.equal(world.GetJointCount(), json.joints.length + 1);
+      near(session.grab().pivot.x, pivot.x, 'pivot x', 1e-4);
+      near(session.grab().pivot.y, pivot.y, 'pivot y', 1e-4);
+      near(session.grab().anchor.x, grabbedBefore.x, 'grab point kept x', 1e-6);
+      near(session.grab().anchor.y, grabbedBefore.y, 'grab point kept y', 1e-6);
+      rotateBy(session, pivot, pulled, 45);
+      const turned = session.pose().get('b_arm2').angle - atSwitch.get('b_arm2').angle;
+      near(turned, Math.PI / 4, 'turns from the angle at the switch', (3 * Math.PI) / 180);
+      const anchor = transformPoint(session.pose().get('b_arm2'), { x: 0.2, y: 0 });
+      assert.ok(Math.hypot(anchor.x - pivotLocal.x, anchor.y - pivotLocal.y) < 0.01, 'about the anchor at the switch');
+      const grabbed = session.grab().anchor;
+      session.setRotate(null);
+      assert.equal(world.GetJointCount(), json.joints.length + 1);
+      assert.equal(session.grab().pivot, null);
+      near(session.grab().anchor.x, grabbed.x, 'pull anchored at the grab point x', 1e-5);
+      near(session.grab().anchor.y, grabbed.y, 'pull anchored at the grab point y', 1e-5);
+      const target = { x: grabbed.x + 0.5, y: grabbed.y - 0.5 };
+      session.drag(target);
+      run(session, 2);
+      const reached = session.grab().anchor;
+      assert.ok(Math.hypot(reached.x - target.x, reached.y - target.y) < 0.1, 'the pull drags again');
+      session.setRotate(null);
+      assert.equal(world.GetJointCount(), json.joints.length + 1);
+      assert.throws(() => session.setRotate({ joint: 'j_nope' }), /unknown joint/);
+      assert.equal(session.grab().pivot, null, 'a refused switch keeps the pull');
+      session.drag(target);
+      session.advance(POSE.step);
+    } finally {
+      session.destroy();
+    }
+    assert.throws(() => session.setRotate(null), Error);
+  });
+});
+
+test('no heap growth over 200 tests with repeated pull and rotation switches', () => {
+  const json = ragFile();
+  const press = restWorld(json, 'b_arm');
+  const cycle = (i) => {
+    const session = start(json, 'b_arm', press);
+    for (let k = 0; k < 4; k++) {
+      session.setRotate(k % 2 === 0 ? { joint: i % 2 ? 'j_shoulder' : null } : null);
+      session.drag({ x: press.x + 0.1 * k, y: press.y + (i % 5) * 0.1 });
+      session.advance(POSE.step);
+      session.grab();
+    }
+    session.pose();
+    session.destroy();
+  };
+  cycle(0);
+  cycle(1);
+  const before = heapProbe();
+  for (let i = 2; i <= 200; i++) cycle(i);
+  assert.equal(heapProbe(), before);
+});

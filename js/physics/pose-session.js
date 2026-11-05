@@ -96,8 +96,9 @@ export function poseTestJson(json) {
  * Starts a pose test: a zero-gravity LiquidFun world holding the ragdoll at `options.root` in rest pose, or with the
  * bodies of `options.start` placed at those root-local transforms, every body damped, motors off, and a mouse joint
  * pulling `options.bodyId` from `options.point`. With `options.rotate`, a motor joint instead turns the grabbed body
- * about a pivot fixed at the start: the anchor of `rotate.joint`, or the body's center of mass when it is `null`.
- * Every body, `rootBody` included, moves freely. Owns every native object it creates until `destroy`.
+ * about a pivot fixed when the rotation starts: the anchor of `rotate.joint`, or the body's center of mass when it is
+ * `null`; `setRotate` switches between the two during the test. Every body, `rootBody` included, moves freely. Owns
+ * every native object it creates until `destroy`.
  * @param {*} Box2D The liquidfun.js namespace.
  * @param {object} json A `.rag.json` document.
  * @param {import('../tools/tool.js').PoseSessionOptions} options Root transform, grabbed body id, press point, start
@@ -113,13 +114,17 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
   const world = new Box2D.b2World(gravity);
   Box2D.destroy(gravity);
   const scratch = new Box2D.b2Vec2(0, 0);
+  const target = { x: point.x, y: point.y };
+  const previous = { x: point.x, y: point.y };
   let rag = null;
   let ground = null;
+  let grabbed = null;
   let mouse = null;
   let motor = null;
   let pivot = null;
   let origin = null;
-  let localPress = null;
+  let localGrab = null;
+  let rotation = 0;
 
   const release = () => {
     if (mouse !== null) world.DestroyJoint(mouse);
@@ -130,12 +135,78 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
     Box2D.destroy(world);
   };
 
-  let grabbed;
+  const bodyTransform = () => {
+    const position = grabbed.GetPosition();
+    return { x: position.get_x(), y: position.get_y(), angle: grabbed.GetAngle() };
+  };
+
+  const grabPoint = () => {
+    if (mouse !== null) {
+      const anchor = mouse.GetAnchorB();
+      return { x: anchor.get_x(), y: anchor.get_y() };
+    }
+    const placed = composeTransforms(bodyTransform(), localGrab);
+    return { x: placed.x, y: placed.y };
+  };
+
+  const detach = () => {
+    if (mouse !== null) world.DestroyJoint(mouse);
+    if (motor !== null) world.DestroyJoint(motor);
+    mouse = null;
+    motor = null;
+  };
+
+  const attachMouse = (anchor) => {
+    const jointDef = new Box2D.b2MouseJointDef();
+    try {
+      scratch.set_x(anchor.x);
+      scratch.set_y(anchor.y);
+      jointDef.set_bodyA(ground);
+      jointDef.set_bodyB(grabbed);
+      jointDef.set_target(scratch);
+      jointDef.set_maxForce(POSE.forcePerKg * grabbed.GetMass());
+      jointDef.set_frequencyHz(POSE.frequencyHz);
+      jointDef.set_dampingRatio(POSE.dampingRatio);
+      mouse = Box2D.castObject(world.CreateJoint(jointDef), Box2D.b2MouseJoint);
+    } finally {
+      Box2D.destroy(jointDef);
+    }
+    pivot = null;
+    scratch.set_x(target.x);
+    scratch.set_y(target.y);
+    mouse.SetTarget(scratch);
+  };
+
+  const attachMotor = (nextPivot, anchor) => {
+    origin = bodyTransform();
+    localGrab = composeTransforms(invertTransform(origin), { x: anchor.x, y: anchor.y, angle: 0 });
+    const load = loadAbout(rag.bodies, nextPivot);
+    const jointDef = new Box2D.b2MotorJointDef();
+    try {
+      scratch.set_x(origin.x);
+      scratch.set_y(origin.y);
+      jointDef.set_bodyA(ground);
+      jointDef.set_bodyB(grabbed);
+      jointDef.set_linearOffset(scratch);
+      jointDef.set_angularOffset(origin.angle);
+      jointDef.set_maxForce(POSE.forcePerKg * load.mass);
+      jointDef.set_maxTorque(POSE.forcePerKg * load.inertia);
+      jointDef.set_correctionFactor(POSE.correction);
+      motor = Box2D.castObject(world.CreateJoint(jointDef), Box2D.b2MotorJoint);
+    } finally {
+      Box2D.destroy(jointDef);
+    }
+    pivot = nextPivot;
+    rotation = 0;
+    previous.x = target.x;
+    previous.y = target.y;
+  };
+
   try {
     rag = def.spawn(world, { x: root.x, y: root.y, angle: root.angle, flipX: false });
     const bodies = rag.bodies;
-    grabbed = bodies.get(bodyId);
-    if (grabbed === undefined) throw new Error(`Pose: unknown body "${bodyId}"`);
+    grabbed = bodies.get(bodyId) ?? null;
+    if (grabbed === null) throw new Error(`Pose: unknown body "${bodyId}"`);
     for (const [id, local] of start ?? []) {
       const body = bodies.get(id);
       if (body === undefined) continue;
@@ -154,43 +225,8 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
     } finally {
       Box2D.destroy(groundDef);
     }
-    if (rotate === null || rotate === undefined) {
-      const jointDef = new Box2D.b2MouseJointDef();
-      try {
-        scratch.set_x(point.x);
-        scratch.set_y(point.y);
-        jointDef.set_bodyA(ground);
-        jointDef.set_bodyB(grabbed);
-        jointDef.set_target(scratch);
-        jointDef.set_maxForce(POSE.forcePerKg * grabbed.GetMass());
-        jointDef.set_frequencyHz(POSE.frequencyHz);
-        jointDef.set_dampingRatio(POSE.dampingRatio);
-        mouse = Box2D.castObject(world.CreateJoint(jointDef), Box2D.b2MouseJoint);
-      } finally {
-        Box2D.destroy(jointDef);
-      }
-    } else {
-      pivot = pivotOf(Box2D, rag, grabbed, rotate.joint);
-      const position = grabbed.GetPosition();
-      origin = { x: position.get_x(), y: position.get_y(), angle: grabbed.GetAngle() };
-      localPress = composeTransforms(invertTransform(origin), { x: point.x, y: point.y, angle: 0 });
-      const load = loadAbout(bodies, pivot);
-      const jointDef = new Box2D.b2MotorJointDef();
-      try {
-        scratch.set_x(origin.x);
-        scratch.set_y(origin.y);
-        jointDef.set_bodyA(ground);
-        jointDef.set_bodyB(grabbed);
-        jointDef.set_linearOffset(scratch);
-        jointDef.set_angularOffset(origin.angle);
-        jointDef.set_maxForce(POSE.forcePerKg * load.mass);
-        jointDef.set_maxTorque(POSE.forcePerKg * load.inertia);
-        jointDef.set_correctionFactor(POSE.correction);
-        motor = Box2D.castObject(world.CreateJoint(jointDef), Box2D.b2MotorJoint);
-      } finally {
-        Box2D.destroy(jointDef);
-      }
-    }
+    if (rotate === null || rotate === undefined) attachMouse(point);
+    else attachMotor(pivotOf(Box2D, rag, grabbed, rotate.joint), point);
     grabbed.SetAwake(true);
   } catch (error) {
     release();
@@ -198,9 +234,6 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
   }
 
   const toRoot = invertTransform(root);
-  const target = { x: point.x, y: point.y };
-  const previous = { x: point.x, y: point.y };
-  let rotation = 0;
   let accumulated = 0;
   let destroyed = false;
 
@@ -237,6 +270,20 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
       scratch.set_y(next.y);
       mouse.SetTarget(scratch);
     },
+    setRotate(next) {
+      alive();
+      const anchor = grabPoint();
+      if (next === null || next === undefined) {
+        if (mouse !== null) return;
+        detach();
+        attachMouse(anchor);
+      } else {
+        const nextPivot = pivotOf(Box2D, rag, grabbed, next.joint);
+        detach();
+        attachMotor(nextPivot, anchor);
+      }
+      grabbed.SetAwake(true);
+    },
     advance(seconds) {
       alive();
       accumulated += seconds;
@@ -259,16 +306,10 @@ export function createPoseSession(Box2D, json, { root, bodyId, point, start = nu
     },
     grab() {
       alive();
-      if (motor === null) {
-        const anchor = mouse.GetAnchorB();
-        return { anchor: { x: anchor.get_x(), y: anchor.get_y() }, target: { x: target.x, y: target.y }, pivot: null };
-      }
-      const position = grabbed.GetPosition();
-      const anchor = composeTransforms({ x: position.get_x(), y: position.get_y(), angle: grabbed.GetAngle() }, localPress);
       return {
-        anchor: { x: anchor.x, y: anchor.y },
+        anchor: grabPoint(),
         target: { x: target.x, y: target.y },
-        pivot: { x: pivot.x, y: pivot.y },
+        pivot: pivot === null ? null : { x: pivot.x, y: pivot.y },
       };
     },
     destroy() {
