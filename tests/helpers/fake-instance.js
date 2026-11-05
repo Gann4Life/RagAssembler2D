@@ -7,17 +7,22 @@ export const MOTOR = Object.freeze({ maxTorque: 80, gain: 10, damping: 0.5, maxS
  * Fake `b2RevoluteJoint` that records the motor writes.
  * @param {number} [angle] Joint angle, radians.
  * @param {number} [speed] Joint speed, rad/s.
- * @returns {object} The fake joint; `motorSpeed`, `maxTorque` and `enabled` hold the last writes.
+ * @returns {object} The fake joint; `motorSpeed`, `maxTorque` and `enabled` hold the last writes; `anchor` (world
+ *   `[x, y]`, default origin) and `referenceAngle` (default 0) feed `GetAnchorB` and `GetReferenceAngle`.
  */
 export function fakeJoint(angle = 0, speed = 0) {
   return {
     angle,
     speed,
+    anchor: [0, 0],
+    referenceAngle: 0,
     motorSpeed: null,
     maxTorque: null,
     enabled: null,
     GetJointAngle() { return this.angle; },
     GetJointSpeed() { return this.speed; },
+    GetAnchorB() { return fakeVec(...this.anchor); },
+    GetReferenceAngle() { return this.referenceAngle; },
     SetMotorSpeed(v) { this.motorSpeed = v; },
     SetMaxMotorTorque(v) { this.maxTorque = v; },
     EnableMotor(v) { this.enabled = v; },
@@ -70,8 +75,12 @@ export function fakeBody(angle = 0, angularVelocity = 0, { center = [0, 0], velo
   };
 }
 
+/** Limits of both fake joints: enabled, −1 to 1 rad. */
+export const JOINT_LIMITS = Object.freeze({ enabled: true, lower: -1, upper: 1 });
+
 /**
- * Builds a `RagInstance` over a fake world with two fake joints, `j_a` and `j_b`, and a fake root body `b_root`.
+ * Builds a `RagInstance` over a fake world with two fake joints, `j_a` (named `a`) and `j_b` (named `b`), both with
+ * bodyA `b_root`, and a fake root body `b_root`, at 32 px/m.
  * @param {object} [options] Definition data overrides.
  * @param {{ strength: number, balance: number, gain: number, damping: number }} [options.channels] Root channels.
  * @param {ReadonlyArray<object>} [options.clips] Clips as in the frozen definition data.
@@ -81,16 +90,21 @@ export function fakeBody(angle = 0, angularVelocity = 0, { center = [0, 0], velo
  * @param {object} [options.balance] Balance data; `BALANCE` by default.
  * @param {object} [options.root] Root body; a new `fakeBody()` by default.
  * @param {number} [options.restAngle] Balance reference angle, radians.
+ * @param {*} [options.view] View container; a fake without parent by default.
  * @returns {{ rag: RagInstance, joints: Map<string, object>, root: object }} The instance, its fake joints and root body.
  */
-export function fakeInstance({ channels = { strength: 1, balance: 1, gain: 1, damping: 1 }, clips = [], flipX = false, angle = 0, speed = 0, balance = BALANCE, root = fakeBody(), restAngle = 0 } = {}) {
+export function fakeInstance({ channels = { strength: 1, balance: 1, gain: 1, damping: 1 }, clips = [], flipX = false, angle = 0, speed = 0, balance = BALANCE, root = fakeBody(), restAngle = 0, view = { parent: null, destroy() {} } } = {}) {
   const joints = new Map([['j_a', fakeJoint(angle, speed)], ['j_b', fakeJoint(angle, speed)]]);
   const data = {
     channels,
     balance,
     bodies: [],
-    joints: [{ id: 'j_a', motor: MOTOR }, { id: 'j_b', motor: { ...MOTOR, gain: 4, maxTorque: 10 } }],
+    joints: [
+      { id: 'j_a', name: 'a', bodyA: 'b_root', limits: JOINT_LIMITS, motor: MOTOR },
+      { id: 'j_b', name: 'b', bodyA: 'b_root', limits: JOINT_LIMITS, motor: { ...MOTOR, gain: 4, maxTorque: 10 } },
+    ],
     clips,
+    pixelsPerMeter: 32,
   };
   const rag = new RagInstance({
     world: { IsLocked: () => false, DestroyJoint() {}, DestroyBody() {} },
@@ -98,9 +112,9 @@ export function fakeInstance({ channels = { strength: 1, balance: 1, gain: 1, da
     joints,
     byName: { body: new Map(), joint: new Map(), shape: new Map() },
     root,
-    view: { parent: null, destroy() {} },
+    view,
     flipX,
-    aimAxes: new Map(),
+    aimAxes: new Map([['j_a', 0], ['j_b', 0]]),
     data,
     restAngle,
     force: fakeForce(),
