@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-11-05
+
+### Fixed
+- Clicking an empty spot of the Timeline key lanes clears the key selection; Shift/Ctrl clicks keep it.
+
 ## [0.20.0] - 2026-11-05
 
 ### Added

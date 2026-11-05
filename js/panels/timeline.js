@@ -516,7 +516,12 @@ export function createTimeline(element_, editor, player) {
 
   const onKeyPointerDown = (event) => {
     const diamond = event.target.closest?.('.timeline-key, .timeline-summary-key');
-    if (event.button !== 0 || !diamond || keyDrag !== null) return;
+    if (event.button !== 0 || keyDrag !== null) return;
+    if (!diamond) {
+      if (!event.shiftKey && !event.ctrlKey && !event.metaKey && selection.timeline.length > 0) selection.remove([...selection.timeline]);
+      lanes.focus({ preventScroll: true });
+      return;
+    }
     const targets = diamond.dataset.keys === undefined ? [Number(diamond.dataset.key)] : JSON.parse(diamond.dataset.keys);
     const next = clickSelection(selection.timeline, targets, { shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey });
     selection.set(next);
